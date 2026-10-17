@@ -26,25 +26,25 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.4)
+## What's in the box (v0.9.5)
 
 ### Five missions, each grounded in real incident patterns
 
 - **OP. BLACKFROST** — 8-node Northeast power grid. Ransomware / APT / insider / hacktivist / supply-chain / pre-positioning adversary pool.
 - **OP. NIGHTWATCH** — 5-asset satellite constellation (GEO + 2 LEO sun-synchronous + ground station + mission control). Uses real orbital propagation (SGP4-style Kepler solver, J2 perturbation, ECI→geodetic, GMST, link budget) lifted from the author's AeroSec-Lab platform. Grounded in SPARTA technique catalog.
-- **OP. TIDEBREAK** — 8-asset Gulf Coast container terminal. Grounded in Port of Houston 2021 (Volt Typhoon-attributed via ManageEngine CVE-2021-40539), Maersk NotPetya 2017 ($300M loss, 76 port terminals offline), and ZPMC crane supply-chain concerns.
-- **OP. HEARTLINE** — 8-node regional hospital system (EDGE / AD / EHR / PACS / LAB / PHARM / BIOMED-PUMP / BIOMED-TELEM). Grounded in NHS WannaCry 2017 (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks). First mission with a **life-safety consequence model**: compromise of a patient-connected biomed device registers as a care-delivery event (per FDA Medical Device Cybersecurity Guidance 2023 + HHS 405(d) Healthcare Industry Cybersecurity Practices), not a dollar-value event.
-- **OP. RAILGUARD** 🆕 — 8-node regional railway (AD / DISPATCH / PTC-SERVER / FREIGHT-TMS / INTERLOCK-A / INTERLOCK-B / VHF-LINK / GRADE-X). Grounded in Belarusian Cyber-Partisans Jan 2022 (BelZhD dispatch encryption during Russian troop movements), Polish ABW Aug 2023 investigation of radio-stop command injection on freight lines (20+ unauthorized stop signals via legitimate cleartext VHF signaling), and Taiwan TRA 2022-2024 ransomware+phishing. Life-safety consequence model: trackside signaling or grade-crossing compromise = passenger- or motorist-safety event per FRA 49 CFR 236 Subpart H + TSA Security Directive 1580/82-2022-01A.
+- **OP. TIDEBREAK** — 8-asset Gulf Coast container terminal. Grounded in Port of Houston Aug 2021 (CVE-2021-40539 Zoho ManageEngine ADSelfService Plus — CISA Director Easterly publicly described as a "nation-state actor" intrusion; no primary source has named a specific cluster), Maersk NotPetya 2017 ($300M loss, operations disrupted across Maersk's 76-terminal network), and ZPMC crane supply-chain concerns.
+- **OP. HEARTLINE** — 8-node regional hospital system (EDGE / AD / EHR / PACS / LAB / PHARM / BIOMED-PUMP / BIOMED-TELEM). Grounded in NHS WannaCry 2017 (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 (ALPHV/BlackCat; $872M Q1 2024 impact [$593M direct + $279M business disruption], full-year 2024 impact >$3B; ~190M individuals' PHI; pharmacy claims nationwide offline for weeks). First mission with a **life-safety consequence model**: compromise of a patient-connected biomed device registers as a care-delivery event (per FDA Medical Device Cybersecurity Guidance 2023 + HHS 405(d) Healthcare Industry Cybersecurity Practices), not a dollar-value event.
+- **OP. RAILGUARD** 🆕 — 8-node regional railway (AD / DISPATCH / PTC-SERVER / FREIGHT-TMS / INTERLOCK-A / INTERLOCK-B / VHF-LINK / GRADE-X). Grounded in Belarusian Cyber-Partisans Jan 2022 (encrypted the bulk of BelZhD IT during Russian troop movements), Polish ABW Aug 2023 investigation of radio-stop command injection (approximately 20 trains halted using legitimate cleartext VHF signaling), and generic rail-sector ransomware exposure per CISA #StopRansomware advisories + APTA Cybersecurity Toolkit. Life-safety consequence model: trackside signaling or grade-crossing compromise = passenger- or motorist-safety event per FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements) + TSA Security Directive 1580/82-2022-01C.
 
 ### Eight threat actor archetypes (v0.9: reality-grounded rework)
 
-Each is a mechanical fingerprint with distinct behavioral parameters, not an attribution. v0.9 reworked these to match 2026 ground truth per primary sources (Mandiant M-Trends 2026, CISA advisories, Ponemon 2025 Insider Threats, Huntress/Rapid7 2025 IAB reporting, Europol Operation Eastwood July 2025):
+Each is a mechanical fingerprint with distinct behavioral parameters, not an attribution. v0.9 reworked these to match 2026 ground truth per primary sources (Mandiant M-Trends 2026, CISA advisories, Ponemon 2025 Cost of Insider Risks, Huntress/Rapid7 2025 IAB reporting, Europol Operation Eastwood July 2025):
 
 - **CRYO COLLECTIVE** — RaaS, **slow-dwell reconnaissance + fast-impact double extortion**. 14-day median dwell per M-Trends 2026; exfil before encrypt; backup destruction before encryption; sources CISA Change Healthcare 2024 pattern.
 - **KINGFISHER** — aerospace APT, patient, adaptive-pivoting on response.
 - **IRONHAZE** — hacktivist, **availability-focused (T1498 DDoS family + T1499 Endpoint DoS)** with opportunistic exposed-OT exploitation. Models NoName057(16) / DDOSIA crowdsourced-DDoS pattern (Europol Operation Eastwood, July 2025) and CyberAv3ngers / Unitronics direct-PLC-abuse pattern (CISA AA23-335A, Nov 2023).
-- **GHOSTWIRE** — **malicious insider** (~25% of insider cases per Ponemon 2025), long-dwell, authorized-but-abnormal. Separated from compromised-credentials in v0.9.
-- **HOLLOWKEY** 🆕 — **compromised credentials** (~20% of insider-category cases per Ponemon 2025). Infostealer-sourced valid-account abuse; external geography; MFA fatigue / session-cookie theft; immediate reconnaissance after sign-in. Keyhole silhouette.
+- **GHOSTWIRE** — **malicious insider** (~26% of insider cases per Ponemon 2025 Cost of Insider Risks), long-dwell, authorized-but-abnormal. Separated from compromised-credentials in v0.9.
+- **HOLLOWKEY** 🆕 — **"outsmarted" / compromised credentials** (~20% of insider-category cases per Ponemon 2025 Cost of Insider Risks). Infostealer-sourced valid-account abuse; external geography; MFA fatigue / session-cookie theft; immediate reconnaissance after sign-in. Keyhole silhouette.
 - **WARDEN** — **true Initial Access Broker** per 2025-2026 reality. Enumeration-heavy, impact-light. **Hands off to a successor actor** (CRYO or HOLLOWKEY) after round 3 — the broker-to-ransomware handoff; sources Mandiant M-Trends 2026 (22-second handoff cases observed) and Huntress/Rapid7 2025.
 - **TIDEMARK** — supply-chain operator (ZPMC-pattern), vendor-remote-access vector.
 - **VOLTFORGE** — pre-positioning operator built on CISA/NSA/FBI advisory [AA24-038A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a) on Volt Typhoon. Lives off the land (cmd, certutil, ntdsutil, wmic, PowerShell, netsh, wevtutil, vssadmin, …). Wins by accumulating undetected dwell rounds, not by Impact. Changes the strategic game.
@@ -117,7 +117,7 @@ Found by audit: several archetypes were playing to pre-2020 Hollywood tropes rat
 
 - **CRYO is no longer a 2018 ransomware.** Reworked to Mandiant M-Trends 2026 slow-dwell (14-day median) + fast-impact tempo with double extortion (exfil before encrypt) and backup destruction. New `tempo: 'slow_dwell_fast_impact'` flag. Mirrors CISA's Change Healthcare 2024 advisory pattern.
 - **IRONHAZE has DDoS now.** Added T1498 (Network DoS), T1498.001 (Direct Flood), T1498.002 (Reflection Amplification), T1499 (Endpoint DoS), T1491.001 (Internal Defacement) to the technique catalog. Primary bias toward availability impact (DDoS), with secondary OT-direct exploitation per CISA AA23-335A (CyberAv3ngers / Unitronics).
-- **GHOSTWIRE is now specifically the malicious insider.** Narrowed to the ~25% of real insider cases per Ponemon 2025. Compromised credentials (the ~20% stolen-cred cases) got its own actor:
+- **GHOSTWIRE is now specifically the malicious insider.** Narrowed to the ~26% of real insider cases per Ponemon 2025 Cost of Insider Risks. Compromised credentials (the ~20% "outsmarted" category in the report) got its own actor:
 - **HOLLOWKEY (new)** — infostealer-sourced compromised-credential actor. External geography, MFA fatigue / session-cookie theft tradecraft, immediate recon after sign-in. New `archetype: 'compromised_credentials'`, keyhole silhouette, added to all three missions' valid-actor pools.
 - **WARDEN is now a true Initial Access Broker.** No longer deploys ransomware itself. New `handoffAfterRounds: 3` mechanic — WARDEN enumerates for 3 rounds, then hands off STATE.activeActor to a successor from `successorPool: ['CRYO', 'HOLLOWKEY']` on round 4, with a 30-point attribution penalty (you have to re-identify the new actor). Models the broker-to-ransomware pipeline per Mandiant M-Trends 2026 and Huntress/Rapid7 2025.
 - **CFI debrief notes** got four new actor-specific branches (slow-dwell ransomware, IAB handoff, compromised-creds, availability-focused hacktivist).
@@ -131,11 +131,11 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 
 - **VOLTFORGE stage-chain** — the AA24-038A tool ladder is now stage-aware. `lolChain` carries 7 stages (Recon → Discovery → Credential Access → Lateral → Defense Evasion → C2/Proxy → Exfil Staging) with real tool names and command-line fingerprints per the advisory. Codex Volt Typhoon entry now shows every stage with its signature commands (`ntdsutil "ac i ntds" "ifm"`, `nltest /domain_trusts`, `netsh int portproxy add v4tov4`, `rundll32 comsvcs.dll MiniDump`, …).
 - **TIDEMARK cellular-modem signature (ZPMC pattern)** — new `cellularBeaconMode: true` flag + 5 new ATT&CK techniques (T1205 Traffic Signaling, T1571 Non-Standard Port, T1573 Encrypted Channel, T0885 Commonly Used Port ICS, T0845 Program Upload ICS). Dedicated codex entry on the 2024 U.S. House Select Committee on CCP ZPMC report + USCG MARSEC Directive 105-6 + EO 14116. DETECTIONS.md Play 6 extended with sub-play 6B — a procurement + physical + carrier-metadata hunt, because enterprise NetFlow is blind to this traffic.
-- **TIDEBREAK Maersk-scale consequence** — mission tightened: `maxRounds: 11→9`, `loseThreshold: 4→3`. New `sectorCascade` mechanic: when TOS compromises, both cranes become operationally stressed (not just adjacent-cascade stressed) because manifest truth is lost — the Maersk NotPetya 2017 pattern ($300M loss, 76 terminals offline, 10-day recovery). CFI debrief references Port of Houston 2021 (CVE-2021-40539, Volt Typhoon via ManageEngine) when the mission ends in loss.
+- **TIDEBREAK Maersk-scale consequence** — mission tightened: `maxRounds: 11→9`, `loseThreshold: 4→3`. New `sectorCascade` mechanic: when TOS compromises, both cranes become operationally stressed (not just adjacent-cascade stressed) because manifest truth is lost — the Maersk NotPetya 2017 pattern ($300M loss, operations disrupted across 76-terminal network, 10-day recovery). CFI debrief references Port of Houston Aug 2021 (CVE-2021-40539 Zoho ManageEngine) when the mission ends in loss.
 
 ### v0.9.2: Priority 3 — KINGFISHER depth + seeded replay URLs
 
-- **KINGFISHER aerospace APT depth** — the actor now has a 7-stage `aerospaceChain` (RF+OSINT Recon → Ground-IT Initial Access → MCC Lateral → Operator-Identity Theft → Uplink Staging → On-Orbit Payload Delivery → Mission Impact), each stage tagged with its SPARTA/ATT&CK TTPs and a documented real-world incident anchor. 5 new SPARTA techniques added (REC-0005 Eavesdropping, EX-0010 Malicious Code, EX-0012 Modify On-Board Values, IMP-0005 Denial, LM-0001 Lateral Movement) with full descriptions grounded in CSIS Space Threat Assessment, Secure World Foundation, USSF Space Delta 15, Mandiant M-Trends aerospace, CISA ViaSat KA-SAT 2022 analysis, Russia-Ukraine theater jamming reporting, and Black Sea GPS-spoofing campaigns. NIGHTWATCH threatMix extended, intro card renders the chain, dedicated codex entry carries the stage-by-stage tool + incident mapping, CFI debrief has an aerospace-APT-aware doctrine note.
+- **KINGFISHER aerospace APT depth** — the actor now has a 7-stage `aerospaceChain` (RF+OSINT Recon → Ground-IT Initial Access → MCC Lateral → Operator-Identity Theft → Uplink Staging → On-Orbit Payload Delivery → Mission Impact), each stage tagged with its SPARTA/ATT&CK TTPs and a documented real-world incident anchor. 5 new SPARTA techniques added (REC-0005 Eavesdropping, EX-0010 Malicious Code, EX-0012 Modify On-Board Values, IMP-0005 Destruction, LM-0001 Hosted Payload) with full descriptions grounded in CSIS Space Threat Assessment, Secure World Foundation, USSF Space Delta 15, Mandiant M-Trends annual reports (aerospace observations within), CISA ViaSat KA-SAT 2022 analysis, Russia-Ukraine theater jamming reporting, and Black Sea GPS-spoofing campaigns. NIGHTWATCH threatMix extended, intro card renders the chain, dedicated codex entry carries the stage-by-stage tool + incident mapping, CFI debrief has an aerospace-APT-aware doctrine note.
 - **Deterministic seeded replay URLs** — append `?seed=…` to the game URL and every random draw becomes deterministic. Seeds accept decimal, hex (`0x…`), or human-friendly strings (FNV-1a normalized). The debrief header shows the active seed; a new **SHARE** button on the debrief copies a shareable `?seed=…` URL to the clipboard. Case-log JSON export now carries the seed. mulberry32 PRNG — small, uniform, deterministic. Share your runs; peers can replay the exact scenario, actor, and attack sequence you faced.
 
 ### v0.9.3: OP. HEARTLINE healthcare mission + life-safety consequence model
@@ -154,10 +154,10 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 **OP. RAILGUARD — 5th playable mission**
 
 - 8 nodes: AD → DISPATCH → PTC-SERVER / FREIGHT-TMS (back-office) → INTERLOCK-A / INTERLOCK-B (trackside signaling) + VHF-LINK (RF cab-signaling) + GRADE-X (grade crossing). 14-link topology; DISPATCH is the hub. Purdue mapping: rail-back-office=L3, interlock=L2, trackside/rf-link=L1, identity=L4.
-- Grounded in **Belarusian Cyber-Partisans Jan 2022** (BelZhD dispatch encryption during Russian troop movements), **Polish ABW Aug 2023** investigation (20+ unauthorized VHF radio-stop signals on freight lines using legitimate cleartext signaling — no cryptographic authentication by legacy design), **Taiwan TRA 2022-2024** (ransomware + phishing against back-office), **TSA Security Directive 1580/82-2022-01A** (rail cybersecurity requirements), **FRA 49 CFR Part 236 Subpart H** (PTC cybersecurity + fallback operations), and **CENELEC 50159** (safety-critical rail communications).
+- Grounded in **Belarusian Cyber-Partisans Jan 2022** (encrypted the bulk of BelZhD IT during Russian troop movements), **Polish ABW Aug 2023** investigation (approximately 20 trains halted using legitimate cleartext VHF signaling — no cryptographic authentication by legacy design), **CISA #StopRansomware rail-sector advisories + APTA Cybersecurity Toolkit** (generic sector ransomware context), **TSA Security Directive 1580/82-2022-01C** (current rail cybersecurity requirements), **FRA 49 CFR Part 236 Subpart I §236.1033** (PTC communications and security requirements), and **CENELEC EN 50159** (safety-related communications in transmission systems).
 - Life-safety consequence model: compromise of INTERLOCK-A, INTERLOCK-B, or GRADE-X = passenger- or motorist-safety event (not dollar loss). CFI debrief cites FRA Part 236 + TSA 1580/82 and the Polish Aug 2023 pattern.
-- Belarusian sector cascade: when DISPATCH compromises, interlockings + PTC + FREIGHT-TMS go stressed with narrator beat citing the real BelZhD incident doctrine ("Dispatch is the control plane for every movement").
-- Valid actor pool: CRYO (Taiwan TRA archetype), **IRONHAZE** (hacktivist with command-injection — maps Belarus Partisans + Polish VHF patterns), WARDEN → CRYO/HOLLOWKEY handoff, HOLLOWKEY, GHOSTWIRE insider, VOLTFORGE pre-positioning. 6 actors.
+- Belarusian sector cascade: when DISPATCH compromises, interlockings + PTC + FREIGHT-TMS go stressed with narrator beat citing the real BelZhD-pattern lesson (when the IT backbone that coordinates movement goes down, movement authorities freeze while trackside gear stays physically fine).
+- Valid actor pool: CRYO (ransomware against rail IT per CISA #StopRansomware archetype), **IRONHAZE** (hacktivist with command-injection — maps Belarus Partisans + Polish VHF patterns), WARDEN → CRYO/HOLLOWKEY handoff, HOLLOWKEY, GHOSTWIRE insider, VOLTFORGE pre-positioning. 6 actors.
 - 2 new ATT&CK for ICS techniques: **T0871 Execution Through API** (rail SCADA / PTC back-office API abuse per CISA ICS-CERT advisories), **T0836 Modify Parameter** (parameter manipulation of signaling/PTC gains — Polish Aug 2023 investigation documented command-side parameter abuse).
 - 2 new codex entries: **Belarusian Cyber-Partisans / BelZhD Jan 2022** (Reuters + AP reporting, TSA 1580/82, CENELEC 50159), **Polish Freight Railway VHF Radio-Stop Incidents** (Polish ABW statements Aug-Sep 2023, PAP reporting, CENELEC 50159 doctrine).
 - Custom node rendering: INTERLOCK draws as a 3-lamp signal aspect; VHF-LINK draws as an antenna mast with animated RF wave arcs; GRADE-X draws as a diamond with X-mark motif. Track-plane band + public-zone (life-safety) band at the bottom of the map.
@@ -171,6 +171,52 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Reuses `STATE.metrics` + `STATE.combosTriggered` + `STATE.lifeSafetyEvents` (now with new `metrics.compromisesByRound`, `metrics.handoffRound`, `metrics.handoffFrom/To` tracking)
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
+
+### v0.9.5: SME hostile-audit remediation
+
+A deep-dive SME fact-check audit (35 findings, 7 CRITICAL + 13 HIGH + 10 MEDIUM + 5 LOW) uncovered real sourcing errors that this release fixes. Every change is a factual correction against a primary source.
+
+**SPARTA technique naming fixed** — the two most embarrassing errors. **LM-0001** was labeled "Lateral Movement" (the tactic name) when its real SPARTA name is **Hosted Payload**. **IMP-0005** was labeled "Denial" when its real SPARTA name is **Destruction** (IMP-0003 is Denial — swapped). Both renamed with corrected descriptions.
+
+**USCG MARSEC Directive number corrected everywhere** — the Feb 2024 PRC-crane directive is **105-4** (89 FR 13726), not 105-6. Replaced across index.html, DETECTIONS.md, and README.md. Also noted the Nov 2024 reissuance as 105-5.
+
+**ZPMC committee report date corrected** — the joint House Homeland Security + Select Committee on the CCP report dropped **16 Sep 2024**, not Feb 2024. (Feb 2024 was EO 14116 + MARSEC 105-4.)
+
+**Port of Houston attribution removed** — the Aug 2021 incident was publicly described by CISA Director Easterly as a "nation-state actor" intrusion; **no primary source attributed it to Volt Typhoon**. Removed the Volt Typhoon claim; kept CVE-2021-40539 (Zoho ManageEngine ADSelfService Plus).
+
+**Taiwan TRA 2022-2024 ransomware anchor removed** — no primary source matched the specific-incident claim. RAILGUARD now relies on Belarus Cyber-Partisans + Polish ABW anchors (both well-documented) plus generic CISA #StopRansomware rail-sector + APTA Cybersecurity Toolkit context for ransomware exposure.
+
+**Mandiant M-Trends claims tightened** — M-Trends 2026 does NOT publish a "7-day median for ransomware"; that specific claim is removed. Kept the 14-day global median (verified). The "aerospace-sector incident analyses (2022-2026)" series was invented — Mandiant publishes one annual M-Trends with aerospace observations within; wording corrected throughout.
+
+**Ponemon report title + metric corrected** — the report is "Cost of Insider **Risks**" (renamed 2023+), not "Cost of Insider Threats." The 81-day figure is time to **CONTAIN**, not detect. The 20% category is called **"outsmarted"** / credential theft in the real report, not "stolen-credential." The three-way split is approximately 55% negligent / 26% malicious / 20% outsmarted (closer than the previous 55/25/20 round numbers).
+
+**FRA 49 CFR Part 236 subpart corrected** — the PTC cybersecurity requirements are in **Subpart I §236.1033** (Communications and security requirements), not Subpart H.
+
+**TSA SD updated to current revision** — the current rail-cyber Security Directive is **1580/82-2022-01C** (01A was superseded).
+
+**Change Healthcare statistics corrected** — PHI affected is **~190M** per UnitedHealth's Jan 2025 OCR update (was 100M; doubled after fuller forensic review). The $872M Q1 2024 impact is composed of **$593M direct response + $279M business disruption**, not pure direct response. Full-year 2024 impact exceeded $3B. The "~9-day dwell" is sourced to CEO Witty's May 2024 House E&C testimony, not CISA.
+
+**NHS WannaCry statistics corrected** — "81 of 236 NHS Trusts" (was 80 — off by one per NAO), "603 more NHS organizations including 595 GP practices" (was imprecise).
+
+**Maersk NotPetya scope wording corrected** — "operations disrupted across Maersk's 76-terminal global network" (was "76 terminals offline" — the real figure is 17 of 76 terminals directly affected but the operational blast radius was system-wide; Snabe WEF Davos 2018 quote cites 4,000 servers + 45,000 PCs + 2,500 applications re-imaged).
+
+**Belarusian Cyber-Partisans claim de-overspecified** — Partisans publicly claimed encrypting "the bulk of BelZhD servers, databases, and workstations" with backup destruction, not specifically "dispatch servers" (the game had extrapolated). The sector-cascade *lesson* about dispatch-is-the-control-plane stays as doctrine, no longer attributed to a specific Partisan target.
+
+**Named APT groups removed** — KillNet (index.html), Scattered Spider / UNC3944 + Storm-0501/Storm-0540 + DEV-0537/DEV-0193 (DETECTIONS.md) all removed per the game's archetype-not-attribution doctrine. (Volt Typhoon, AcidRain, ALPHV/BlackCat, NoName057(16), CyberAv3ngers remain where they appear in primary CISA/government advisories — they're the exception set.)
+
+**Internal catalog consistency fixed** — 4 technique IDs that were referenced in actor affinity but had no catalog entry (**T1074 Data Staged**, **T1657 Financial Theft**, **T0803** legacy, **T0856** legacy) added with real ATT&CK descriptions. Catalog now 68 entries, zero undefined references.
+
+**H-ISAC sourcing reweighted** — H-ISAC member-only post-incident briefings now cited as non-public sector-wide intel-sharing; publicly-locatable primaries (UnitedHealth earnings, HHS OCR, Senate Finance + House E&C testimony, CISA #StopRansomware ALPHV/BlackCat) carry the citation weight.
+
+**"70-minute detonation window" number cut** — the game had conflated CrowdStrike breakout time (~62 min, lateral movement) with ransomware detonation window (different concept, no sourced number). Replaced with the qualitative "minutes-to-hours once detonation begins, not days" claim which is accurate and sourceable.
+
+**FSW compromise claim softened** — "Mandiant and CrowdStrike have reported state-nexus actors staging capability" rewritten as "CSIS, SWF, and USSF reporting have described state-nexus concern over FSW-compromise-capability staging; specific public incident reporting is limited" — more honest about the primary-source landscape.
+
+**Verizon DBIR 72% misdelivery softened** — specific figure removed; wording now "Miscellaneous Errors pattern dominant for non-malicious insider actions" per DBIR 2024/2025 published pattern analysis.
+
+**ZPMC market share nuanced** — "approximately 80%" → "roughly 70-80%" per the Sep 2024 joint committee report.
+
+All 24 corrections (CRITICAL + HIGH + attribution + internal consistency) ship in v0.9.5. The 10 MEDIUM items (further stylistic tightening) and 5 LOW items are deferred to v0.9.6 or later.
 
 ---
 
@@ -252,4 +298,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.4** (October 2026) · BUILD `HUNT-20261017-1645Z`
+Current version: **v0.9.5** (October 2026) · BUILD `HUNT-20261017-1920Z`

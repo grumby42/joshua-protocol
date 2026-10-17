@@ -25,7 +25,7 @@
 > - **Watch the trend** — spike / drop-off / first-seen / beacon.
 > - **Pivot to** — the adjacent data/patterns you check next.
 
-> **Fact-check rigor bar.** Every technique ID below is verified against live MITRE ATT&CK (Enterprise or ICS v20). Volt Typhoon artifacts are verified against the joint CISA/NSA/FBI advisory [AA24-038A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a). CyberAv3ngers / Unitronics patterns are from [AA23-335A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-335a). Ransomware dwell-time and double-extortion figures are from Mandiant M-Trends 2026 and the CISA Change Healthcare advisory. Insider-threat statistics are from the Ponemon Institute / DTEX Systems *2025 Cost of Insider Threats Global Report* (81-day avg detection; 25% malicious / 55% negligent / 20% stolen-credential split). Initial-Access-Broker model is from Mandiant M-Trends 2026 (handoff timing) and Huntress/Rapid7 2025 reporting. ICS v19 revoked IDs (T0855 → T1692.001, T0803 → T1691.001, T0856 → T1692.002) are presented with both forms for operator familiarity. Where a canonical public rule exists, it is cited; where one doesn't (hunt built from your own baseline), that is said plainly.
+> **Fact-check rigor bar.** Every technique ID below is verified against live MITRE ATT&CK (Enterprise or ICS v20). Volt Typhoon artifacts are verified against the joint CISA/NSA/FBI advisory [AA24-038A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a). CyberAv3ngers / Unitronics patterns are from [AA23-335A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-335a). Ransomware dwell-time figures are from Mandiant M-Trends 2026 (14-day global median); double-extortion and ~9-day access-to-detonation figures for Change Healthcare are from UnitedHealth CEO Andrew Witty's May 2024 House Energy & Commerce testimony. Insider statistics are from the Ponemon Institute / DTEX Systems *2025 Cost of Insider Risks Global Report* (6th edition) — 81-day average time to CONTAIN an insider incident; approximately 55% negligent / 26% malicious / 20% "outsmarted" (credential theft) split. Initial-Access-Broker model is from Mandiant M-Trends 2026 (handoff timing) and Huntress/Rapid7 2025 reporting. ICS v19 revoked IDs (T0855 → T1692.001, T0803 → T1691.001, T0856 → T1692.002) are presented with both forms for operator familiarity. Where a canonical public rule exists, it is cited; where one doesn't (hunt built from your own baseline), that is said plainly.
 
 > **Format convention.** Pseudocode uses `source:` and `where:` / `project:` keywords in the spirit of KQL/SPL/EQL without binding to one. Replace with your schema's equivalents.
 
@@ -34,7 +34,7 @@
 ## Play 1 · CRYO — Ransomware (slow-dwell reconnaissance → fast-impact double extortion)
 
 ### Objective
-Catch modern RaaS operations during their **reconnaissance and staging dwell window** — before T1657 Financial Theft (exfil) and T1486 Data Encrypted for Impact / T1490 Inhibit System Recovery fire. Mandiant M-Trends 2026 reports a **14-day median global dwell time**; the Change Healthcare 2024 incident operated with ~9 days of dwell, backup destruction before encryption, and double-extortion (exfil before encrypt). Rapid-encryption detections are the last-chance net — the real catch window is 7-14 days earlier, during the quiet recon/staging phase.
+Catch modern RaaS operations during their **reconnaissance and staging dwell window** — before T1657 Financial Theft (exfil) and T1486 Data Encrypted for Impact / T1490 Inhibit System Recovery fire. Mandiant M-Trends 2026 reports a **14-day global median dwell time** (up from 11 days in 2025); the Change Healthcare 2024 incident operated with ~9 days of access-to-detonation (per UnitedHealth CEO Andrew Witty's May 2024 House Energy & Commerce testimony), backup destruction before encryption, and double-extortion (exfil before encrypt). Rapid-encryption detections are the last-chance net — the real catch window is during the quiet recon/staging phase.
 
 ### Hypothesis
 A non-admin user credential (via T1566.001, T1190, or T1133) is followed over the next 1-14 days by: (a) credential-material access on the host (T1003.001 LSASS access) OR (b) outbound beacon pattern to never-before-seen infrastructure OR (c) first-seen SMB admin-share lateral movement from a workstation to a server, before any destructive activity. Each individual signal has noise; the sequence inside a 14-day window on a credential that didn't previously generate it is the catch.
@@ -93,7 +93,7 @@ project: user, host, time, phase, signal
   - **Backup-system admin-event spike without a change ticket** → treat as very high. This is the pre-encryption signature.
 
 ### Real anchors
-- **Mandiant M-Trends 2026** — 14-day global median dwell time, 7-day median for ransomware
+- **Mandiant M-Trends 2026** — 14-day global median dwell time (up from 11 in 2025); ransomware prior-compromise rose from 15% to 30% of initial infection vectors
 - **CISA Alert on Change Healthcare / ALPHV-BlackCat (2024)** — ~9-day dwell, backup destruction, double extortion
 - CISA #StopRansomware guides (LockBit, Royal, Play, ALPHV, Qilin, Akira)
 - MITRE ATT&CK T1486 Data Encrypted for Impact, T1490 Inhibit System Recovery, T1657 Financial Theft, T1070.001 Clear Windows Event Logs
@@ -146,7 +146,7 @@ having: pivot_host not in historical_access_pattern(user, 90d)
 ### Response / triage
 1. **Immediate**: enumerate all hosts the pivoted user has touched in the last 24h.
 2. **Within 30 min**: dump NTDS.dit access logs from the domain controller(s) that authenticated the pivot session.
-3. **Hunt**: look for `netsh portproxy` persistence on the pivot host (Volt Typhoon signature; APTs reuse these tradecraft patterns).
+3. **Hunt**: look for `netsh portproxy` persistence on the pivot host (a classic LotL-APT signature — see Play 7 VOLTFORGE for the Volt Typhoon chain reference).
 4. **Escalate**: APT confirmation triggers your major-incident playbook — breach counsel, exec notification, TI vendor hand-off.
 
 ### Maintenance & trend
@@ -252,7 +252,7 @@ project: time, dest_asset, source_ip, protocol, function_or_action
 ## Play 4 · GHOSTWIRE — Malicious insider (long-dwell, authorized-but-abnormal)
 
 ### Objective
-Detect **a trusted insider acting against the organization** — the ~25% of insider cases Ponemon 2025 attributes to deliberately malicious actors (as distinct from negligence at ~55% or stolen-credential cases at ~20%; those get separate plays — negligence is a training/control gap, stolen credentials get Play 8 HOLLOWKEY). Average detection takes **81 days** at an average per-case cost of **$17.4M** (Ponemon 2025 *Cost of Insider Threats*). The dwell is the point: the insider knows what will alert, what won't, and when their access is normal — so the signal is subtle divergence in behavior over weeks, not a single loud event.
+Detect **a trusted insider acting against the organization** — the ~26% of insider cases Ponemon 2025 attributes to deliberately malicious actors (as distinct from negligence at ~55% or "outsmarted" / credential-theft cases at ~20%; those get separate plays — negligence is a training/control gap, credential theft gets Play 8 HOLLOWKEY). Average time to **CONTAIN** an insider incident is **81 days** at an average per-case cost of **$17.4M** (Ponemon Institute / DTEX Systems *2025 Cost of Insider Risks Global Report*, 6th edition). Note: 81 days is containment end-to-end, not detection — detection is typically a smaller figure. The dwell is the point: the insider knows what will alert, what won't, and when their access is normal — so the signal is subtle divergence in behavior over weeks, not a single loud event.
 
 ### Hypothesis
 An authorized user with privileged access to sensitive data or systems shows a **slow drift** across weeks — the user starts touching assets slightly outside their historical pattern, accesses them during slightly different hours, or at slightly higher volumes than their 90-day baseline — AND those touches concentrate on assets with high data-exfil or sabotage value, AND those touches occur in the vicinity (temporal, not causal) of HR adverse events (notice given, PIP, grievance, access review, denied promotion, team reorganization).
@@ -306,7 +306,7 @@ project: user, drift_start_week, drift_signals, hr_signal, exfil_signal
   - **Multiple users drifting at once on the same crown-jewel set** → often not insider — more likely a shared compromise (pivot to Play 8 HOLLOWKEY or Play 2 KINGFISHER). Investigate before concluding insider.
 
 ### Real anchors
-- **Ponemon Institute / DTEX Systems, *2025 Cost of Insider Threats Global Report*** — 81-day average detection, $17.4M average annual cost, 25% malicious / 55% negligent / 20% stolen-credentials split
+- **Ponemon Institute / DTEX Systems, *2025 Cost of Insider Risks Global Report* (6th edition)** — 81-day average time to CONTAIN an insider incident (down from 86 days in 2023), $17.4M average annual cost, approximately 55% negligent / 26% malicious / 20% "outsmarted" (credential theft) split
 - CERT National Insider Threat Center (SEI/CMU) — the Insider Threat Database and Common Sense Guide
 - NIST SP 800-53 PM-12 Insider Threat Program
 - CISA Insider Threat Mitigation Guide
@@ -390,7 +390,7 @@ where: ti_catalog.actor_tag in ("ransomware_affiliate", "data_broker", "nation_s
 ### Real anchors
 - **Mandiant M-Trends 2026** — IAB marketplace analytics, 22-second handoff cases, broker-to-ransomware pipeline
 - **Huntress 2025 Cyber Threat Report**, **Rapid7 2025 Mid-Year Report** — IAB-as-separate-actor model, broker tradecraft catalog
-- Microsoft Threat Intelligence profiles on access-broker clusters (historical DEV-0537, DEV-0193; current labels change)
+- Microsoft Threat Intelligence profiles on access-broker clusters (cluster labels change over time)
 - Flashpoint / Intel 471 broker-market intelligence
 - MITRE ATT&CK T1078, T1555.003 (Browser Credential Theft — infostealer-sourced), T1046, T1082, T1087.001
 
@@ -515,9 +515,9 @@ for each OT equipment arrival or firmware update:
 - RF survey picking up adjacent cellular equipment not actually inside your gear (common in multi-tenant environments)
 
 ### Response / triage
-1. **Confirmed undocumented radio**: physical isolation first — disconnect the radio or power the equipment down if operationally feasible. Document everything (serial, MSISDN, physical location, carrier). Preserve chain of custody. Report to USCG (maritime), CISA, and your sector ISAC — this is a national-security concern under USCG MARSEC Directive 105-6 and EO 14116.
+1. **Confirmed undocumented radio**: physical isolation first — disconnect the radio or power the equipment down if operationally feasible. Document everything (serial, MSISDN, physical location, carrier). Preserve chain of custody. Report to USCG (maritime), CISA, and your sector ISAC — this is a national-security concern under USCG MARSEC Directive 105-4 (21 Feb 2024, 89 FR 13726) and EO 14116.
 2. **Confirmed anomalous carrier traffic on a documented SIM**: contact the carrier for session metadata. If the destinations suggest state-adversary infrastructure, escalate immediately per major-incident playbook; this is beyond enterprise-only response.
-3. **Compliance posture**: for STS cranes specifically, verify USCG MARSEC Directive 105-6 posture. For other PRC-manufactured OT equipment, apply the same logic — Executive Order 14116 (Feb 2024) authorized USCG to directly regulate maritime cybersecurity.
+3. **Compliance posture**: for STS cranes specifically, verify USCG MARSEC Directive 105-4 posture (reissued as MARSEC 105-5 in Nov 2024). For other PRC-manufactured OT equipment, apply the same logic — Executive Order 14116 (Feb 2024) authorized USCG to directly regulate maritime cybersecurity.
 4. **TI product**: physical and procurement evidence feeds strategic reporting on supply-chain compromise patterns at sector level.
 
 ### Maintenance & trend
@@ -529,8 +529,8 @@ for each OT equipment arrival or firmware update:
   - **Carrier reports inbound signaling** (T1205) to one of your SIMs with no outbound initiation history → covert-channel activation attempt. High urgency.
 
 ### Real anchors
-- **U.S. House Select Committee on the CCP + House Homeland Security Committee joint investigation on ZPMC STS cranes (Feb 2024)**
-- **USCG MARSEC Directive 105-6** (Feb 2024) — cybersecurity requirements for PRC-manufactured STS cranes at U.S. ports
+- **U.S. House Committee on Homeland Security + Select Committee on the CCP joint investigation on ZPMC STS cranes (16 Sep 2024, homeland.house.gov)**
+- **USCG MARSEC Directive 105-4** (21 Feb 2024, 89 FR 13726) — cybersecurity requirements for PRC-manufactured STS cranes at U.S. ports (reissued as MARSEC 105-5, Nov 2024)
 - **Executive Order 14116** (Feb 2024) — USCG authority over maritime cybersecurity
 - CISA / USCG joint maritime cybersecurity briefings (2023-2025)
 - MITRE ATT&CK T1205 Traffic Signaling, T1571 Non-Standard Port, T1573 Encrypted Channel
@@ -652,7 +652,7 @@ project: time, host, target_object, value_data
 ## Play 8 · HOLLOWKEY — Compromised credentials (infostealer-sourced valid-account abuse)
 
 ### Objective
-Detect the **20% of insider-category cases Ponemon 2025 attributes to stolen credentials** — the account is legitimate, the human behind it isn't the owner. The 2024-2026 shape: an infostealer (RedLine, Raccoon, LummaC2, Vidar) grabs credentials from a user's personal device or an under-protected workstation, those credentials appear on criminal markets or in a combo-list within hours, and the buyer logs in. Unlike GHOSTWIRE's slow deliberate drift, HOLLOWKEY arrives from an unfamiliar geography immediately and acts fast — the buyer paid for working access and intends to monetize it quickly.
+Detect the **~20% of insider-category cases Ponemon 2025 attributes to the "outsmarted" / credential-theft category** — the account is legitimate, the human behind it isn't the owner. The 2024-2026 shape: an infostealer (RedLine, Raccoon, LummaC2, Vidar) grabs credentials from a user's personal device or an under-protected workstation, those credentials appear on criminal markets or in a combo-list within hours, and the buyer logs in. Unlike GHOSTWIRE's slow deliberate drift, HOLLOWKEY arrives from an unfamiliar geography immediately and acts fast — the buyer paid for working access and intends to monetize it quickly.
 
 ### Hypothesis
 A valid, non-privileged user credential (or increasingly, an OAuth/session-token cookie) successfully authenticates from a **first-seen source IP, ASN, device fingerprint, and often country** — with impossible-travel characteristics relative to the user's last legitimate session, no corresponding MFA notification acknowledgment pattern (push-fatigue bypass), and immediate reconnaissance activity (access to shared drives, inbox search, OAuth grant creation) in the first session.
@@ -710,9 +710,9 @@ where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vida
   - **OAuth-consent-granted spike** → session-token theft campaign; audit app catalog.
 
 ### Real anchors
-- **Ponemon 2025 Cost of Insider Threats** — 20% of insider-category cases are stolen-credential
-- CISA Advisory on **Scattered Spider / UNC3944** patterns — infostealer + MFA fatigue + session cookie theft
-- Microsoft Threat Intelligence on **Storm-0501**, **Storm-0540** — IAB → ransomware chain fed by infostealer-sourced creds
+- **Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report** — ~20% of insider-category cases are "outsmarted" (credential theft)
+- CISA Advisories on infostealer + MFA fatigue + session cookie theft tradecraft (2023-2026)
+- Microsoft Threat Intelligence on access-broker-to-ransomware clusters fed by infostealer-sourced creds (cluster labels change over time)
 - **Flare / SpyCloud / Hudson Rock** market intelligence on infostealer log volumes
 - MITRE ATT&CK T1078 Valid Accounts, T1555.003 Credentials from Web Browsers, T1539 Steal Web Session Cookie, T1621 Multi-Factor Authentication Request Generation
 - CISA #StopRansomware guides — most recent entries reference infostealer-sourced access as the primary initial-access path for RaaS affiliates in 2025
@@ -739,4 +739,4 @@ where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vida
 
 ---
 
-*Appendix generated for Joshua Protocol v0.9.4 — BUILD HUNT-20261017-1645Z · STAMP 2026-10-17T16:45Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.9.5 — BUILD HUNT-20261017-1920Z · STAMP 2026-10-17T19:20Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

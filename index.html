@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.4</title>
+<title>JOSHUA PROTOCOL v0.9.5</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1645Z';
-const STAMP_UTC = '2026-10-17T16:45Z';
-const APP_VERSION = 'v0.9.4';
+const BUILD_ID = 'HUNT-20261017-1920Z';
+const STAMP_UTC = '2026-10-17T19:20Z';
+const APP_VERSION = 'v0.9.5';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -1481,10 +1481,37 @@ const TECHNIQUES = {
     tools:['Telemetry monitoring','Anomaly detection','Mission-mode state tracking'],
     counters:['Mode resilience','Safe-mode logic that distinguishes attack from fault','Multi-constellation redundancy for critical downlinks','Operator-side recovery runbooks tested annually'] },
   'PER-0001': { fw:'sparta', name:'Memory Compromise', tactic:'Persistence',
-    desc:'Modify flight software (FSW) in spacecraft memory — bootloader, FSW application image, or configuration tables. The highest-leverage persistence in orbit: once FSW is modified, no ground-side containment removes it; the adversary waits for a future trigger (specific uplink pattern, orbital event, timed activation) to disable or redirect the asset. Mandiant and CrowdStrike have reported state-nexus actors staging capability for FSW compromise against commercial and defense payloads.',
+    desc:'Modify flight software (FSW) in spacecraft memory — bootloader, FSW application image, or configuration tables. The highest-leverage persistence in orbit: once FSW is modified, no ground-side containment removes it; the adversary waits for a future trigger (specific uplink pattern, orbital event, timed activation) to disable or redirect the asset. CSIS, Secure World Foundation, and USSF reporting have described state-nexus concern over FSW-compromise-capability staging against commercial and defense payloads; specific public incident reporting is limited.',
     novice:'Adversary plants malicious code onboard satellite.',
     tools:['Software attestation (per-boot cryptographic measurement)','Memory checksums','Secure-boot chain verification','Ground-side build artifact signing'],
     counters:['D3-EI: Executable Integrity','Secure boot with hardware root of trust','Signed FSW uploads with per-image counter','Dual-authority FSW upload approval'] },
+  // v0.9.5: catalog consistency fixes — these were referenced in actor
+  // affinity / mission threatMix but had no catalog entry, so lookups via
+  // TECHNIQUES[tid] silently returned undefined and the codex couldn't render.
+  'T1074': { fw:'attack', name:'Data Staged', tactic:'Collection',
+    desc:'Adversary stages collected data in a central location (often a staging directory on a compromised host) prior to exfiltration. Lower-noise step than exfil itself; the signature is bulk write to an unusual path by a credential that doesn\'t normally touch that path.',
+    novice:'Adversary gathers files into one place to exfiltrate later.',
+    tools:['File-create audit on sensitive shares','DLP agent events','SMB session audit'],
+    counters:['Honey-files in common staging paths','D3-ITV: Internal Traffic Validation','UEBA baseline on per-user file-write volumes'] },
+  'T1657': { fw:'attack', name:'Financial Theft', tactic:'Impact',
+    desc:'Adversary monetizes access through financial theft — ransom payment, extortion, BEC fraud, direct account draining, or data-extortion payouts. Added to ATT&CK Enterprise v14 (Oct 2023) to recognize that financial impact is the actual objective of RaaS and e-crime, not merely a side effect of T1486. Mandiant M-Trends and Verizon DBIR annual reports consistently rank financial motivation as the dominant category for 2023-2026 breaches.',
+    novice:'Adversary steals money or forces a payment.',
+    tools:['Financial-system audit logs','Wire-transfer anomaly detection','Negotiation / ransom-note capture'],
+    counters:['Immutable backups + tested restore','Legal / breach-counsel escalation playbook','Pre-arranged incident response retainer'] },
+  'T0803': { fw:'ics', name:'Block Command Message', tactic:'Inhibit Response Function (ICS)',
+    canonicalId: 'T1691.001',
+    legacyNote: 'Revoked in ATT&CK for ICS v19 → T1691.001 (Block OT Message: Command Message). Preserved here with its legacy ID because many public writeups still use T0803.',
+    desc:'Adversary blocks legitimate command messages from reaching the field, denying operators control.',
+    novice:'Operator commands blocked from reaching the equipment.',
+    tools:['Zeek','Network taps','Historian correlation'],
+    counters:['D3-ANA','Redundant command paths','Latency alerting'] },
+  'T0856': { fw:'ics', name:'Spoof Reporting Message', tactic:'Evasion, Impair Process Control (ICS)',
+    canonicalId: 'T1692.002',
+    legacyNote: 'Revoked in ATT&CK for ICS v19 → T1692.002 (Unauthorized Message: Reporting Message). Preserved here with its legacy ID because many public writeups still use T0856.',
+    desc:'Adversary sends unauthorized reporting messages (status, telemetry) to make the operator see a false picture of the process. Enables Impact without the operator reacting.',
+    novice:'Fake sensor readings sent to the operators so they see the wrong thing.',
+    tools:['Zeek (modbus/dnp3)','Historian anomaly detection'],
+    counters:['D3-ANA: Message Authentication','Cross-source telemetry validation','Out-of-band verification'] },
   // v0.9.4: railway signaling techniques for OP. RAILGUARD
   'T0871': { fw:'ics', name:'Execution Through API', tactic:'Execution (ICS)',
     desc:'Adversary executes functionality on an OT asset via its documented API — HMI, maintenance API, OPC-UA, DNP3, or (in rail) a train-control back-office RESTful or SCADA API. The authentication is often legitimate (stolen credentials, abused service accounts); the detection surface is API audit logs, not network traffic. CISA ICS-CERT advisories 2023-2025 document this pattern against rail dispatch and PTC back-office servers.',
@@ -1492,7 +1519,7 @@ const TECHNIQUES = {
     tools:['PTC/CBTC back-office audit logs','SCADA API gateway logs','UEBA against operator consoles'],
     counters:['API audit logging + alerting on first-seen API caller','MFA on API consoles','Role-based separation between read API and command API'] },
   'T0836': { fw:'ics', name:'Modify Parameter', tactic:'Impair Process Control (ICS)',
-    desc:'Adversary modifies parameters within an OT asset — PID gains in a controller, PTC movement authorities in rail, signal-aspect-timer values in an interlocking, chemical setpoints in a plant. Lower bar than full logic modification; often undetected because the asset still looks "operational" to the operator view. Polish ABW investigation of the Aug 2023 radio-stop incidents on freight railways documented command-side parameter manipulation of the kind this technique covers.',
+    desc:'Adversary modifies parameters within an OT asset — PID gains in a controller, PTC movement authorities in rail, signal-aspect-timer values in an interlocking, chemical setpoints in a plant. Lower bar than full logic modification; often undetected because the asset still looks "operational" to the operator view. Polish ABW investigation of the Aug 2023 radio-stop incidents on Polish rail (approximately 20 trains halted, both passenger and freight) documented command-side manipulation of the kind this technique covers.',
     novice:'Adversary changes a parameter value so the system behaves differently without changing its program.',
     tools:['Config-value baseline + drift alerts','Dual-authority parameter changes','Historian correlation'],
     counters:['Change-management discipline on OT parameters','Parameter signing','Audit-log forwarding to immutable store'] },
@@ -1523,16 +1550,16 @@ const TECHNIQUES = {
     novice:'Adversary changes a setting on the satellite that quietly breaks it.',
     tools:['Config-value baseline + alert on drift','Dual-authority configuration upload','Routine health checks against known-good values'],
     counters:['Configuration integrity monitoring','Dual-sign on parameter uploads','Health-check comparison against FSW gold image'] },
-  'IMP-0005': { fw:'sparta', name:'Denial', tactic:'Impact',
-    desc:'Full denial of mission — the asset is unrecoverable or recovery is deferred beyond the operational window. Permanent memory corruption, uncommandable attitude, battery damage from thermal cycling. Documented in effect by the KA-SAT 2022 wiper (modems bricked; replacement was the only remediation).',
-    novice:'Satellite is unusable; needs replacement or extended recovery.',
+  'IMP-0005': { fw:'sparta', name:'Destruction', tactic:'Impact',
+    desc:'Permanent, unrecoverable damage to a spacecraft or ground-segment asset — permanent memory corruption, uncommandable attitude leading to tumble, battery damage from thermal cycling, deliberate propellant depletion. Distinct from IMP-0003 Denial (temporary loss of availability) and IMP-0002 Disruption (temporary mission interruption). Documented in effect by the KA-SAT Feb 2022 AcidRain wiper (modems bricked; replacement was the only remediation).',
+    novice:'Asset is permanently unusable; replacement is the only path.',
     tools:['Mode-recovery runbooks','Replacement-asset inventory','Operator-side insurance posture'],
     counters:['Redundant payloads','Pre-staged replacement capacity','Automated safe-mode with hardware watchdog recovery'] },
-  'LM-0001': { fw:'sparta', name:'Lateral Movement', tactic:'Lateral Movement (SPARTA)',
-    desc:'Movement from one mission-segment asset to another — ground station to MCC, MCC to spacecraft (via uplink), spacecraft to ground via downlink injection, or (in constellation operations) spacecraft-to-spacecraft via inter-satellite links. The multi-asset constellation is particularly exposed: once a single bus is compromised, lateral spread to adjacent nodes via ISL can be rapid.',
-    novice:'Adversary moves from one asset to another in the mission.',
-    tools:['Per-asset network segmentation','ISL authentication','Ground-segment micro-segmentation'],
-    counters:['Zero-trust between mission segments','ISL cryptographic authentication','Operator-side detection of unexpected ISL traffic'] },
+  'LM-0001': { fw:'sparta', name:'Hosted Payload', tactic:'Lateral Movement (SPARTA)',
+    desc:'Adversary uses a hosted payload on the victim spacecraft to reach other subsystems. Because hosted payloads often exchange data with the primary spacecraft bus, a compromised payload is a lateral-movement bridge to the host spacecraft\'s other subsystems. In multi-tenant commercial satellite architectures (common in modern LEO), this is a growing exposure vector per CSIS Space Threat Assessment and USSF Space Delta 15 reporting.',
+    novice:'Adversary pivots from a hosted payload into other systems on the same spacecraft.',
+    tools:['Per-tenant payload isolation review','Bus-to-payload interface auditing','Operator-side detection of unexpected bus-to-payload traffic'],
+    counters:['Strong payload-to-bus segregation (ideally physical, otherwise authenticated protocols)','Interface specification + change-management discipline','Zero-trust between mission segments'] },
 
   // ATLAS (AI/ML)
   'AML.T0020': { fw:'atlas', name:'Poison Training Data', tactic:'Resource Development',
@@ -1625,7 +1652,7 @@ const TECHNIQUES = {
 
   // v0.9: DDoS and endpoint-DoS tradecraft — dominant hacktivist signatures 2024-2026.
   'T1498': { fw:'attack', name:'Network Denial of Service', tactic:'Impact',
-    desc:'Adversary floods a target with network traffic to degrade or deny availability. The dominant hacktivist signature in 2024-2026: NoName057(16) DDOSIA tool, KillNet, pro-Russian collectives.',
+    desc:'Adversary floods a target with network traffic to degrade or deny availability. The dominant hacktivist signature in 2024-2026 (per Europol Operation Eastwood July 2025 reporting on NoName057(16) / DDOSIA): crowdsourced-DDoS platforms + pro-Russian collectives.',
     novice:'Adversary floods a website or service with so much traffic that it stops working.',
     tools:['NetFlow baseline','DDoS mitigation (Cloudflare, Akamai, AWS Shield)','ISP scrubbing'],
     counters:['D3-NTF: Network Traffic Filtering','Anycast absorption','Rate limiting'],
@@ -1766,7 +1793,7 @@ const THREAT_ACTORS = {
     tagline: 'Ransomware-as-a-Service',
     silhouette: 'skull',
     color: '#ff4ea8',
-    summary: 'Financially-motivated RaaS operation. Slow-dwell reconnaissance and credential theft (median 14 days per Mandiant M-Trends 2026), then a fast ~70-minute detonation window: backup destruction → data exfil → encryption. Double extortion is standard.',
+    summary: 'Financially-motivated RaaS operation. Slow-dwell reconnaissance and credential theft (14-day global median per Mandiant M-Trends 2026), then a compressed detonation phase after staging — backup destruction → data exfil → encryption typically runs in minutes to hours once it begins, not days. Double extortion is standard.',
     pattern: 'Behavior matches 2026 RaaS tradecraft — initial access via infostealer-sourced credentials or exploited VPN, Mimikatz/LaZagne credential dumping, Cobalt Strike or similar C2, backup infrastructure targeted BEFORE encryption, exfil-then-encrypt double extortion. Reference incidents: Change Healthcare (BlackCat/ALPHV Feb 2024, ~9-day dwell).',
     adaptive: false,
     // v0.9: Patient recon then explosive impact. Spawn rate is low early (dwell),
@@ -1793,7 +1820,7 @@ const THREAT_ACTORS = {
     silhouette: 'eye',
     color: '#60a0ff',
     summary: 'Long-dwell state-nexus actor with aerospace targeting history. Patient, stealthy, adaptive. Operates across both ground segment (IT exploitation, management-plane compromise per ViaSat KA-SAT Feb 2022 archetype) and RF (reconnaissance, spoofing, jamming per Black Sea 2017+ GPS spoofing and ongoing Ukraine theater reporting). Will pivot to an adjacent node when pushed back. Objective is typically persistence through FSW compromise or operator-identity theft, not fast disruption.',
-    pattern: 'Tradecraft consistent with multi-year aerospace intrusion campaigns documented by CSIS Space Threat Assessment, Secure World Foundation Global Counterspace Capabilities, Mandiant M-Trends aerospace-sector reporting, and USSF Space Delta 15 briefings. Phased: RF + OSINT reconnaissance over months, ground-segment IT exploitation of an operator or vendor, lateral into mission-control, uplink staging, and finally either spoofing/command-injection OR flight-software persistence.',
+    pattern: 'Tradecraft consistent with multi-year aerospace intrusion campaigns documented by CSIS Space Threat Assessment, Secure World Foundation Global Counterspace Capabilities, Mandiant M-Trends annual reports (aerospace observations within), and USSF Space Delta 15 briefings. Phased: RF + OSINT reconnaissance over months, ground-segment IT exploitation of an operator or vendor, lateral into mission-control, uplink staging, and finally either spoofing/command-injection OR flight-software persistence.',
     adaptive: true,                // pivots to adjacent node when DISRUPT-ed
     spawnRateMod: 0.8,             // fewer simultaneous threats
     detectionWindow: 2.0,          // recon hidden longer
@@ -1816,7 +1843,7 @@ const THREAT_ACTORS = {
         incident:'ViaSat KA-SAT Feb 2022: adversary accessed KA-SAT management plane through a VPN-adjacent vector, then deployed AcidRain wiper to ~tens of thousands of modems across Europe.' },
       { stage:'Lateral into Mission-Control', ttp:'LM-0001, T1078',
         tools:['Credentialed lateral from ground-ops IT to MCC segment','Jump-host abuse','Dual-authority bypass via social engineering'],
-        incident:'Mandiant M-Trends aerospace-sector cases 2022-2025 document ground-ops → MCC lateral movement as the pivot that converts an IT compromise into a mission-threat compromise.' },
+        incident:'Mandiant M-Trends annual reports (aerospace observations across 2022-2025) document ground-ops → MCC lateral movement as the pivot that converts an IT compromise into a mission-threat compromise.' },
       { stage:'Operator-Identity Theft / Credential Access', ttp:'T1555.003, T1078',
         tools:['Infostealer-sourced operator browser creds (Lumma, RedLine)','PAM session hijack','Legitimate console abuse during operator shift'],
         incident:'The 2026 infostealer market produced valid operator credentials for sale against identifiable aerospace targets per Flare / Hudson Rock market reporting (sector-level, not org-level attribution).' },
@@ -1826,23 +1853,23 @@ const THREAT_ACTORS = {
       { stage:'On-Orbit Payload Delivery', ttp:'EX-0010 (Malicious Code), EX-0012 (Modify On-Board Values), PER-0001 (FSW Compromise)',
         tools:['Crafted FSW upload (requires either stolen signing keys or an unsigned upload path)','Parameter-table modification (lower bar — no new code)','Timed-trigger logic patch'],
         incident:'Public reporting is thin on confirmed FSW compromises (the capability is highly classified), but CSIS Space Threat Assessment 2024-2026 reports warn of pre-positioned FSW payloads as the strategic concern.' },
-      { stage:'Mission Impact', ttp:'IMP-0002 (Disruption) / IMP-0005 (Denial)',
+      { stage:'Mission Impact', ttp:'IMP-0002 (Disruption) / IMP-0005 (Destruction)',
         tools:['Timed FSW trigger','Attitude-control misalignment','Battery damage via thermal-threshold shift','Imaging-schedule corruption'],
-        incident:'KA-SAT: 2 months of ground recovery before full service restoration; ~5,800 wind turbines in Germany lost remote-management for months.' },
+        incident:'KA-SAT: 2 months of ground recovery before full service restoration; ~5,800 Enercon wind turbines in Germany lost remote-management for months.' },
     ],
-    source: 'Composite of CSIS Space Threat Assessment series, Secure World Foundation Global Counterspace Capabilities annual, USSF Space Delta 15 briefings, Mandiant M-Trends aerospace-sector, CISA / NSA space-sector advisories, and the public ViaSat KA-SAT Feb 2022 incident analysis.',
+    source: 'Composite of CSIS Space Threat Assessment series, Secure World Foundation Global Counterspace Capabilities annual, USSF Space Delta 15 briefings, Mandiant M-Trends annual reports (aerospace observations within), CISA / NSA space-sector advisories, and the public ViaSat KA-SAT Feb 2022 incident analysis.',
     sources: [
       'CISA Alert: Russian Military Cyber Actors (ViaSat KA-SAT, Feb 2022)',
       'CSIS Space Threat Assessment (annual series)',
       'Secure World Foundation: Global Counterspace Capabilities (annual series)',
       'USSF Space Delta 15 public threat briefings',
-      'Mandiant M-Trends aerospace-sector incident analyses (2022-2026)',
+      'Mandiant M-Trends annual reports 2022-2026 (aerospace observations within)',
       'Public reporting on Black Sea / Eastern Mediterranean GPS-spoofing campaigns (2017-2025)',
     ],
   },
   // v0.9: IRONHAZE reworked around 2024-2026 hacktivist reality — DDoS-primary
   // tradecraft with botnet-driven volumetric floods (NoName057(16) DDOSIA pattern,
-  // KillNet), supplemented by opportunistic exploitation of exposed devices
+  // pro-Russian collectives), supplemented by opportunistic exploitation of exposed devices
   // (CyberAv3ngers / IRGC-affiliated pattern against exposed water-utility PLCs per
   // CISA AA23-335A). Dominant impact: availability denial, not persistence.
   'IRONHAZE': {
@@ -1869,12 +1896,12 @@ const THREAT_ACTORS = {
     availabilityFocused: true,
     sources: ['NoName057(16) Wikipedia / Europol Operation Eastwood July 2025', 'CISA AA23-335A: CyberAv3ngers Unitronics PLC campaign'],
   },
-  // v0.9: GHOSTWIRE reworked — malicious insider. Per Ponemon 2025, malicious
+  // v0.9: GHOSTWIRE reworked — malicious insider. Per Ponemon 2025 Cost of Insider Risks, malicious
   // insiders are ~25% of insider incidents; the other ~75% are non-malicious
   // (negligence 55%, external-exploit-of-stolen-creds 20%). GHOSTWIRE now
   // represents the malicious ~25% specifically. New HOLLOWKEY (below) represents
   // the compromised-credentials pattern that dominates real-world insider cases.
-  // Insider detection median: 81 days per Ponemon 2025 (compressed to game rounds).
+  // Insider CONTAINMENT median: 81 days per Ponemon 2025 Cost of Insider Risks (not detection — containment; compressed to game rounds).
   'GHOSTWIRE': {
     id: 'GHOSTWIRE',
     archetype: 'insider',
@@ -1882,7 +1909,7 @@ const THREAT_ACTORS = {
     tagline: 'Malicious Insider',
     silhouette: 'mask',
     color: '#a060ff',
-    summary: 'Authorized user acting against the organization — grievance-driven exfiltration, sabotage, or sell-outs. Already inside. No external beaconing. Represents the ~25% of insider incidents that are malicious (per Ponemon 2025). Win by IDENTIFYING the actor and CONTAINING.',
+    summary: 'Authorized user acting against the organization — grievance-driven exfiltration, sabotage, or sell-outs. Already inside. No external beaconing. Represents the ~26% of insider incidents that are malicious (per Ponemon 2025 Cost of Insider Risks). Win by IDENTIFYING the actor and CONTAINING.',
     pattern: 'Legitimate credentials behaving abnormally — off-hours access to crown-jewel assets, data staging to removable media or personal cloud, scheduled-task persistence for after-termination access. No external C2.',
     adaptive: true,
     spawnRateMod: 0.5,
@@ -1899,13 +1926,14 @@ const THREAT_ACTORS = {
     // passive defender actually loses (fixing the v0.8 passivity exploit).
     dwellMode: true,
     dwellRoundsToWin: 6,  // insider patience is longer than APT dwell
-    sources: ['Ponemon 2025 Cost of Insider Threats', 'Verizon DBIR 2025 (72% misdelivery for non-malicious)'],
+    sources: ['Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report (6th edition)', 'Verizon DBIR 2025 (Miscellaneous Errors pattern dominant for non-malicious insider actions)'],
   },
   // v0.9: HOLLOWKEY — compromised-credentials actor. Represents the dominant
   // real-world insider pattern that GHOSTWIRE misses: an external attacker
   // using stolen credentials from infostealer logs (Lumma, RedLine) or breach
   // dumps. Legitimate user is unaware. Session cookies may provide MFA bypass.
-  // Per Ponemon 2025 / Verizon DBIR 2025: 20% of "insider incidents" are this.
+  // Per Ponemon 2025 Cost of Insider Risks: ~20% of "insider incidents" are this
+  // (the report calls the category "outsmarted" / credential theft).
   'HOLLOWKEY': {
     id: 'HOLLOWKEY',
     archetype: 'compromised_credentials',
@@ -1928,7 +1956,7 @@ const THREAT_ACTORS = {
     // detect the behavioral anomaly (impossible travel, unusual asset access)
     // and respond via credential rotation rather than insider-threat process.
     externalCredSource: true,
-    sources: ['Recorded Future 2025 Identity Threat Landscape', 'Ponemon 2025 (20% external-exploit of insider accounts)'],
+    sources: ['Recorded Future 2025 Identity Threat Landscape', 'Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report — ~20% "outsmarted" (credential-theft) category'],
   },
   // v0.9: WARDEN reworked to match actual initial-access-broker tradecraft per
   // Huntress / Rapid7 2025 reporting: IABs breach → verify → sell → MOVE ON.
@@ -1989,8 +2017,8 @@ const THREAT_ACTORS = {
     cellularBeaconMode: true,
     outOfBandC2: 'cellular_carrier',
     sources: [
-      'U.S. House Select Committee on CCP: Investigation of ZPMC ship-to-shore cranes (Feb 2024)',
-      'USCG MARSEC Directive 105-6 (Feb 2024) — PRC-manufactured STS crane cyber risk',
+      'U.S. House Homeland Security + Select Committee on the CCP joint investigation of ZPMC ship-to-shore cranes (16 Sep 2024)',
+      'USCG MARSEC Directive 105-4 (21 Feb 2024, 89 FR 13726) — PRC-manufactured STS crane cyber risk',
       'CISA/USCG joint maritime cybersecurity briefings 2023-2025',
     ],
   },
@@ -2342,11 +2370,11 @@ const MISSIONS = {
     sector: 'GULF COAST CONTAINER TERMINAL',
     threat: 'Active Campaign',
     threatArchetype: 'supply_chain',
-    // v0.9.1: Maersk NotPetya 2017 scale posture. $300M loss, 76 terminals offline,
+    // v0.9.1: Maersk NotPetya 2017 scale posture. $300M loss, operations disrupted across 76-terminal network,
     // 4000 servers + 45,000 PCs re-imaged over 10 days. Port of Houston 2021 (Volt
     // Typhoon-attributed via ManageEngine CVE-2021-40539) confirms the pattern at
     // U.S. ports. The TOS compromise is sector-cascading, not single-asset.
-    summary: 'Defend an 8-asset container port against sector-cascading disruption. Mixed IT/OT environment with crane PLCs, vessel traffic services, and a vessel in port. Maersk NotPetya 2017 ($300M loss, 76 terminals offline, 10-day recovery) and Port of Houston 2021 (CVE-2021-40539, Volt Typhoon pattern) establish ground truth: when TOS falls, the port stops — even if every crane and ship is fine, nobody knows what container is where.',
+    summary: 'Defend an 8-asset container port against sector-cascading disruption. Mixed IT/OT environment with crane PLCs, vessel traffic services, and a vessel in port. Maersk NotPetya 2017 ($300M loss, operations disrupted across 76-terminal network, 10-day recovery) and Port of Houston Aug 2021 (CVE-2021-40539 Zoho ManageEngine ADSelfService Plus — publicly described by CISA Director Easterly as a "nation-state actor" intrusion; no primary source has named a specific cluster) establish ground truth: when TOS falls, the port stops — even if every crane and ship is fine, nobody knows what container is where.',
     frameworks: ['attack','ics','d3fend'],
     // v0.9.1: tighter window + lower threshold reflect how fast a maritime
     // compromise degrades once TOS or CTRL goes. Container ports lose
@@ -2380,7 +2408,7 @@ const MISSIONS = {
     sector: 'REGIONAL HEALTH SYSTEM',
     threat: 'Active Campaign',
     threatArchetype: 'ransomware',
-    summary: 'Defend an 8-node regional hospital against ransomware-dominant campaign with patient-safety stakes. The NHS WannaCry 2017 pattern (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 pattern (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks) establish ground truth: in healthcare, availability loss on the EHR becomes operational paralysis within hours, and compromise of patient-connected biomed devices is a life-safety event, not a dollar-value event.',
+    summary: 'Defend an 8-node regional hospital against ransomware-dominant campaign with patient-safety stakes. The NHS WannaCry 2017 pattern (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 pattern (ALPHV/BlackCat, $872M Q1 2024 impact [$593M direct response + $279M business disruption], full-year 2024 impact exceeded $3B, pharmacy claims nationwide offline for weeks) establish ground truth: in healthcare, availability loss on the EHR becomes operational paralysis within hours, and compromise of patient-connected biomed devices is a life-safety event, not a dollar-value event.',
     frameworks: ['attack','ics','d3fend'],
     // Tight window + low threshold — hospitals lose operational tempo in hours.
     maxRounds: 10,
@@ -2422,13 +2450,13 @@ const MISSIONS = {
     sector: 'REGIONAL RAIL SIGNALING + FREIGHT DISPATCH',
     threat: 'Active Campaign',
     threatArchetype: 'nation_state',
-    summary: 'Defend an 8-node regional railway system — passenger signaling + freight dispatch — against a mixed-tempo campaign. Belarusian Cyber-Partisans Jan 2022 (encrypted BelZhD dispatch during Russian troop movements), Polish Aug 2023 radio-stop command injection on freight lines (ABW investigation documented 20+ unauthorized stop signals using legitimate cleartext VHF signaling), and Taiwan TRA 2022-2024 ransomware+phishing establish ground truth: rail is RF-exposed, signaling has limited authentication by design, and the consequence of a compromise can be a passenger-safety event (not just dollar loss).',
+    summary: 'Defend an 8-node regional railway system — passenger signaling + freight dispatch — against a mixed-tempo campaign. Belarusian Cyber-Partisans Jan 2022 (encrypted the bulk of BelZhD IT during Russian troop movements) and Polish Aug 2023 radio-stop command injection (ABW investigation; approximately 20 trains halted via legitimate cleartext VHF signaling) establish ground truth: rail is RF-exposed, legacy cab-signaling protocols were safety-engineered but not cryptographically authenticated, and the consequence of a compromise can be a passenger-safety event (not just dollar loss). CISA #StopRansomware rail-sector advisories and APTA Cybersecurity Toolkit cover the broader ransomware-against-rail-back-office pattern.',
     frameworks: ['attack','ics','d3fend'],
     maxRounds: 10,
     loseThreshold: 3,
     threatMix: ['T1566.001','T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1059','T1021','T1021.001','T1486','T1070.001','T1087.001','T1498','T1498.001','T1491.001','T0855','T0803','T0871','T0836','T0832','T0826','T1692.001','T1691.001','T1692.002','PER-0001'],
     impactTechs: ['T0855','T0803','T0871','T0836','T0832','T0826'],
-    // Rail-sector actor pool: ransomware (Taiwan TRA 2022-2024 pattern),
+    // Rail-sector actor pool: ransomware against rail IT (per CISA #StopRansomware rail-sector advisories),
     // hacktivist with command-injection capability (Belarus/Polish patterns —
     // availability-focused + RF-protocol opportunism), broker-to-ransomware
     // pipeline, infostealer-sourced creds against ops consoles, insider
@@ -2444,14 +2472,14 @@ const MISSIONS = {
       triggerNode: 'DISPATCH',
       effectNodes: ['INTERLOCK-A','INTERLOCK-B','FREIGHT-TMS','PTC-SERVER'],
       effectState: 'stressed',
-      narration: 'DISPATCH COMPROMISED — OPERATIONAL CASCADE. The Belarusian Cyber-Partisans Jan 2022 BelZhD pattern: dispatch encrypted, movement authorities frozen. Trackside signaling still functional but operators cannot issue clearance. Trains hold at interlockings. Freight schedules collapse. In the Belarus case, this stalled Russian troop movements for days. In a passenger context, the operational consequence is service suspension measured in hours to days, not minutes.',
+      narration: 'DISPATCH COMPROMISED — OPERATIONAL CASCADE. The Belarusian Cyber-Partisans Jan 2022 BelZhD pattern (as a lesson, not as the Partisans\' stated specific target): when the IT backbone that coordinates movement goes down, movement authorities freeze. Trackside signaling still functional but operators cannot issue clearance. Trains hold at interlockings. Freight schedules collapse. In the Belarus case, broad BelZhD IT encryption stalled Russian troop movements for days. In a passenger context, the operational consequence is service suspension measured in hours to days, not minutes.',
       doctrineRef: 'Belarusian Cyber-Partisans / BelZhD Jan 2022',
     },
     // Life-safety nodes: trackside signaling and grade crossings. Compromise
     // of these = passenger-safety or motorist-safety event per FRA 49 CFR
     // Part 236 (Positive Train Control) + APTA cybersecurity guidance.
     lifeSafetyNodes: ['INTERLOCK-A','INTERLOCK-B','GRADE-X'],
-    lifeSafetyNarration: 'TRACKSIDE SIGNALING / GRADE-CROSSING CONTROLLER COMPROMISED. This is a passenger-safety or motorist-safety event, not a schedule event. In the real world: emergency manual operation per FRA 49 CFR Part 236 Subpart H fallback procedures; dispatcher-side flagman authority at affected points; notify FRA + TSA Transportation Security Operations Center per Security Directive 1580/82-2022-01A; the Polish Aug 2023 radio-stop pattern (per ABW) showed 20+ unauthorized stop signals causing emergency braking — no fatalities but operational-safety-margin loss was documented.',
+    lifeSafetyNarration: 'TRACKSIDE SIGNALING / GRADE-CROSSING CONTROLLER COMPROMISED. This is a passenger-safety or motorist-safety event, not a schedule event. In the real world: emergency manual operation per FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements) fallback procedures; dispatcher-side flagman authority at affected points; notify FRA + TSA Transportation Security Operations Center per TSA Security Directive 1580/82-2022-01C; the Polish Aug 2023 radio-stop pattern (per ABW investigation) showed approximately 20 trains halted via unauthorized VHF stop commands causing emergency braking — no fatalities but operational-safety-margin loss was documented.',
   },
 };
 
@@ -4016,7 +4044,7 @@ function drawVesselNode(n) {
 // 8-node regional hospital. Real-world grounded: NHS WannaCry 2017 (£92M loss,
 // ~19,000 cancelled appointments, surgeries diverted — the archetype healthcare
 // ransomware consequence pattern), Change Healthcare Feb 2024 (ALPHV/BlackCat,
-// $872M direct loss, pharmacy claims nationwide offline for weeks — the modern
+// $872M Q1 2024 impact ($593M direct + $279M business disruption), full-year 2024 impact >$3B — the modern
 // sector-cascading ransomware pattern), and HHS 405(d) Healthcare Industry
 // Cybersecurity Practices + FDA Medical Device Cybersecurity Guidance (2023)
 // for the biomed exposure model.
@@ -4199,13 +4227,13 @@ function drawEHRNode(n) {
 //
 // 8-node regional railway: dispatch, two interlockings, PTC back-office,
 // freight management, VHF link, grade crossing, and AD. Grounded in:
-//   • Belarusian Cyber-Partisans Jan 2022 (BelZhD dispatch encryption)
+//   • Belarusian Cyber-Partisans Jan 2022 (encrypted the bulk of BelZhD IT)
 //   • Polish ABW Aug 2023 investigation of radio-stop command injection
-//     on freight railways (20+ unauthorized stop signals via legitimate
+//     on Polish rail (approximately 20 trains halted via legitimate
 //     cleartext VHF signaling)
-//   • Taiwan TRA 2022-2024 ransomware + phishing incidents
-//   • TSA Security Directive 1580/82-2022-01A (rail cybersecurity reqs)
-//   • FRA 49 CFR Part 236 Subpart H (PTC cybersecurity + fallback ops)
+//   • CISA #StopRansomware rail-sector advisories (ransomware against rail IT, generic sector reporting)
+//   • TSA Security Directive 1580/82-2022-01C (current rail cybersecurity reqs; successor to 01A/01B)
+//   • FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements)
 //   • APTA Cybersecurity Toolkit
 //   • CENELEC 50159 (safety-critical rail communications)
 //
@@ -4644,7 +4672,7 @@ function pickC2() {
     // - HOLLOWKEY (external cred against operator console): AD
     // - VOLTFORGE (long-dwell pre-position): rail-back-office preferred
     // - WARDEN (broker): AD typical entry
-    // - CRYO (ransomware against dispatch IT per Taiwan TRA pattern): AD
+    // - CRYO (ransomware against dispatch IT per CISA #StopRansomware rail-sector pattern): AD
     if (actor && actor.archetype === 'hacktivist') {
       STATE.c2Node = Math.random() < 0.5 ? 'AD' : 'VHF-LINK';
     } else if (actor && actor.archetype === 'compromised_credentials') {
@@ -4653,7 +4681,7 @@ function pickC2() {
       const candidates = STATE.nodes.filter(n => n.type === 'rail-back-office' || n.type === 'identity');
       STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else {
-      // CRYO / WARDEN / default — AD entry (Taiwan TRA 2022-2024 archetype)
+      // CRYO / WARDEN / default — AD entry (CISA #StopRansomware rail-sector archetype)
       STATE.c2Node = 'AD';
     }
   }
@@ -4685,9 +4713,9 @@ function aiPlanThreats() {
     if (STATE.round <= dwellRounds) {
       baseDesired = 1;  // just the dwell footprint; mostly recon/lateral in quiet
     } else {
-      // Detonation phase: aggressive multi-vector spawning. This is the
-      // "70-minute explosive window" per Huntress/M-Trends 2026 patterns —
-      // compressed to in-game tempo.
+      // Detonation phase: aggressive multi-vector spawning. The real-world
+      // detonation window after staging is minutes-to-hours — not days — once
+      // backup destruction / exfil / encryption begins. Compressed to in-game tempo.
       baseDesired = Math.max(baseDesired, 2) + 1;
     }
   }
@@ -4960,7 +4988,7 @@ function generateCFINote(rubric) {
       const handed = STATE.handoffFired ? 'did' : 'did not';
       notes.push(`Faced ${A.name} — initial access broker. ${handed === 'did' ? 'Attribution shifted mid-run as the IAB sold the foothold to a buyer per Rapid7 2025 pattern.' : 'IAB did not reach handoff; your containment denied the sale.'}`);
     } else if (A.archetype === 'compromised_credentials') {
-      notes.push(`Faced ${A.name} — compromised credentials, not a real insider. Per Ponemon 2025, this is ~20% of what organizations label "insider threats." Response differs: rotate credentials, kill sessions, enforce device-bound tokens — do not treat the account owner as hostile.`);
+      notes.push(`Faced ${A.name} — compromised credentials, not a real insider. Per Ponemon 2025 Cost of Insider Risks, this is ~20% of what organizations label as insider risk (the report calls the category "outsmarted" / credential theft). Response differs: rotate credentials, kill sessions, enforce device-bound tokens — do not treat the account owner as hostile.`);
     } else if (A.archetype === 'hacktivist' && A.availabilityFocused) {
       notes.push(`Faced ${A.name} — DDoS-primary hacktivist in the NoName057(16) / CyberAv3ngers mold. Availability was the target, not persistence. Mitigation lives at the edge (CDN scrubbing, rate limiting, BCP 38) more than at the endpoint.`);
     } else if (A.archetype === 'nation_state' && A.aerospaceChain) {
@@ -4992,17 +5020,17 @@ function generateCFINote(rubric) {
   if (STATE.metrics && STATE.metrics.sectorCascade) {
     const sc = STATE.metrics.sectorCascade;
     if (sc.doctrineRef === 'Maersk NotPetya 2017') {
-      notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real-world Maersk incident ($300M loss, 76 terminals offline, 10-day recovery), the lesson was: TOS is not an IT system in an OT port, it is the control plane for everything that moves. Bulwark it day one; recover it with isolated rebuild capacity, not by replaying backups into the production domain.`);
+      notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real-world Maersk incident ($300M loss, operations disrupted across Maersk's 76-terminal global network, 10-day recovery, 4,000 servers + 45,000 PCs + 2,500 applications re-imaged per Jim Hagemann Snabe's WEF Davos 2018 remarks), the lesson was: TOS is not an IT system in an OT port, it is the control plane for everything that moves. Bulwark it day one; recover it with isolated rebuild capacity, not by replaying backups into the production domain.`);
     } else if (sc.doctrineRef === 'NHS WannaCry 2017') {
       notes.push(`Clinical cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real NHS WannaCry incident (~19,000 appointments cancelled, surgeries diverted, £92M in direct/indirect loss), the ransomware itself did not kill patients — the loss of the information backbone that coordinates care did, by forcing clinicians onto manual workflows at a tempo they could not sustain safely. Bulwark EHR day one; have a tested paper/manual-mode runbook; practice it before you need it.`);
     } else if (sc.doctrineRef === 'Belarusian Cyber-Partisans / BelZhD Jan 2022') {
-      notes.push(`Operational cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real BelZhD incident, dispatch servers were encrypted during Russian troop movements into Belarus; movement authorities froze while trackside signaling and locomotives remained physically operational. The operational effect was days of service suspension even though no OT equipment was touched. For a U.S. operator, the equivalent lesson is TSA Security Directive 1580/82 compliance (incident response plan, operational-fallback procedures, access-control review): practice the dispatch-less day before you have one.`);
+      notes.push(`Operational cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real BelZhD incident the bulk of BelZhD servers, databases, and workstations were encrypted during Russian troop movements into Belarus (Partisans public statements); movement coordination was lost while trackside signaling and locomotives remained physically operational. The operational effect was days of service suspension even though no OT equipment was touched. For a U.S. operator, the equivalent lesson is TSA Security Directive 1580/82-2022-01C compliance (incident response plan, operational-fallback procedures, access-control review): practice the dispatch-less day before you have one.`);
     } else {
       notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern.`);
     }
   }
   if (STATE.mission && STATE.mission.id === 'TIDEBREAK' && STATE.phase === 'LOSE') {
-    notes.push('Maritime loss analysis: Port of Houston 2021 (CVE-2021-40539, Volt Typhoon pattern via ManageEngine) and Maersk NotPetya 2017 both prove the same point — the perimeter CVE is the headline, but the OT consequence is the body. Patch the known-exploited edge appliance list (CISA KEV catalog) continuously; TOS is the crown jewel.');
+    notes.push('Maritime loss analysis: Port of Houston Aug 2021 (CVE-2021-40539 Zoho ManageEngine; publicly described by CISA Director Easterly as a "nation-state actor" intrusion — no primary source has named a specific cluster) and Maersk NotPetya 2017 both prove the same point — the perimeter CVE is the headline, but the OT consequence is the body. Patch the known-exploited edge appliance list (CISA KEV catalog) continuously; TOS is the crown jewel.');
   }
   // v0.9.3: HEARTLINE healthcare-specific debrief notes
   if (STATE.mission && STATE.mission.id === 'HEARTLINE') {
@@ -5012,7 +5040,7 @@ function generateCFINote(rubric) {
       notes.push(`${lse} life-safety event${lse > 1 ? 's' : ''} this run (${nodes}). Compromise of a patient-connected device is a CARE-DELIVERY event, not a data-integrity event — hospital policy requires Patient Safety notification, manual-mode fallback with bedside confirmation of every dose/parameter, and ultimately a device-fleet isolation. FDA Medical Device Cybersecurity Guidance (2023) and HHS 405(d) HICP both treat this as reportable. Dollar-loss metrics will understate what actually happened here.`);
     }
     if (STATE.phase === 'LOSE') {
-      notes.push('Healthcare loss analysis: Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks) is the modern pattern — the ransomware operator understood that healthcare has thin recovery capacity, limited downtime tolerance, and a willingness to pay. The defensive move isn\'t "better backups alone" — it is pre-tested manual-mode clinical workflows and (per HHS 405(d) HICP Practice #4) a tested crisis-management plan that assumes the information backbone will be unavailable for days to weeks.');
+      notes.push('Healthcare loss analysis: Change Healthcare Feb 2024 (ALPHV/BlackCat; $872M Q1 2024 impact — $593M direct response + $279M business disruption — with full-year 2024 impact exceeding $3B; pharmacy claims nationwide offline for weeks; ~190M individuals\' PHI affected per UnitedHealth\'s Jan 2025 OCR update) is the modern pattern — the ransomware operator understood that healthcare has thin recovery capacity, limited downtime tolerance, and a willingness to pay. The defensive move isn\'t "better backups alone" — it is pre-tested manual-mode clinical workflows and (per HHS 405(d) HICP Practice #4) a tested crisis-management plan that assumes the information backbone will be unavailable for days to weeks.');
     }
   }
   // v0.9.4: RAILGUARD rail-specific debrief notes
@@ -5020,10 +5048,10 @@ function generateCFINote(rubric) {
     const lse = (STATE.lifeSafetyEvents || []).length;
     if (lse > 0) {
       const nodes = STATE.lifeSafetyEvents.map(e => e.node).join(', ');
-      notes.push(`${lse} life-safety event${lse > 1 ? 's' : ''} this run (${nodes}). Compromise of trackside signaling or a grade-crossing controller is a PASSENGER- or MOTORIST-safety event. Per FRA 49 CFR Part 236 Subpart H, operators must have fallback procedures for PTC/signaling degradation; per TSA Security Directive 1580/82-2022-01A, incident response and operational-fallback procedures are a compliance requirement, not optional. The Polish Aug 2023 ABW investigation documented 20+ unauthorized VHF stop signals causing emergency braking — no fatalities, but the safety margin was spent.`);
+      notes.push(`${lse} life-safety event${lse > 1 ? 's' : ''} this run (${nodes}). Compromise of trackside signaling or a grade-crossing controller is a PASSENGER- or MOTORIST-safety event. Per FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements), operators must have fallback procedures for PTC/signaling degradation; per TSA Security Directive 1580/82-2022-01C, incident response and operational-fallback procedures are a compliance requirement, not optional. The Polish Aug 2023 ABW investigation documented approximately 20 trains halted via unauthorized VHF stop commands causing emergency braking — no fatalities, but the safety margin was spent.`);
     }
     if (STATE.phase === 'LOSE') {
-      notes.push('Rail loss analysis: three concurrent public patterns inform the defensive posture — Belarus Cyber-Partisans Jan 2022 (dispatch encrypted, days of service lost), Polish Aug 2023 radio-stop (cleartext VHF command injection, no authentication by legacy design), Taiwan TRA 2022-2024 (phishing → ransomware against back-office). The common thread is that rail signaling grew up with safety-engineering authentication (fail-safe design) but limited cybersecurity authentication (no cryptographic command signing on legacy VHF). TSA 1580/82-2022-01A compliance is table stakes; CENELEC 50159 (safety-critical rail communications) and FRA 49 CFR 236 Subpart H together frame the next-generation posture — cryptographic signing on command messages, dual-authority on parameter changes, and dispatch-less fallback procedures practiced routinely.');
+      notes.push('Rail loss analysis: two well-documented public patterns inform the defensive posture — Belarus Cyber-Partisans Jan 2022 (encrypted the bulk of BelZhD IT during Russian troop movements, days of service lost) and Polish ABW Aug 2023 (approximately 20 trains halted via cleartext VHF command injection, no cryptographic authentication by legacy design). Generic rail-sector ransomware risk is covered by CISA #StopRansomware advisories + APTA Cybersecurity Toolkit. The common thread is that rail signaling grew up with safety-engineering authentication (fail-safe design) but limited cybersecurity authentication (no cryptographic command signing on legacy VHF). TSA SD 1580/82-2022-01C compliance is table stakes; CENELEC EN 50159 (safety-related communications in transmission systems) and FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements) together frame the next-generation posture — cryptographic signing on command messages, dual-authority on parameter changes, and dispatch-less fallback procedures practiced routinely.');
     }
   }
   if (rubric.doctrine.score === 100) notes.push('Decisive operational result.');
@@ -6796,23 +6824,23 @@ function renderCodexTab(el) {
 
   // v0.9.1: ZPMC Cellular-Modem Pattern codex entry
   html += `<div class="codex-entry" style="border-left:2px solid #5cb8ff;padding-left:6px;margin-top:8px;">
-    <div><span style="color:#5cb8ff;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ ZPMC CELLULAR-MODEM PATTERN (U.S. House Select Committee on CCP, Feb 2024)</span></div>
-    <div class="codex-desc" style="margin-top:3px;">Shanghai Zhenhua Heavy Industries (ZPMC) builds approximately 80% of ship-to-shore (STS) cranes operating in U.S. ports. The 2024 U.S. House Select Committee on CCP joint investigation (with House Homeland Security Committee) documented cellular modems installed on ZPMC STS cranes beyond contractual specification, in some cases without the operator\'s knowledge, creating an out-of-band command-and-control channel that bypasses the port\'s IT security entirely.</div>
+    <div><span style="color:#5cb8ff;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ ZPMC CELLULAR-MODEM PATTERN (House joint investigation, 16 Sep 2024)</span></div>
+    <div class="codex-desc" style="margin-top:3px;">Shanghai Zhenhua Heavy Industries (ZPMC) builds roughly 70-80% of ship-to-shore (STS) cranes operating in U.S. ports per the Sep 2024 joint House investigation. The U.S. House Committee on Homeland Security and the Select Committee on the Chinese Communist Party released their joint investigation report on 16 Sep 2024 documenting cellular modems installed on ZPMC STS cranes beyond contractual specification, in some cases without the operator\'s knowledge, creating an out-of-band command-and-control channel that bypasses the port\'s IT security entirely.</div>
     <div class="codex-tools" style="margin-top:4px;">
       <b>Access vector</b>: Cellular modem embedded in crane PLC housing or operator cab, carrier SIM activated during manufacture or commissioning. Traffic egresses via the mobile carrier, never crossing the port\'s enterprise firewall.<br>
       <b>Signaling</b>: T1205 Traffic Signaling — modem stays passive until an inbound wake-up from the carrier network activates the covert channel. T1573 Encrypted Channel over T1571 Non-Standard Port.<br>
       <b>Collection</b>: T0845 Program Upload — adversary reads PLC program/logic over the covert channel for reconnaissance.<br>
       <b>Impact enabler</b>: Once the channel is live, T0832 Manipulation of View and T0826 Loss of Availability targeting crane PLC logic are feasible without any enterprise-network footprint.<br>
-      <b>Scope</b>: USCG MARSEC Directive 105-6 (Feb 2024) established cybersecurity requirements for PRC-manufactured STS cranes operating at U.S. ports. Executive Order 14116 (Feb 2024) authorized USCG to directly regulate maritime cybersecurity.
+      <b>Scope</b>: USCG MARSEC Directive 105-4 (21 Feb 2024, 89 FR 13726) established cybersecurity requirements for PRC-manufactured STS cranes operating at U.S. ports (subsequently reissued as MARSEC 105-5 in Nov 2024). Executive Order 14116 (Feb 2024) authorized USCG to directly regulate maritime cybersecurity.
     </div>
     <div class="codex-counters" style="margin-top:4px;">▸ Hunt artifacts: physical cellular-radio inventory of OT equipment; carrier-provided SIM-activity reports for all enterprise-contracted SIMs; RF survey around crane housings; vendor-contract audit for undocumented radios. Enterprise NetFlow will not see this traffic — carrier-level visibility is the only path.</div>
-    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: U.S. House Select Committee on the CCP + House Homeland Security Committee joint investigation report on ZPMC STS cranes (Feb 2024); USCG MARSEC Directive 105-6; Executive Order 14116. In-game: TIDEMARK models this behavior via cellularBeaconMode.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: U.S. House Committee on Homeland Security + Select Committee on the CCP joint investigation report on ZPMC STS cranes (16 Sep 2024, homeland.house.gov); USCG MARSEC Directive 105-4 (21 Feb 2024, 89 FR 13726); Executive Order 14116 (Feb 2024). In-game: TIDEMARK models this behavior via cellularBeaconMode.</div>
   </div>`;
 
   // v0.9.3: NHS WannaCry 2017 pattern codex entry
   html += `<div class="codex-entry" style="border-left:2px solid #ff5080;padding-left:6px;margin-top:8px;">
     <div><span style="color:#ff5080;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ NHS WANNACRY 2017 PATTERN (NAO + DHSC post-incident reports)</span></div>
-    <div class="codex-desc" style="margin-top:3px;">On 12-13 May 2017, the WannaCry ransomware worm (ETERNALBLUE / MS17-010 propagation) hit at least 80 of 236 NHS Trusts and 603 primary-care organizations in England, locking Windows systems and spreading laterally over SMB. ~19,000 appointments were cancelled; A&amp;E diversions and surgery cancellations followed. UK Department of Health and Social Care estimated £92M in direct/indirect cost. Patient harm from the IT outage was not fatal in confirmed reporting, but the care-tempo compression was documented and the sector learned how brittle appointment and order routing are to availability loss.</div>
+    <div class="codex-desc" style="margin-top:3px;">On 12-13 May 2017, the WannaCry ransomware worm (ETERNALBLUE / MS17-010 propagation) hit at least 81 of 236 NHS Trusts in England and infected 603 more NHS organizations (including 595 GP practices), locking Windows systems and spreading laterally over SMB. Approximately 19,000 appointments were cancelled; A&amp;E diversions and surgery cancellations followed. UK Department of Health and Social Care estimated £92M in direct/indirect cost (per Oct 2018 post-incident learning review). Patient harm from the IT outage was not fatal in confirmed reporting, but the care-tempo compression was documented and the sector learned how brittle appointment and order routing are to availability loss.</div>
     <div class="codex-tools" style="margin-top:4px;">
       <b>Entry vector</b>: unpatched Windows SMBv1 (MS17-010), exposed inside the network via unsegmented clinical VLANs.<br>
       <b>Spread</b>: ETERNALBLUE automated worm propagation — no human-in-the-loop needed to pivot across hospitals once a single Trust was infected.<br>
@@ -6826,35 +6854,35 @@ function renderCodexTab(el) {
   // v0.9.3: Change Healthcare Feb 2024 pattern codex entry
   html += `<div class="codex-entry" style="border-left:2px solid #ff5080;padding-left:6px;margin-top:8px;">
     <div><span style="color:#ff5080;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ CHANGE HEALTHCARE FEB 2024 PATTERN (ALPHV/BlackCat + HHS OCR + UnitedHealth public reporting)</span></div>
-    <div class="codex-desc" style="margin-top:3px;">On 21 Feb 2024, Change Healthcare (a UnitedHealth Group subsidiary that processes a large majority of U.S. pharmacy claims and clinician billing) detected an ALPHV/BlackCat ransomware intrusion. UnitedHealth took ~$872M in Q1 2024 direct response costs; the final 2024 total materially exceeded that in subsequent earnings disclosures. The downstream effect on the health system was systemic: pharmacy claims nationwide were offline for weeks, pharmacists manually processed scripts without insurance verification, clinicians went unpaid in some practices while billing clearinghouses were down, and the HHS Secretary issued an unprecedented public call for insurers to accelerate payments to providers.</div>
+    <div class="codex-desc" style="margin-top:3px;">On 21 Feb 2024, Change Healthcare (a UnitedHealth Group subsidiary that processes a large majority of U.S. pharmacy claims and clinician billing) detected an ALPHV/BlackCat ransomware intrusion. UnitedHealth reported a Q1 2024 impact of $872M, composed of $593M direct response costs plus $279M business disruption impact. The full-year 2024 impact exceeded $3B in subsequent earnings disclosures. The downstream effect on the health system was systemic: pharmacy claims nationwide were offline for weeks, pharmacists manually processed scripts without insurance verification, clinicians went unpaid in some practices while billing clearinghouses were down, and the HHS Secretary issued an unprecedented public call for insurers to accelerate payments to providers.</div>
     <div class="codex-tools" style="margin-top:4px;">
       <b>Entry vector</b>: compromised credentials for a Change Healthcare Citrix remote-access gateway with no MFA (per subsequent testimony).<br>
-      <b>Tradecraft</b>: ALPHV/BlackCat RaaS affiliate — slow dwell (~9 days before detonation), double extortion (data exfil before encryption), backup destruction prior to encrypt event. See CRYO in-game archetype which models this tempo (<i>slow_dwell_fast_impact</i>).<br>
-      <b>Scope</b>: 100M+ individuals' PHI implicated in subsequent HHS OCR breach notification — one of the largest healthcare breaches on record.<br>
+      <b>Tradecraft</b>: ALPHV/BlackCat RaaS affiliate — ~9 days of access-to-detonation (per UnitedHealth CEO Andrew Witty's May 2024 House Energy & Commerce testimony), double extortion (data exfil before encryption), backup destruction prior to encrypt event. See CRYO in-game archetype which models this tempo (<i>slow_dwell_fast_impact</i>).<br>
+      <b>Scope</b>: ~190M individuals' PHI implicated per UnitedHealth's Jan 2025 update to HHS OCR (initial Q2 2024 estimate was ~100M; figure doubled after fuller forensic review) — the largest healthcare breach on record.<br>
       <b>Doctrine lesson</b>: the intra-sector interdependency is the exposure. Change Healthcare was a single-point-of-failure for pharmacy claims nationally. The question for any health system now is not "are we patched?" but "what single vendor could take us offline for weeks?"
     </div>
-    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: MFA on every remote-access gateway without exception (the Change Healthcare gateway had none); vendor interdependency mapping with contractual recovery SLAs; sector-wide intel-sharing via H-ISAC and HHS 405(d); pre-tested manual-mode clinical and billing workflows for 2-6 weeks of a key vendor being unavailable.</div>
-    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: UnitedHealth Group public earnings disclosures Q1-Q4 2024; HHS OCR breach notification; U.S. Senate Finance Committee hearing testimony by UnitedHealth CEO (May 2024); H-ISAC post-incident briefings; CISA #StopRansomware ALPHV/BlackCat profile. In-game: CRYO archetype's slow_dwell_fast_impact tempo + doubleExtortion flag model this pattern.</div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: MFA on every remote-access gateway without exception (the Change Healthcare Citrix gateway had none, per TechTarget reporting of Witty testimony); vendor interdependency mapping with contractual recovery SLAs; sector-wide intel-sharing via H-ISAC and HHS 405(d); pre-tested manual-mode clinical and billing workflows for 2-6 weeks of a key vendor being unavailable.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: UnitedHealth Group public earnings disclosures Q1-Q4 2024; HHS OCR breach notification; U.S. Senate Finance Committee hearing (May 1 2024) and House Energy & Commerce Subcommittee hearing (May 1 2024) testimony by UnitedHealth CEO Andrew Witty; CISA #StopRansomware ALPHV/BlackCat profile. (H-ISAC runs member-only post-incident briefings as sector-wide intel-sharing, non-public.) In-game: CRYO archetype's slow_dwell_fast_impact tempo + doubleExtortion flag model this pattern.</div>
   </div>`;
 
   // v0.9.4: Belarusian Cyber-Partisans + BelZhD Jan 2022 pattern
   html += `<div class="codex-entry" style="border-left:2px solid #ffb84d;padding-left:6px;margin-top:8px;">
     <div><span style="color:#ffb84d;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ BELARUSIAN CYBER-PARTISANS / BELZHD JAN 2022 PATTERN</span></div>
-    <div class="codex-desc" style="margin-top:3px;">In late January 2022, during Russian force buildup and transit into Belarus prior to the Feb 24 invasion of Ukraine, the Belarusian Cyber-Partisans (@cpartisans) publicly claimed a ransomware-style encryption attack against Belarusian Railways (БелЖД / BelZhD). Partisans stated they encrypted dispatch servers to disrupt Russian troop and materiel movements by rail. Public reporting (Reuters, AP) corroborated significant BelZhD service disruption during the attack window. The incident is a hacktivist archetype that demonstrated two things: (1) a motivated non-state actor can meaningfully disrupt rail operations by targeting dispatch IT rather than trackside OT, and (2) the operational cascade — trains stop even though signals and locomotives are physically fine — is the point of this attack, not the data.</div>
+    <div class="codex-desc" style="margin-top:3px;">In late January 2022, during Russian force buildup and transit into Belarus prior to the Feb 24 invasion of Ukraine, the Belarusian Cyber-Partisans (@cpartisans) publicly claimed a ransomware-style encryption attack against Belarusian Railways (БелЖД / BelZhD). Partisans stated they encrypted the bulk of BelZhD servers, databases, and workstations and destroyed backups; ticketing, scheduling, and freight flows were disrupted. The group publicly said security/emergency operations systems were deliberately avoided. Public reporting (Reuters, TheWarZone, BankInfoSecurity) corroborated significant BelZhD service disruption during the attack window. The incident is a hacktivist archetype that demonstrated two things: (1) a motivated non-state actor can meaningfully disrupt rail operations by targeting rail IT rather than trackside OT, and (2) the operational cascade — trains stop even though signals and locomotives are physically fine — is the point of this attack, not the data.</div>
     <div class="codex-tools" style="margin-top:4px;">
       <b>Entry vector</b>: not publicly disclosed by Partisans; typical for hacktivist operations with insider assistance in rail-industry Belarus-specific context.<br>
-      <b>Payload</b>: encryption of dispatch servers (public statements). Partisans later released stolen BelZhD data over a period of weeks.<br>
+      <b>Payload</b>: encryption of the bulk of BelZhD servers, databases, and workstations with backup destruction (public Partisans statements); security/emergency operations systems deliberately avoided. Partisans later released stolen BelZhD data over a period of weeks.<br>
       <b>Operational effect</b>: movement authorities frozen, trains held at interlockings, freight schedules collapsed. Russian military rail movements disrupted.<br>
       <b>Doctrine lesson</b>: dispatch is the control plane for every movement. Its loss paralyzes rail without ever touching trackside gear. Operators who assume trackside hardening is enough miss the point.
     </div>
-    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: TSA Security Directive 1580/82-2022-01A incident response + operational fallback requirements; CENELEC 50159 safety-critical communications posture; dispatch-less fallback procedures (manual authority issuance by voice, with recorded authority codes) practiced regularly, not just on paper.</div>
-    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Belarusian Cyber-Partisans public channel statements Jan 2022; Reuters and AP reporting Jan 2022; TSA Security Directive 1580/82-2022-01A; CENELEC 50159 safety-critical rail communications standard. In-game: triggered by RAILGUARD sectorCascade when DISPATCH compromises.</div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: TSA Security Directive 1580/82-2022-01C (current revision, superseding 01A/01B) incident response + operational fallback requirements; CENELEC EN 50159 safety-related communications posture; dispatch-less fallback procedures (manual authority issuance by voice, with recorded authority codes) practiced regularly, not just on paper.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Belarusian Cyber-Partisans public channel statements Jan 2022; Reuters, TheWarZone, and BankInfoSecurity reporting Jan 2022; TSA Security Directive 1580/82-2022-01C; CENELEC EN 50159 safety-related communications in transmission systems. In-game: triggered by RAILGUARD sectorCascade when DISPATCH compromises.</div>
   </div>`;
 
   // v0.9.4: Polish Aug 2023 VHF radio-stop pattern
   html += `<div class="codex-entry" style="border-left:2px solid #ffb84d;padding-left:6px;margin-top:8px;">
     <div><span style="color:#ffb84d;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ POLISH FREIGHT RAILWAY VHF RADIO-STOP INCIDENTS (Polish ABW, Aug 2023)</span></div>
-    <div class="codex-desc" style="margin-top:3px;">Over several days in August 2023, more than 20 unauthorized emergency-stop signals were transmitted to freight trains in Poland over the legitimate Polish rail VHF cab-signaling system. The Polish Internal Security Agency (ABW) investigated and publicly characterized the activity as sabotage; the trigger-signal protocol in use was cleartext tones with no cryptographic authentication by design (a decades-old safety protocol that pre-dated cybersecurity concerns). No fatalities resulted — PTC fail-safe behavior stopped trains as designed — but the pattern demonstrated how an RF-protocol compromise can cause operational-safety-margin loss without ever touching any computer.</div>
+    <div class="codex-desc" style="margin-top:3px;">Over several days in August 2023, approximately 20 trains in Poland (both passenger and freight, per TheRecord and Euronews coverage) were halted by unauthorized emergency-stop signals transmitted over the legitimate Polish rail VHF cab-signaling system; CERT Polska described additional events across a wider window. The Polish Internal Security Agency (ABW) investigated and publicly characterized the activity as sabotage; the trigger-signal protocol in use was cleartext tones with no cryptographic authentication by design (a decades-old safety protocol that pre-dated cybersecurity concerns). No fatalities resulted — fail-safe design stopped trains as designed — but the pattern demonstrated how an RF-protocol compromise can cause operational-safety-margin loss without ever touching any computer.</div>
     <div class="codex-tools" style="margin-top:4px;">
       <b>Vector</b>: VHF transmitter in RF range of track; cleartext signaling protocol; no mutual authentication between transmitter and receiver on legacy cab-signaling.<br>
       <b>Payload</b>: emergency-stop tone sequences, which cause rolling stock to brake. The brake is a safety-design response (fail-safe); the attack weaponizes the safety behavior itself.<br>
@@ -6877,19 +6905,19 @@ function renderCodexTab(el) {
       <b style="color:var(--cyan);">GROUND-SEGMENT INITIAL ACCESS</b> — <span style="color:var(--cyan-dim);">T1190 edge-exploit + T1133 valid VPN creds</span><br>
       <span style="color:var(--muted);font-size:9px;">↳ ViaSat KA-SAT Feb 2022: VPN-adjacent vector → management plane → AcidRain wiper to tens of thousands of modems across Europe.</span><br>
       <b style="color:var(--cyan);">LATERAL INTO MCC</b> — <span style="color:var(--cyan-dim);">LM-0001 + T1078 valid accounts</span><br>
-      <span style="color:var(--muted);font-size:9px;">↳ ground-ops IT → MCC segment pivot. Mandiant M-Trends aerospace cases document this consistently as the step that converts IT compromise into mission-threat compromise.</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ ground-ops IT → MCC segment pivot. Mandiant M-Trends annual reports (aerospace observations within) document this consistently as the step that converts IT compromise into mission-threat compromise.</span><br>
       <b style="color:var(--cyan);">OPERATOR-IDENTITY THEFT</b> — <span style="color:var(--cyan-dim);">T1555.003 (infostealer) + T1078</span><br>
       <span style="color:var(--muted);font-size:9px;">↳ Lumma / RedLine / Vidar sourced browser credentials for operator consoles. The 2026 infostealer market produced sector-identifiable listings per Flare + Hudson Rock reporting.</span><br>
       <b style="color:var(--cyan);">UPLINK STAGING</b> — <span style="color:var(--cyan-dim);">EX-0014 Spoofing / EX-0016.01 Uplink Jamming</span><br>
       <span style="color:var(--muted);font-size:9px;">↳ RF transmitter in asset footprint or compromised ground-station transmitter + software-defined uplink built on captured schema. Documented at theater scale: Russia-Ukraine war GPS/Starlink/Iridium jamming + persistent Eastern Mediterranean / Baltic spoofing.</span><br>
       <b style="color:var(--cyan);">ON-ORBIT DELIVERY</b> — <span style="color:var(--cyan-dim);">EX-0010 Malicious Code / EX-0012 Modify On-Board Values / PER-0001 Memory Compromise</span><br>
       <span style="color:var(--muted);font-size:9px;">↳ Crafted FSW upload (requires signing-key compromise or unsigned path) OR parameter-table modification (lower bar — no new code). The strategic concern per CSIS Space Threat Assessment 2024-2026 is pre-positioned FSW payloads.</span><br>
-      <b style="color:var(--cyan);">MISSION IMPACT</b> — <span style="color:var(--cyan-dim);">IMP-0002 Disruption / IMP-0005 Denial</span><br>
+      <b style="color:var(--cyan);">MISSION IMPACT</b> — <span style="color:var(--cyan-dim);">IMP-0002 Disruption / IMP-0005 Destruction</span><br>
       <span style="color:var(--muted);font-size:9px;">↳ Timed trigger, attitude misalignment, thermal-threshold shift, imaging-schedule corruption. KA-SAT required ~2 months of ground recovery; ~5,800 German wind turbines lost remote management for months.</span>
       </div>
     </div>
     <div class="codex-counters" style="margin-top:6px;">▸ Hunt artifacts: dual-authority FSW upload approval; monotonic command-counter audit; config-value drift alert; operator-shift UEBA; carrier-side signal-strength monitoring of your own downlinks; routine conjunction + RPO screening. Treat ground-segment IT as mission-critical, not corporate-IT.</div>
-    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Sources: CISA Alert on ViaSat KA-SAT (Feb 2022); CSIS Space Threat Assessment (annual); Secure World Foundation Global Counterspace Capabilities (annual); USSF Space Delta 15 briefings; Mandiant M-Trends aerospace-sector; public GPS-spoofing campaign reporting (Black Sea / Eastern Med 2017-2025). In-game: KINGFISHER actor archetype models this behavior.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Sources: CISA Alert on ViaSat KA-SAT (Feb 2022); CSIS Space Threat Assessment (annual); Secure World Foundation Global Counterspace Capabilities (annual); USSF Space Delta 15 briefings; Mandiant M-Trends annual reports (aerospace observations within); public GPS-spoofing campaign reporting (Black Sea / Eastern Med 2017-2025). In-game: KINGFISHER actor archetype models this behavior.</div>
   </div>`;
 
   // Section 1: Active this run
