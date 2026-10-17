@@ -406,10 +406,10 @@ where: ti_catalog.actor_tag in ("ransomware_affiliate", "data_broker", "nation_s
 
 ---
 
-## Play 6 · TIDEMARK — Supply-chain / trusted vendor remote access
+## Play 6 · TIDEMARK — Supply-chain / trusted vendor remote access + ZPMC cellular-modem signature
 
 ### Objective
-Catch adversary presence that enters through a trusted-vendor remote-access channel (vendor VPN, LogMeIn, TeamViewer, vendor-managed jump host, PLC vendor cellular modem per ZPMC supply-chain concerns). The entry point is authorized; the activity after it isn't.
+Catch adversary presence that enters through a trusted-vendor remote-access channel (vendor VPN, LogMeIn, TeamViewer, vendor-managed jump host) OR through a cellular modem embedded in vendor-manufactured OT equipment (ZPMC-pattern per the 2024 U.S. House Select Committee on CCP report). The vendor-remote-access entry point is authorized; the activity after it isn't. The cellular-modem channel is a different problem — the enterprise firewall never sees it. **Two parallel sub-plays below.**
 
 ### Hypothesis
 A session originating from a vendor-access channel reaches assets outside the vendor's documented support scope, or executes commands outside the vendor's documented maintenance patterns.
@@ -471,6 +471,80 @@ having: time outside documented_maintenance_window
 - The vendor's own IR team (they may already know they're compromised)
 - Other customers of the same vendor via your ISAC
 - Any ICS/OT equipment of the same vendor make/model elsewhere in your estate (common foothold)
+
+### Sub-play 6B — ZPMC cellular-modem out-of-band C2
+
+### Objective
+Catch an adversary using a cellular modem embedded in vendor-manufactured OT equipment (classically ZPMC STS cranes) for out-of-band command-and-control that bypasses the enterprise firewall. Enterprise NetFlow does not see this traffic; carrier-level visibility is the only path.
+
+### Hypothesis
+A piece of vendor-manufactured OT equipment contains a cellular radio (SIM) not documented in the equipment purchase contract or system engineering drawings. The radio periodically contacts a carrier network, or receives inbound traffic-signaling events (T1205), from infrastructure not matched to any legitimate maintenance program.
+
+### Data source
+Carrier-provided SIM activity reports (billing records, data-session logs — your carrier contract may require you to request these explicitly, or you may need law-enforcement partnership). Physical cellular-radio inventory of OT equipment (RF survey, FCC equipment ID lookup, physical teardown during maintenance). Vendor contract and system-engineering drawings as ground truth for which radios SHOULD exist. OT-equipment procurement records for all PLC / HMI / crane / substation hardware.
+
+### Starter logic
+This is primarily a *procurement + physical audit* detection; secondarily a carrier-metadata hunt. The "logic" is a checklist, not pseudocode:
+
+```
+# Inventory baseline — document the ground truth
+for each piece of vendor-manufactured OT equipment in the estate:
+  - record manufacturer, model, serial, install date
+  - record vendor contract and whether cellular radios are specified
+  - record ALL radios present (RF survey + FCC ID + physical inspection)
+  - record any SIMs installed and their carrier/MSISDN
+
+# Carrier-metadata hunt — once a quarter at minimum
+for each enterprise-contracted SIM:
+  - pull carrier data-session log (data volume per day, destination IPs/ASNs)
+  - correlate with documented maintenance program (what SHOULD this SIM talk to?)
+  - flag: data sessions outside maintenance windows
+  - flag: destinations outside the vendor's documented support infrastructure
+  - flag: inbound signaling patterns (T1205) — the SIM receives traffic without initiating
+
+# Procurement exception hunt
+for each OT equipment arrival or firmware update:
+  - compare physical radio inventory before/after
+  - any new radio = out-of-contract hardware addition
+```
+
+### Known false positives
+- Legitimate vendor cellular telemetry contractually specified (should match vendor contract and support-scope documentation)
+- Carrier-side maintenance (DNS re-pointing, provisioning updates — the carrier should notify you)
+- Legitimate 4G/5G backup links in network design (should be documented in network architecture)
+- RF survey picking up adjacent cellular equipment not actually inside your gear (common in multi-tenant environments)
+
+### Response / triage
+1. **Confirmed undocumented radio**: physical isolation first — disconnect the radio or power the equipment down if operationally feasible. Document everything (serial, MSISDN, physical location, carrier). Preserve chain of custody. Report to USCG (maritime), CISA, and your sector ISAC — this is a national-security concern under USCG MARSEC Directive 105-6 and EO 14116.
+2. **Confirmed anomalous carrier traffic on a documented SIM**: contact the carrier for session metadata. If the destinations suggest state-adversary infrastructure, escalate immediately per major-incident playbook; this is beyond enterprise-only response.
+3. **Compliance posture**: for STS cranes specifically, verify USCG MARSEC Directive 105-6 posture. For other PRC-manufactured OT equipment, apply the same logic — Executive Order 14116 (Feb 2024) authorized USCG to directly regulate maritime cybersecurity.
+4. **TI product**: physical and procurement evidence feeds strategic reporting on supply-chain compromise patterns at sector level.
+
+### Maintenance & trend
+- **Baseline**: annual physical radio inventory per OT asset. Quarterly carrier-SIM reconciliation against contracted-SIM list.
+- **Tune**: your carrier contract may not give you data-session visibility by default; renegotiate. Some carriers offer "enterprise SIM visibility" products.
+- **Trends to watch**:
+  - **Discovery of a single undocumented radio** → verify against contract; it may be legitimate undocumented support capacity (bad hygiene, not malicious) OR adversary capability. Scope matters.
+  - **Pattern across multiple assets of the same vendor** → sector-wide concern. Share immediately via ISAC.
+  - **Carrier reports inbound signaling** (T1205) to one of your SIMs with no outbound initiation history → covert-channel activation attempt. High urgency.
+
+### Real anchors
+- **U.S. House Select Committee on the CCP + House Homeland Security Committee joint investigation on ZPMC STS cranes (Feb 2024)**
+- **USCG MARSEC Directive 105-6** (Feb 2024) — cybersecurity requirements for PRC-manufactured STS cranes at U.S. ports
+- **Executive Order 14116** (Feb 2024) — USCG authority over maritime cybersecurity
+- CISA / USCG joint maritime cybersecurity briefings (2023-2025)
+- MITRE ATT&CK T1205 Traffic Signaling, T1571 Non-Standard Port, T1573 Encrypted Channel
+- MITRE ATT&CK for ICS T0885 Commonly Used Port, T0845 Program Upload
+
+### Evolve it
+- *Easy*: enterprise NetFlow + firewall log analysis. Covert cellular channel never crosses the firewall — this control is blind to it.
+- *Harder*: Carrier-provided SIM-activity reports. Still misses radio presence if the SIM is dormant.
+- *Toughest*: Physical radio inventory + procurement verification + carrier-side anomaly detection. This is a *supply-chain assurance program*, not a SOC detection — and that is the only configuration that catches this pattern reliably.
+
+### Pivot to
+- Vendor-contract audit: what radios were procured, what maintenance program activates them, who authorized install?
+- Sector ISAC: are other operators of the same equipment seeing the same pattern?
+- Procurement future-state: contract language and acceptance-test procedures that enumerate ALL radios before equipment goes live
 
 ---
 
@@ -665,4 +739,4 @@ where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vida
 
 ---
 
-*Appendix generated for Joshua Protocol v0.9 — BUILD HUNT-20261017-1438Z · STAMP 2026-10-17T14:38Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.9.1 — BUILD HUNT-20261017-1459Z · STAMP 2026-10-17T14:59Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

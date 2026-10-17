@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9)
+## What's in the box (v0.9.1)
 
 ### Three missions, each grounded in real incident patterns
 
@@ -123,6 +123,14 @@ Found by audit: several archetypes were playing to pre-2020 Hollywood tropes rat
 - **11 new ATT&CK techniques** added to the catalog: T1498, T1498.001, T1498.002, T1499, T1491.001, T1078.001, T1110, T1565.001, T1531, T1555.003, T1087.001.
 - **Zero fabrication.** Every TTP sourced to primary advisory / report. Every statistic cited to source (M-Trends 2026, Ponemon 2025, CISA advisories, Europol Operation Eastwood).
 
+### v0.9.1: Priority 2 SME audit — depth passes
+
+Added depth to the three archetypes/missions the audit flagged as thin:
+
+- **VOLTFORGE stage-chain** — the AA24-038A tool ladder is now stage-aware. `lolChain` carries 7 stages (Recon → Discovery → Credential Access → Lateral → Defense Evasion → C2/Proxy → Exfil Staging) with real tool names and command-line fingerprints per the advisory. Codex Volt Typhoon entry now shows every stage with its signature commands (`ntdsutil "ac i ntds" "ifm"`, `nltest /domain_trusts`, `netsh int portproxy add v4tov4`, `rundll32 comsvcs.dll MiniDump`, …).
+- **TIDEMARK cellular-modem signature (ZPMC pattern)** — new `cellularBeaconMode: true` flag + 5 new ATT&CK techniques (T1205 Traffic Signaling, T1571 Non-Standard Port, T1573 Encrypted Channel, T0885 Commonly Used Port ICS, T0845 Program Upload ICS). Dedicated codex entry on the 2024 U.S. House Select Committee on CCP ZPMC report + USCG MARSEC Directive 105-6 + EO 14116. DETECTIONS.md Play 6 extended with sub-play 6B — a procurement + physical + carrier-metadata hunt, because enterprise NetFlow is blind to this traffic.
+- **TIDEBREAK Maersk-scale consequence** — mission tightened: `maxRounds: 11→9`, `loseThreshold: 4→3`. New `sectorCascade` mechanic: when TOS compromises, both cranes become operationally stressed (not just adjacent-cascade stressed) because manifest truth is lost — the Maersk NotPetya 2017 pattern ($300M loss, 76 terminals offline, 10-day recovery). CFI debrief references Port of Houston 2021 (CVE-2021-40539, Volt Typhoon via ManageEngine) when the mission ends in loss.
+
 ---
 
 ## Framework references and provenance
@@ -203,4 +211,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9** (October 2026) · BUILD `HUNT-20261017-1438Z`
+Current version: **v0.9.1** (October 2026) · BUILD `HUNT-20261017-1459Z`

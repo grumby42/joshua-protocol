@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9</title>
+<title>JOSHUA PROTOCOL v0.9.1</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1438Z';
-const STAMP_UTC = '2026-10-17T14:38Z';
-const APP_VERSION = 'v0.9';
+const BUILD_ID = 'HUNT-20261017-1459Z';
+const STAMP_UTC = '2026-10-17T14:59Z';
+const APP_VERSION = 'v0.9.1';
 
 // v0.8: Local save/load namespace keys.
 const LS_SAVE_KEY = 'joshua_protocol.save.v1';
@@ -1565,6 +1565,33 @@ const TECHNIQUES = {
     novice:'Malware steals passwords and session cookies saved in the browser.',
     tools:['EDR process monitoring (chrome.exe child reads)','Browser integrity','Sysmon event 11 (FileCreate)'],
     counters:['Hardened browser profile','Short session TTL','Device-bound tokens','D3-CH Credential Hardening'] },
+  // v0.9.1 — TIDEMARK cellular-modem signature (ZPMC-pattern per 2024 U.S.
+  // House Select Committee on CCP report + CISA/USCG maritime-cyber briefings).
+  'T1205': { fw:'attack', name:'Traffic Signaling', tactic:'Command and Control, Persistence, Defense Evasion',
+    desc:'Adversary signals a dormant implant to activate via an inbound trigger (magic packet, DNS query, specific HTTP header). The implant stays silent until signaled, defeating most beacon-based detections. In the ZPMC cellular-modem pattern, the modem\'s radio stays passive until a signal from the carrier network wakes the covert channel.',
+    novice:'An implant pretends to be inactive until the attacker sends a wake-up signal.',
+    tools:['NetFlow baseline against expected traffic','Carrier-provided SIM activity logs','Zeek with custom signatures for magic-packet patterns'],
+    counters:['Deny-by-default egress on OT','Carrier-level allow-list for cellular SIMs','D3-NTA: Network Traffic Analysis'] },
+  'T1571': { fw:'attack', name:'Non-Standard Port', tactic:'Command and Control',
+    desc:'Adversary uses a non-standard port for C2 traffic. Cellular-modem C2 often egresses on arbitrary ports chosen by the carrier network, bypassing port-based firewall rules on the IT side (because the traffic never crosses the IT firewall).',
+    novice:'Adversary uses an unexpected port to hide command traffic.',
+    tools:['NetFlow / IPFIX','Zeek protocol-mismatch detection','OT-firewall egress logs'],
+    counters:['Explicit allow-list egress rules','Deep-packet-inspection for protocol-port mismatches'] },
+  'T1573': { fw:'attack', name:'Encrypted Channel', tactic:'Command and Control',
+    desc:'Adversary encrypts C2 traffic (TLS, SSH, custom crypto) to evade content inspection. In OT contexts, this is particularly impactful when C2 travels over a cellular carrier network where the port owner has no visibility.',
+    novice:'Adversary encrypts their commands so defenders cannot read them.',
+    tools:['JA3/JA4 TLS fingerprinting','Carrier-level netflow','Side-channel analysis (timing, volume)'],
+    counters:['TLS inspection where lawfully permitted','Deny-by-default egress on OT'] },
+  'T0885': { fw:'ics', name:'Commonly Used Port', tactic:'Command and Control (ICS)',
+    desc:'Adversary uses a commonly used port (TCP/80, TCP/443, UDP/53) for ICS-targeting C2, blending with routine enterprise traffic. In cellular-modem scenarios, the modem acts as an out-of-band egress that bypasses the enterprise perimeter entirely — the port choice is less relevant than the fact that the traffic never crosses the main firewall.',
+    novice:'Adversary uses a port everyone else uses, to blend in.',
+    tools:['NetFlow baseline','Enterprise egress analytics','Cellular carrier SIM activity reports'],
+    counters:['OT network segmentation from enterprise','Carrier-level visibility of OT SIMs','D3-NI: Network Isolation'] },
+  'T0845': { fw:'ics', name:'Program Upload', tactic:'Collection (ICS)',
+    desc:'Adversary uploads (reads) PLC programs or logic from a controller — reconnaissance for subsequent modification or sabotage. Preceded by T0872 (Indicator Removal on Host) when the adversary clears controller event logs after read access.',
+    novice:'Adversary reads the controller\'s program to understand how it works before changing it.',
+    tools:['Zeek Modbus/S7Comm/EIP parsers','PLC audit log where present','OT asset-inventory baseline for which programs should be touched when'],
+    counters:['OT firewalling at Purdue L2/L3 boundary','PLC audit logging','Change-management correlation'] },
 };
 
 
@@ -1794,17 +1821,26 @@ const THREAT_ACTORS = {
     tagline: 'Supply-Chain Operator',
     silhouette: 'wave',
     color: '#5cb8ff',
-    summary: 'Operates through trusted-vendor remote access. Establishes presence via legitimate maintenance channels and pivots inward. Patient, hard to detect, highly cascading.',
-    pattern: 'TTP signature consistent with supply-chain compromise — abuse of vendor remote-access channels, dormant cellular modems, pre-installed backdoor capability.',
+    summary: 'Operates through trusted-vendor remote access AND through cellular modems embedded in vendor-manufactured OT equipment (ZPMC-pattern per 2024 U.S. House Select Committee on CCP report). Establishes presence via legitimate maintenance channels; pivots inward over out-of-band carrier networks that never cross the port\'s IT firewall. Patient, hard to detect, highly cascading.',
+    pattern: 'TTP signature consistent with supply-chain compromise — abuse of vendor remote-access channels, dormant cellular modems with traffic-signaling activation (T1205), non-standard C2 ports over carrier networks (T1571), encrypted channel masking (T1573), and PLC program upload (T0845) prior to manipulation. The cellular channel is the differentiator: enterprise security teams never see the egress because the modem\'s SIM talks to the carrier directly.',
     adaptive: true,
     spawnRateMod: 0.7,
     detectionWindow: 2.2,
     cascadeChance: 0.55,
-    techniqueAffinity: ['T1078','T0883','T0855','T0832','T0826','T1190','PER-0001','T1059'],
+    // v0.9.1: expanded with ZPMC cellular-modem signature techniques.
+    techniqueAffinity: ['T1078','T0883','T0855','T0832','T0826','T1190','PER-0001','T1059','T1205','T1571','T1573','T0885','T0845'],
     impactBias: 'T0832',
-    biasInitialAccess: ['T0883','T1078'],
-    biasExecution: ['T1059','T0855'],
+    biasInitialAccess: ['T0883','T1078','T1205'],
+    biasExecution: ['T1059','T0855','T0845'],
     biasImpact: ['T0832','T0826'],
+    // v0.9.1: cellular-modem out-of-band C2 characteristic.
+    cellularBeaconMode: true,
+    outOfBandC2: 'cellular_carrier',
+    sources: [
+      'U.S. House Select Committee on CCP: Investigation of ZPMC ship-to-shore cranes (Feb 2024)',
+      'USCG MARSEC Directive 105-6 (Feb 2024) — PRC-manufactured STS crane cyber risk',
+      'CISA/USCG joint maritime cybersecurity briefings 2023-2025',
+    ],
   },
   // v0.6: VOLTFORGE — archetypal pre-positioning / living-off-the-land actor.
   // Mechanical model grounded in CISA/NSA/FBI joint advisory AA24-038A on Volt
@@ -1838,7 +1874,30 @@ const THREAT_ACTORS = {
     dwellRoundsToWin: 5,
     // Living-off-the-land tool list for narration/codex display
     lolBins: ['vssadmin','ntdsutil','wmic','PowerShell','netsh','certutil','wevtutil','ldifde','nltest','reg','comsvcs.dll'],
+    // v0.9.1: stage-aware LotL chain per AA24-038A. Each stage lists the
+    // native tools / commands the advisory documents, with the signature
+    // command-line fingerprints that make the stage detectable.
+    lolChain: [
+      { stage:'Reconnaissance', ttp:'TA0043', tools:['ping','ipconfig','netstat','arp','route print','net view','systeminfo','tasklist'],
+        fingerprint:'Enumerating network layout, routing tables, running processes. On a server where none of this is routine, the sequence itself is the signal.' },
+      { stage:'Discovery', ttp:'TA0007', tools:['net user /domain','net group','nltest /domain_trusts','PowerShell Get-ADComputer','ldifde -f','dnscmd'],
+        fingerprint:'Mapping the AD environment via native tools. "nltest /domain_trusts" from a non-admin host is a hunt favorite.' },
+      { stage:'Credential Access', ttp:'TA0006', tools:['ntdsutil "ac i ntds" "ifm"','vssadmin create shadow','wmic shadowcopy call create','rundll32 comsvcs.dll MiniDump','reg save hklm\\sam'],
+        fingerprint:'The signature move: NTDS.dit extraction via IFM creation on a DC. ESENT event IDs 216 / 325 / 326 / 327 / 637 fire during the dit touch.' },
+      { stage:'Lateral Movement', ttp:'TA0008', tools:['wmic /node: process call create','PowerShell Invoke-Command / Enter-PSSession','net use','xcopy over SMB'],
+        fingerprint:'WMI remote process create and PowerShell remoting with no corresponding file-write — the goal is in-memory execution, not implant deployment.' },
+      { stage:'Defense Evasion', ttp:'TA0005', tools:['wevtutil cl Security','wevtutil cl System','certutil -decode','netsh int portproxy add v4tov4','reg modifications to Run keys'],
+        fingerprint:'Selective log clearing (not full-wipe), portproxy relay for internal pivot (HKLM\\SYSTEM\\CurrentControlSet\\Services\\PortProxy\\v4tov4\\tcp\\).' },
+      { stage:'C2 / Proxy', ttp:'TA0011', tools:['netsh portproxy','FRP (Fast Reverse Proxy) binaries','SOHO router hop','Earthworm / Impacket proxychains'],
+        fingerprint:'External C2 arrives through an edge-of-network small-office router the operator has recruited. Internal C2 arrives through portproxy relays that bind on 127.0.0.1 or an internal interface.' },
+      { stage:'Collection / Exfil Staging', ttp:'TA0009 / TA0010', tools:['makecab','xcopy','PowerShell Compress-Archive','rar.exe','certutil -urlcache -f','bitsadmin /transfer'],
+        fingerprint:'Archive-then-stage (makecab or Compress-Archive) in a path that masks as backup, followed by certutil / bitsadmin pulled over the C2 channel. Rare file writes outside admin paths.' },
+    ],
     source: 'CISA/NSA/FBI AA24-038A (Feb 2024)',
+    sources: [
+      'CISA/NSA/FBI AA24-038A: PRC State-Sponsored Actors Compromise and Maintain Persistent Access to U.S. Critical Infrastructure (Feb 2024)',
+      'Microsoft Threat Intelligence: Volt Typhoon targets US critical infrastructure (May 2023)',
+    ],
   },
 };
 
@@ -2130,15 +2189,35 @@ const MISSIONS = {
     sector: 'GULF COAST CONTAINER TERMINAL',
     threat: 'Active Campaign',
     threatArchetype: 'supply_chain',
-    summary: 'Defend an 8-asset container port. Mixed IT/OT environment with crane PLCs, vessel traffic services, and a vessel currently in port. Possible supply-chain compromise via vendor remote access.',
+    // v0.9.1: Maersk NotPetya 2017 scale posture. $300M loss, 76 terminals offline,
+    // 4000 servers + 45,000 PCs re-imaged over 10 days. Port of Houston 2021 (Volt
+    // Typhoon-attributed via ManageEngine CVE-2021-40539) confirms the pattern at
+    // U.S. ports. The TOS compromise is sector-cascading, not single-asset.
+    summary: 'Defend an 8-asset container port against sector-cascading disruption. Mixed IT/OT environment with crane PLCs, vessel traffic services, and a vessel in port. Maersk NotPetya 2017 ($300M loss, 76 terminals offline, 10-day recovery) and Port of Houston 2021 (CVE-2021-40539, Volt Typhoon pattern) establish ground truth: when TOS falls, the port stops — even if every crane and ship is fine, nobody knows what container is where.',
     frameworks: ['attack','ics','d3fend'],
-    maxRounds: 11,
-    loseThreshold: 4,
-    // v0.9: added HOLLOWKEY cred-theft + CRYO slow-dwell TTPs; TIDEMARK already covered
-    threatMix: ['T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1021.001','T0883','T0855','T0832','T0826','T1486','T1490','T1059','T1021','T1087.001','PER-0001'],
+    // v0.9.1: tighter window + lower threshold reflect how fast a maritime
+    // compromise degrades once TOS or CTRL goes. Container ports lose
+    // operational tempo in hours, not days — Maersk never got the business
+    // back in less than 10 days of 24/7 recovery.
+    maxRounds: 9,
+    loseThreshold: 3,
+    // v0.9: added HOLLOWKEY cred-theft + CRYO slow-dwell TTPs
+    // v0.9.1: added TIDEMARK cellular-modem signature TTPs (T1205, T1571, T1573, T0885, T0845)
+    threatMix: ['T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1021.001','T0883','T0855','T0832','T0826','T1486','T1490','T1059','T1021','T1087.001','PER-0001','T1205','T1571','T1573','T0885','T0845'],
     impactTechs: ['T0832','T0826','T1486'],
     validActors: ['TIDEMARK','CRYO','KINGFISHER','GHOSTWIRE','HOLLOWKEY','VOLTFORGE'],
     defaultActor: 'TIDEMARK',
+    // v0.9.1: sector-cascade when TOS compromises. Models Maersk NotPetya 2017:
+    // TOS loss cascades to every crane via loss-of-manifest-truth, not via
+    // direct compromise. Shows up as a one-time narrator beat + logs it against
+    // the mission's doctrine debrief rubric.
+    sectorCascade: {
+      triggerNode: 'TOS',
+      effectNodes: ['GANTRY-1','GANTRY-2'],   // the cranes
+      effectState: 'stressed',                // reuses existing 'stressed' state — rendered + counted as not-yet-lost
+      narration: 'TOS COMPROMISED — SECTOR CASCADE. The Maersk 2017 pattern: cranes are physically healthy but operationally paralyzed. Manifest truth is lost. Containers in motion are now in motion to UNKNOWN. Vessel ETA data is suspect. The port has effectively stopped even though no OT equipment was touched.',
+      doctrineRef: 'Maersk NotPetya 2017',
+    },
   },
 };
 
@@ -4139,6 +4218,14 @@ function generateCFINote(rubric) {
   const repeats = detectRepeatFailures();
   if (repeats.length > 0) notes.push(`${repeats.length} repeat failure pattern${repeats.length > 1 ? 's' : ''} detected — see MOVES tab.`);
   if (rubric.cascade.score >= 85) notes.push('Excellent cascade containment.');
+  // v0.9.1: TIDEBREAK sector-cascade doctrine note (Maersk NotPetya 2017)
+  if (STATE.metrics && STATE.metrics.sectorCascade) {
+    const sc = STATE.metrics.sectorCascade;
+    notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real-world Maersk incident ($300M loss, 76 terminals offline, 10-day recovery), the lesson was: TOS is not an IT system in an OT port, it is the control plane for everything that moves. Bulwark it day one; recover it with isolated rebuild capacity, not by replaying backups into the production domain.`);
+  }
+  if (STATE.mission && STATE.mission.id === 'TIDEBREAK' && STATE.phase === 'LOSE') {
+    notes.push('Maritime loss analysis: Port of Houston 2021 (CVE-2021-40539, Volt Typhoon pattern via ManageEngine) and Maersk NotPetya 2017 both prove the same point — the perimeter CVE is the headline, but the OT consequence is the body. Patch the known-exploited edge appliance list (CISA KEV catalog) continuously; TOS is the crown jewel.');
+  }
   if (rubric.doctrine.score === 100) notes.push('Decisive operational result.');
   if (diff === 'analyst' && rubric.doctrine.score >= 70) notes.push('Result achieved on ANALYST difficulty — significant operational acumen demonstrated.');
   if (notes.length === 0) notes.push('Run within parameters. Consider higher difficulty.');
@@ -4679,6 +4766,29 @@ function advanceThreat(t) {
         log(`&nbsp;&nbsp;└ Cascade stress on ${adj.id}`, 'log-warn');
       }
     });
+    // v0.9.1: Mission-level sector cascade (e.g., TIDEBREAK Maersk pattern)
+    // When the mission designates a trigger node AND it's just compromised,
+    // apply the mission's sector cascade. One-shot — fires once per run.
+    const SC = STATE.mission && STATE.mission.sectorCascade;
+    if (SC && SC.triggerNode === target.id && !STATE.sectorCascadeFired) {
+      STATE.sectorCascadeFired = true;
+      log(`&nbsp;&nbsp;└ <b style="color:var(--red);">⚠⚠ SECTOR CASCADE</b>`, 'log-crit');
+      log(`&nbsp;&nbsp;&nbsp;&nbsp;${SC.narration}`, 'log-crit');
+      (SC.effectNodes || []).forEach(nid => {
+        const n = getNode(nid);
+        if (n && n.state === 'healthy') {
+          n.state = SC.effectState || 'stressed';
+          log(`&nbsp;&nbsp;&nbsp;&nbsp;└ ${nid} → ${n.state} (operationally paralyzed; ${SC.doctrineRef || 'sector pattern'})`, 'log-warn');
+        }
+      });
+      // Capture the moment in metrics for debrief doctrine scoring
+      STATE.metrics = STATE.metrics || {};
+      STATE.metrics.sectorCascade = {
+        round: STATE.round,
+        triggerNode: target.id,
+        doctrineRef: SC.doctrineRef,
+      };
+    }
     // v0.7: OODA reflection on first compromise — relevance/sufficiency teaching moment
     setTimeout(() => maybeShowOODAReflection('first_compromise', {
       when: 'first node compromised',
@@ -5597,8 +5707,42 @@ function renderCodexTab(el) {
       <b>Living-off-the-land</b> (named in advisory): cmd, certutil, cmd.exe, dnscmd, ldifde, makecab, net.exe, netsh, netstat, nltest, ntdsutil, ping, PowerShell, quser, reg, systeminfo, tasklist, wevtutil, whoami, wmic, xcopy, vssadmin, comsvcs.dll (MiniDump). Rare malware deployment.<br>
       <b>C2</b>: T1090 proxied through SOHO router botnets, FRP reverse proxies.
     </div>
-    <div class="codex-counters" style="margin-top:4px;">▸ Hunt artifacts: Windows ESENT application log IDs 216, 325, 326, 327, 637 (per advisory). PowerShell event ID 4104. Netsh portproxy via "netsh int portproxy show all". Assume significant dwell time.</div>
+    <div class="codex-tools" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--grid-line);">
+      <div style="color:var(--amber);font-weight:bold;font-size:10px;margin-bottom:3px;">▸ STAGE-BY-STAGE COMMAND FINGERPRINTS</div>
+      <div style="font-family:monospace;font-size:10px;line-height:1.6;">
+      <b style="color:var(--cyan);">RECON</b> → <span style="color:var(--cyan-dim);">ping · ipconfig · netstat · arp · route print · net view · systeminfo · tasklist</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ sequence on a server where none of this is routine</span><br>
+      <b style="color:var(--cyan);">DISCOVERY</b> → <span style="color:var(--cyan-dim);">net user /domain · nltest /domain_trusts · PowerShell Get-ADComputer · ldifde -f · dnscmd</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ nltest /domain_trusts from a non-admin host is the hunt favorite</span><br>
+      <b style="color:var(--cyan);">CRED ACCESS</b> → <span style="color:var(--cyan-dim);">ntdsutil "ac i ntds" "ifm" · vssadmin create shadow · wmic shadowcopy call create · rundll32 comsvcs.dll MiniDump · reg save hklm\\sam</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ ESENT event IDs 216 / 325 / 326 / 327 / 637 fire during NTDS.dit touch</span><br>
+      <b style="color:var(--cyan);">LATERAL</b> → <span style="color:var(--cyan-dim);">wmic /node:HOST process call create · PowerShell Invoke-Command / Enter-PSSession · net use · xcopy over SMB</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ remote execution without a corresponding file-write — in-memory only</span><br>
+      <b style="color:var(--cyan);">EVASION</b> → <span style="color:var(--cyan-dim);">wevtutil cl Security · wevtutil cl System · certutil -decode · netsh int portproxy add v4tov4 · reg modifications</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ selective clear, not full wipe; portproxy relay creates HKLM\\…\\PortProxy\\v4tov4\\tcp\\ keys</span><br>
+      <b style="color:var(--cyan);">C2 / PROXY</b> → <span style="color:var(--cyan-dim);">netsh portproxy · FRP (Fast Reverse Proxy) · SOHO router hop · Earthworm / Impacket proxychains</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ external C2 via recruited edge-of-network small-office router; internal via portproxy on 127.0.0.1</span><br>
+      <b style="color:var(--cyan);">EXFIL STAGE</b> → <span style="color:var(--cyan-dim);">makecab · PowerShell Compress-Archive · rar.exe · certutil -urlcache -f · bitsadmin /transfer</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ archive-then-stage in a backup-looking path, then pull over C2</span>
+      </div>
+    </div>
+    <div class="codex-counters" style="margin-top:6px;">▸ Hunt artifacts: Windows ESENT application log IDs 216, 325, 326, 327, 637 (per advisory). PowerShell event ID 4104. Netsh portproxy via "netsh int portproxy show all". Assume significant dwell time.</div>
     <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Joint CISA / NSA / FBI / NSA / allies advisory AA24-038A (Feb 2024). In-game: the VOLTFORGE actor archetype models this behavior.</div>
+  </div>`;
+
+  // v0.9.1: ZPMC Cellular-Modem Pattern codex entry
+  html += `<div class="codex-entry" style="border-left:2px solid #5cb8ff;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#5cb8ff;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ ZPMC CELLULAR-MODEM PATTERN (U.S. House Select Committee on CCP, Feb 2024)</span></div>
+    <div class="codex-desc" style="margin-top:3px;">Shanghai Zhenhua Heavy Industries (ZPMC) builds approximately 80% of ship-to-shore (STS) cranes operating in U.S. ports. The 2024 U.S. House Select Committee on CCP joint investigation (with House Homeland Security Committee) documented cellular modems installed on ZPMC STS cranes beyond contractual specification, in some cases without the operator\'s knowledge, creating an out-of-band command-and-control channel that bypasses the port\'s IT security entirely.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Access vector</b>: Cellular modem embedded in crane PLC housing or operator cab, carrier SIM activated during manufacture or commissioning. Traffic egresses via the mobile carrier, never crossing the port\'s enterprise firewall.<br>
+      <b>Signaling</b>: T1205 Traffic Signaling — modem stays passive until an inbound wake-up from the carrier network activates the covert channel. T1573 Encrypted Channel over T1571 Non-Standard Port.<br>
+      <b>Collection</b>: T0845 Program Upload — adversary reads PLC program/logic over the covert channel for reconnaissance.<br>
+      <b>Impact enabler</b>: Once the channel is live, T0832 Manipulation of View and T0826 Loss of Availability targeting crane PLC logic are feasible without any enterprise-network footprint.<br>
+      <b>Scope</b>: USCG MARSEC Directive 105-6 (Feb 2024) established cybersecurity requirements for PRC-manufactured STS cranes operating at U.S. ports. Executive Order 14116 (Feb 2024) authorized USCG to directly regulate maritime cybersecurity.
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt artifacts: physical cellular-radio inventory of OT equipment; carrier-provided SIM-activity reports for all enterprise-contracted SIMs; RF survey around crane housings; vendor-contract audit for undocumented radios. Enterprise NetFlow will not see this traffic — carrier-level visibility is the only path.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: U.S. House Select Committee on the CCP + House Homeland Security Committee joint investigation report on ZPMC STS cranes (Feb 2024); USCG MARSEC Directive 105-6; Executive Order 14116. In-game: TIDEMARK models this behavior via cellularBeaconMode.</div>
   </div>`;
 
   // Section 1: Active this run
@@ -6759,6 +6903,7 @@ function beginGame(missionId) {
   STATE.reasoningShown = {};             // v0.7: reset OODA triggers
   STATE.achGatePassed = false;           // v0.7: reset ACH gate
   STATE.handoffFired = false;            // v0.9: reset IAB handoff flag
+  STATE.sectorCascadeFired = false;      // v0.9.1: reset mission-level sector cascade flag
   if (document.getElementById('view-mode-btn')) updateViewModeButton();
   STATE.killBoxActive = false;
   STATE.metrics = {
@@ -7139,7 +7284,9 @@ function showThreatActorIntro(onDone) {
       ${A.handoffAfterRounds ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ INITIAL ACCESS BROKER — recon-only. Hands off to a successor actor after round ' + A.handoffAfterRounds + '. Re-attribution required.</div>' : ''}
       ${A.externalCredSource ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ EXTERNAL-CRED SOURCE — looks like insider, isn\'t one. Rotate credentials, don\'t investigate the user.</div>' : ''}
       ${A.availabilityFocused ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ AVAILABILITY-FOCUSED — DDoS and defacement, not data theft. Loud, fast, symbolic.</div>' : ''}
+      ${A.cellularBeaconMode ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ OUT-OF-BAND C2 — vendor-equipment cellular modem bypasses your IT firewall entirely. Traffic is invisible to NetFlow. Carrier-level SIM visibility is the only enterprise detection path.</div>' : ''}
       ${A.lolBins ? '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--grid-line);"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ LIVING-OFF-THE-LAND TOOLING</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;font-family:monospace;">' + A.lolBins.join(' · ') + '</div></div>' : ''}
+      ${A.lolChain ? '<div style="margin-top:6px;"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ STAGE CHAIN (per advisory)</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;">' + A.lolChain.map(s => '<span style="color:var(--amber)">' + s.stage + '</span>: <span style="font-family:monospace;color:var(--cyan-dim);">' + s.tools.slice(0,3).join(', ') + (s.tools.length > 3 ? '…' : '') + '</span>').join('<br>') + '</div><div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Full command fingerprints in CODEX ▸ Volt Typhoon pattern.</div></div>' : ''}
       ${A.sources && A.sources.length ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model sources: ' + A.sources.join(' · ') + '</div>' : (A.source ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model source: ' + A.source + '</div>' : '')}
       <button class="action-btn primary" id="actor-intro-ack" style="width:100%;margin-top:14px;">▶ ACKNOWLEDGE</button>
     </div>
