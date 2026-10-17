@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#03060a">
+<title>JOSHUA PROTOCOL v0.1</title>
+<style>
+  :root {
+    --bg-deep: #03060a;
+    --bg-panel: #06101a;
+    --bg-panel-2: #0a1824;
+    --grid-line: #0e2030;
+    --cyan: #4ee2ff;
+    --cyan-dim: #2a8aa0;
+    --amber: #ffb84d;
+    --amber-dim: #a07028;
+    --magenta: #ff4ea8;
+    --magenta-dim: #a02868;
+    --red: #ff3a3a;
+    --red-dim: #802020;
+    --green: #5cff8a;
+    --white: #e8f4ff;
+    --muted: #5a7080;
+    --term-glow: rgba(78, 226, 255, 0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg-deep); color: var(--white);
+    font-family: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    font-size: 13px; line-height: 1.4;
+    user-select: none; -webkit-user-select: none;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+  #app {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh; /* mobile-aware viewport */
+    display: flex; flex-direction: column;
+    position: relative;
+    background:
+      linear-gradient(180deg, #04080d 0%, #03060a 100%);
+    overflow: hidden;
+  }
+  /* Scanline overlay across entire app */
+  #app::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg, rgba(78,226,255,0.025) 0px, rgba(78,226,255,0.025) 1px,
+      transparent 1px, transparent 3px
+    );
+    z-index: 100;
+  }
+  /* Status bar - top */
+  #status-bar {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    background: linear-gradient(180deg, #08141e 0%, #050b13 100%);
+    border-bottom: 1px solid var(--grid-line);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+  .status-tag { color: var(--cyan); text-transform: uppercase; }
+  .status-val { color: var(--white); font-weight: bold; }
+  .status-mid { text-align: center; color: var(--muted); }
+  .threat-low { color: var(--green); }
+  .threat-med { color: var(--amber); }
+  .threat-high { color: var(--red); animation: pulseRed 1.2s infinite; }
+  @keyframes pulseRed { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* Map area - center. Explicit min-height prevents flex collapse. */
+  #map-area {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+  }
+  #map-canvas {
+    width: 100%; height: 100%;
+    display: block;
+  }
+
+  /* Terminal panel - below map. Fixed height, never grows. */
+  #terminal {
+    flex: 0 0 160px;
+    height: 160px;
+    max-height: 160px;
+    background: linear-gradient(180deg, #050d15 0%, #030709 100%);
+    border-top: 1px solid var(--cyan-dim);
+    border-bottom: 1px solid var(--grid-line);
+    display: flex; flex-direction: column;
+    position: relative;
+    box-shadow: inset 0 0 30px var(--term-glow);
+    overflow: hidden;
+  }
+  #terminal-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    border-bottom: 1px solid var(--grid-line);
+    background: #04090e;
+  }
+  .term-tab {
+    flex: 1; padding: 5px 4px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: inherit; font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-right: 1px solid var(--grid-line);
+    transition: all 0.15s;
+  }
+  .term-tab:last-child { border-right: none; }
+  .term-tab.active {
+    color: var(--cyan);
+    background: linear-gradient(180deg, rgba(78,226,255,0.08) 0%, transparent 100%);
+    border-bottom: 2px solid var(--cyan);
+  }
+  .term-tab .badge {
+    display: inline-block;
+    background: var(--red);
+    color: var(--white);
+    font-size: 8px;
+    padding: 1px 4px;
+    border-radius: 6px;
+    margin-left: 2px;
+  }
+  #terminal-content {
+    flex: 1; overflow-y: auto;
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1.5;
+    scroll-behavior: smooth;
+  }
+  #terminal-content::-webkit-scrollbar { width: 4px; }
+  #terminal-content::-webkit-scrollbar-track { background: transparent; }
+  #terminal-content::-webkit-scrollbar-thumb { background: var(--cyan-dim); }
+
+  .log-line { margin-bottom: 3px; word-wrap: break-word; }
+  .log-time { color: var(--muted); margin-right: 6px; }
+  .log-info { color: var(--white); }
+  .log-warn { color: var(--amber); }
+  .log-crit { color: var(--red); }
+  .log-good { color: var(--green); }
+  .log-cyan { color: var(--cyan); }
+  .log-josh { color: var(--cyan); border-left: 2px solid var(--cyan); padding-left: 6px; margin: 4px 0; }
+  .log-vigil { color: var(--cyan); }
+  .log-wraith { color: var(--magenta); }
+  .log-anchor { color: var(--amber); }
+  .log-tech { color: var(--magenta-dim); font-size: 10px; }
+  .log-divider { color: var(--grid-line); margin: 4px 0; letter-spacing: -1px; }
+
+  /* Agent strip - bottom */
+  #agent-strip {
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    background: #04090e;
+    border-top: 1px solid var(--grid-line);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+  }
+  .agent-card {
+    background: linear-gradient(180deg, #0a141d 0%, #060c14 100%);
+    border: 1px solid var(--grid-line);
+    border-radius: 2px;
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    min-height: 44px;
+  }
+  .agent-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  .agent-card.exhausted { opacity: 0.4; }
+  .agent-card.speaking::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 20% 50%, var(--accent-glow) 0%, transparent 60%);
+    pointer-events: none;
+    animation: speakPulse 0.8s ease-out;
+  }
+  @keyframes speakPulse {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .agent-portrait {
+    width: 36px; height: 36px;
+    flex: 0 0 auto;
+  }
+  .agent-info {
+    flex: 1; min-width: 0;
+  }
+  .agent-name {
+    font-size: 11px; font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .agent-class {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .agent-status {
+    font-size: 9px; color: var(--white);
+    margin-top: 2px;
+  }
+
+  /* Action bar */
+  #action-bar {
+    flex: 0 0 auto;
+    padding: 5px 6px 6px;
+    background: #02050a;
+    border-top: 1px solid var(--cyan-dim);
+    display: flex;
+    gap: 5px;
+  }
+  .action-btn {
+    flex: 1;
+    padding: 8px 6px;
+    background: linear-gradient(180deg, #0d1c2a 0%, #07111a 100%);
+    border: 1px solid var(--cyan-dim);
+    color: var(--cyan);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn.attract {
+    animation: attractPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes attractPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(78,226,255,0.3); }
+    50% { box-shadow: 0 0 18px rgba(78,226,255,0.85), 0 0 30px rgba(78,226,255,0.4); }
+  }
+  .action-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .action-btn.primary {
+    background: linear-gradient(180deg, #0f3848 0%, #082028 100%);
+    border-color: var(--cyan);
+    box-shadow: 0 0 8px rgba(78,226,255,0.3);
+  }
+  .action-btn.danger {
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  /* Modal overlays */
+  .modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 6, 10, 0.92);
+    z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .modal-content {
+    width: 100%; max-width: 340px;
+    background: linear-gradient(180deg, #0a1824 0%, #050b13 100%);
+    border: 1px solid var(--cyan);
+    box-shadow: 0 0 24px rgba(78,226,255,0.4);
+    padding: 14px;
+    font-size: 11px;
+  }
+  .modal-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--grid-line);
+    padding-bottom: 6px;
+  }
+  .modal-body { margin-bottom: 12px; line-height: 1.6; }
+  .modal-body p { margin-bottom: 8px; }
+
+  /* Boot screen */
+  #boot {
+    position: absolute; inset: 0;
+    background: var(--bg-deep);
+    z-index: 200;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 20px;
+    font-size: 12px;
+  }
+  #boot-text {
+    width: 100%; max-width: 320px;
+    color: var(--cyan);
+    white-space: pre-wrap;
+    line-height: 1.6;
+    min-height: 280px;
+  }
+  .cursor::after {
+    content: '_';
+    animation: blink 0.8s infinite;
+    color: var(--cyan);
+  }
+  @keyframes blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+
+  /* Plan queue indicators */
+  .queue-marker {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border: 2px solid var(--white);
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* Tap hint */
+  .tap-hint {
+    position: absolute; bottom: 4px; left: 0; right: 0;
+    text-align: center;
+    font-size: 9px; color: var(--muted);
+    pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .map-overlay-text {
+    position: absolute; pointer-events: none;
+    font-size: 9px; color: var(--cyan-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    <div><span class="status-tag">RND</span> <span class="status-val" id="stat-round">01/10</span></div>
+    <div class="status-mid" id="stat-phase">▸ INTEL PHASE</div>
+    <div><span class="status-tag">THREAT</span> <span class="status-val threat-low" id="stat-threat">LOW</span></div>
+  </div>
+
+  <!-- Map area -->
+  <div id="map-area">
+    <canvas id="map-canvas"></canvas>
+    <div class="map-overlay-text" style="top: 6px; left: 8px;" id="sector-label">// NORTHEAST POWER GRID — SECTOR 7</div>
+    <div class="map-overlay-text" style="top: 6px; right: 8px;" id="grid-stat">NODES: 8/8 ONLINE</div>
+    <div class="tap-hint" id="tap-hint">TAP NODE TO INSPECT</div>
+  </div>
+
+  <!-- Terminal -->
+  <div id="terminal">
+    <div id="terminal-tabs">
+      <button class="term-tab active" data-tab="log">LOG</button>
+      <button class="term-tab" data-tab="brief">BRIEF</button>
+      <button class="term-tab" data-tab="codex">ATT&amp;CK</button>
+      <button class="term-tab" data-tab="comms">COMMS</button>
+    </div>
+    <div id="terminal-content"></div>
+  </div>
+
+  <!-- Agent strip -->
+  <div id="agent-strip"></div>
+
+  <!-- Action bar -->
+  <div id="action-bar">
+    <button class="action-btn" id="btn-back">◀ BACK</button>
+    <button class="action-btn primary" id="btn-main">EXECUTE ▶</button>
+  </div>
+
+  <!-- Boot screen -->
+  <div id="boot">
+    <div id="boot-text" class="cursor"></div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+// =====================================================================
+// JOSHUA PROTOCOL v0.1
+// Single-file HTML5 prototype. Energy grid vs ransomware scenario.
+// =====================================================================
+
+const STATE = {
+  phase: 'BOOT',         // BOOT, INTEL, PLAN, RESOLVE, CONSEQ, WIN, LOSE
+  round: 1,
+  maxRounds: 10,
+  threatLevel: 'LOW',
+  selectedAgent: null,   // index into agents
+  selectedTarget: null,  // node id
+  plannedActions: [],    // [{agent, action, target}]
+  nodes: [],             // grid nodes
+  links: [],             // connections between nodes
+  agents: [],
+  threats: [],           // active threat operations
+  attackChains: [],      // animating attack visualizations
+  particles: [],         // ambient connection traffic
+  c2Node: null,          // hidden ransomware C2
+  c2Revealed: false,
+  c2Severed: false,
+  log: [],
+  activeTab: 'log',
+  briefShown: false,
+  unreadComms: 0,
+  inspectingNode: null,
+  tickCount: 0,
+};
+
+// ---------- AGENT DEFINITIONS ----------
+const AGENT_DEFS = [
+  {
+    id: 'VIGIL',
+    cls: 'ANALYST',
+    color: '#4ee2ff',
+    colorDim: '#2a8aa0',
+    desc: 'Detection specialist. Reveals hidden threats.',
+    actions: [
+      { id: 'scan',   name: 'DEEP SCAN',     desc: 'Reveal hidden threats on target node + adjacent.' },
+      { id: 'trace',  name: 'TRACE C2',      desc: 'Attempt to identify ransomware C2 location.' },
+    ],
+  },
+  {
+    id: 'WRAITH',
+    cls: 'HUNTER',
+    color: '#ff4ea8',
+    colorDim: '#a02868',
+    desc: 'Offensive counter-ops. Disrupts active attacks.',
+    actions: [
+      { id: 'disrupt', name: 'DISRUPT',      desc: 'Break active attack chain on target node.' },
+      { id: 'sever',   name: 'SEVER C2',     desc: 'Kill the ransomware C2. Requires C2 revealed.' },
+    ],
+  },
+  {
+    id: 'ANCHOR',
+    cls: 'ARCHITECT',
+    color: '#ffb84d',
+    colorDim: '#a07028',
+    desc: 'Hardening and recovery. Patches and restores.',
+    actions: [
+      { id: 'harden',  name: 'HARDEN',       desc: 'Apply patches. +1 resilience to target node.' },
+      { id: 'restore', name: 'RESTORE',      desc: 'Recover compromised node to stressed state.' },
+    ],
+  },
+];
+
+// ---------- MITRE-FLAVORED TECHNIQUES (for log flavor) ----------
+const TECHNIQUES = [
+  { id: 'T1566.001', name: 'Spearphishing Attachment',  phase: 'access' },
+  { id: 'T1190',     name: 'Exploit Public App',        phase: 'access' },
+  { id: 'T1078',     name: 'Valid Accounts',            phase: 'access' },
+  { id: 'T1059',     name: 'Command Interpreter',       phase: 'exec'   },
+  { id: 'T1053',     name: 'Scheduled Task',            phase: 'persist' },
+  { id: 'T1021',     name: 'Remote Services',           phase: 'lateral' },
+  { id: 'T1486',     name: 'Data Encrypted for Impact', phase: 'impact' },
+  { id: 'T1490',     name: 'Inhibit System Recovery',   phase: 'impact' },
+];
+
+const CODEX_ENTRIES = [
+  { id: 'T1566.001', name: 'Spearphishing Attachment', text: 'Adversaries send malicious attachments to gain initial access. Common ICS vector. Defense: user training, attachment sandboxing.' },
+  { id: 'T1190',     name: 'Exploit Public-Facing Application', text: 'Adversaries exploit vulnerabilities in internet-facing systems. Defense: patch management, WAFs, network segmentation.' },
+  { id: 'T1078',     name: 'Valid Accounts', text: 'Use of legitimate credentials to bypass detection. Defense: MFA, anomaly detection, credential rotation.' },
+  { id: 'T1059',     name: 'Command and Scripting Interpreter', text: 'Execution via PowerShell, Bash, etc. Defense: script block logging, application whitelisting.' },
+  { id: 'T1053',     name: 'Scheduled Task/Job', text: 'Persistence via scheduled execution. Defense: monitor task creation, baseline scheduled jobs.' },
+  { id: 'T1021',     name: 'Remote Services', text: 'Lateral movement via RDP, SMB, SSH. Defense: network segmentation, jump hosts, MFA on remote services.' },
+  { id: 'T1486',     name: 'Data Encrypted for Impact', text: 'Ransomware encryption stage. Defense: offline backups, EDR, segmentation to limit blast radius.' },
+  { id: 'T1490',     name: 'Inhibit System Recovery', text: 'Deletion of shadow copies, backups. Often precedes T1486. Defense: immutable backups, monitor vssadmin/wbadmin.' },
+];
+
+// ---------- CANVAS SETUP ----------
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+let DPR = 1;
+let CW = 0, CH = 0;
+
+function resizeCanvas() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = canvas.getBoundingClientRect();
+  CW = rect.width;
+  CH = rect.height;
+  canvas.width = Math.floor(CW * DPR);
+  canvas.height = Math.floor(CH * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', () => { resizeCanvas(); layoutNodes(); });
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { resizeCanvas(); layoutNodes(); }, 200);
+});
+// Force redraw when returning to tab (Bug 3 fix - canvas backing store can be lost)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    setTimeout(() => { resizeCanvas(); layoutNodes(); }, 50);
+  }
+});
+window.addEventListener('pageshow', () => {
+  setTimeout(() => { resizeCanvas(); layoutNodes(); }, 50);
+});
+// Also observe the map-area itself - catches mobile URL bar collapse, etc.
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => { resizeCanvas(); layoutNodes(); });
+  ro.observe(document.getElementById('map-area'));
+}
+
+// ---------- NODE / LINK SETUP ----------
+function setupGrid() {
+  // 8 nodes: 4 substations + 3 generators + 1 control center
+  const nodeDefs = [
+    { id: 'SUB-A', type: 'substation', label: 'SUB-A' },
+    { id: 'SUB-B', type: 'substation', label: 'SUB-B' },
+    { id: 'SUB-C', type: 'substation', label: 'SUB-C' },
+    { id: 'SUB-D', type: 'substation', label: 'SUB-D' },
+    { id: 'GEN-1', type: 'generator',  label: 'GEN-1' },
+    { id: 'GEN-2', type: 'generator',  label: 'GEN-2' },
+    { id: 'GEN-3', type: 'generator',  label: 'GEN-3' },
+    { id: 'CTRL',  type: 'control',    label: 'CTRL'  },
+  ];
+  STATE.nodes = nodeDefs.map((d, i) => ({
+    ...d,
+    x: 0, y: 0,
+    state: 'healthy',  // healthy, stressed, attacked, compromised
+    resilience: 0,     // hardening counter
+    activeAttack: null,
+    revealed: false,   // for hidden info (e.g. C2)
+    pulsePhase: Math.random() * Math.PI * 2,
+  }));
+  // Define connectivity (adjacency)
+  STATE.links = [
+    ['CTRL','SUB-A'], ['CTRL','SUB-B'], ['CTRL','SUB-C'], ['CTRL','SUB-D'],
+    ['GEN-1','SUB-A'], ['GEN-1','SUB-B'],
+    ['GEN-2','SUB-B'], ['GEN-2','SUB-C'],
+    ['GEN-3','SUB-C'], ['GEN-3','SUB-D'],
+    ['SUB-A','SUB-B'], ['SUB-C','SUB-D'],
+  ];
+  layoutNodes();
+}
+
+function layoutNodes() {
+  if (!STATE.nodes.length) return;
+  // Layout in vertical zones: generators top, substations mid, control bottom
+  const margin = 32;
+  const w = CW - margin * 2;
+  const h = CH - margin * 2;
+  const nodeById = {};
+  STATE.nodes.forEach(n => nodeById[n.id] = n);
+  // Generators across top
+  ['GEN-1','GEN-2','GEN-3'].forEach((id, i) => {
+    const n = nodeById[id];
+    n.x = margin + w * (0.2 + i * 0.3);
+    n.y = margin + h * 0.18;
+  });
+  // Substations across middle
+  ['SUB-A','SUB-B','SUB-C','SUB-D'].forEach((id, i) => {
+    const n = nodeById[id];
+    n.x = margin + w * (0.12 + i * 0.25);
+    n.y = margin + h * 0.55;
+  });
+  // Control center bottom
+  nodeById['CTRL'].x = margin + w * 0.5;
+  nodeById['CTRL'].y = margin + h * 0.88;
+}
+
+function getNode(id) { return STATE.nodes.find(n => n.id === id); }
+function adjacent(nodeId) {
+  const adj = new Set();
+  STATE.links.forEach(([a,b]) => {
+    if (a === nodeId) adj.add(b);
+    if (b === nodeId) adj.add(a);
+  });
+  return [...adj].map(getNode);
+}
+
+// ---------- RENDER ----------
+function nodeColor(n) {
+  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) return '#ff3a3a';
+  if (STATE.c2Severed && n.id === STATE.c2Node) return '#5cff8a';
+  switch (n.state) {
+    case 'healthy':     return '#4ee2ff';
+    case 'stressed':    return '#ffb84d';
+    case 'attacked':    return '#ff4ea8';
+    case 'compromised': return '#ff3a3a';
+  }
+  return '#4ee2ff';
+}
+
+function render() {
+  STATE.tickCount++;
+  // background grid
+  ctx.fillStyle = '#03060a';
+  ctx.fillRect(0, 0, CW, CH);
+  drawBackgroundGrid();
+
+  // links first (under nodes)
+  STATE.links.forEach(([a, b]) => drawLink(getNode(a), getNode(b)));
+
+  // ambient particles on links
+  updateParticles();
+  drawParticles();
+
+  // nodes
+  STATE.nodes.forEach(drawNode);
+
+  // attack chain animations
+  updateAttackChains();
+  drawAttackChains();
+
+  // selection halo
+  if (STATE.selectedTarget) {
+    const n = getNode(STATE.selectedTarget);
+    if (n) drawSelectionHalo(n);
+  }
+  // queue markers
+  STATE.plannedActions.forEach((a, idx) => {
+    const n = getNode(a.target);
+    if (!n) return;
+    const ag = STATE.agents[a.agent];
+    drawQueueMarker(n, ag.color, idx);
+  });
+}
+
+function drawBackgroundGrid() {
+  ctx.strokeStyle = '#0e2030';
+  ctx.lineWidth = 1;
+  const step = 24;
+  ctx.beginPath();
+  for (let x = 0; x < CW; x += step) {
+    ctx.moveTo(x, 0); ctx.lineTo(x, CH);
+  }
+  for (let y = 0; y < CH; y += step) {
+    ctx.moveTo(0, y); ctx.lineTo(CW, y);
+  }
+  ctx.stroke();
+  // contour-y outer ring
+  ctx.strokeStyle = 'rgba(78,226,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(CW/2, CH/2, CW*0.55, CH*0.45, 0, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(CW/2, CH/2, CW*0.42, CH*0.32, 0, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function drawLink(a, b) {
+  const aColor = nodeColor(a);
+  const bColor = nodeColor(b);
+  const compromised = a.state === 'compromised' || b.state === 'compromised';
+  const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+  grad.addColorStop(0, hexA(aColor, 0.4));
+  grad.addColorStop(1, hexA(bColor, 0.4));
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = compromised ? 1 : 1.5;
+  if (compromised) ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawNode(n) {
+  const c = nodeColor(n);
+  const baseR = n.type === 'control' ? 18 : (n.type === 'generator' ? 15 : 13);
+  // pulse
+  n.pulsePhase += 0.04;
+  const pulse = Math.sin(n.pulsePhase) * 0.5 + 0.5;
+  const r = baseR + pulse * 1.5;
+
+  // outer glow
+  const glow = ctx.createRadialGradient(n.x, n.y, r * 0.5, n.x, n.y, r * 2.4);
+  glow.addColorStop(0, hexA(c, 0.5));
+  glow.addColorStop(1, hexA(c, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(n.x, n.y, r * 2.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // node core - geometric shape by type
+  ctx.fillStyle = '#03060a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (n.type === 'control') {
+    // hexagon
+    drawPolygon(n.x, n.y, r, 6);
+  } else if (n.type === 'generator') {
+    // triangle
+    drawPolygon(n.x, n.y, r, 3, -Math.PI/2);
+  } else {
+    // square (substation)
+    drawPolygon(n.x, n.y, r, 4, Math.PI/4);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  // inner indicator
+  if (n.state === 'compromised') {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (n.state === 'attacked') {
+    // pulsing inner ring
+    ctx.strokeStyle = hexA(c, 0.6 + pulse * 0.4);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r * 0.55, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // resilience indicator (small dots above)
+  for (let i = 0; i < n.resilience; i++) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.beginPath();
+    ctx.arc(n.x - 6 + i * 6, n.y - r - 6, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // label
+  ctx.fillStyle = '#5a7080';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(n.label, n.x, n.y + r + 12);
+
+  // C2 indicator if revealed
+  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+    ctx.fillStyle = '#ff3a3a';
+    ctx.font = 'bold 8px JetBrains Mono, monospace';
+    ctx.fillText('◢ C2 ◣', n.x, n.y - r - 10);
+  }
+}
+
+function drawPolygon(cx, cy, r, sides, rot = 0) {
+  for (let i = 0; i < sides; i++) {
+    const a = rot + i * (Math.PI * 2 / sides);
+    const px = cx + Math.cos(a) * r;
+    const py = cy + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function drawSelectionHalo(n) {
+  const r = 22 + Math.sin(STATE.tickCount * 0.1) * 2;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawQueueMarker(n, color, idx) {
+  const offset = (idx + 1) * 14;
+  const x = n.x + offset;
+  const y = n.y - 18;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function hexA(hex, a) {
+  // hex like #rrggbb -> rgba
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ---------- PARTICLES (ambient connection traffic) ----------
+function spawnParticles() {
+  STATE.links.forEach(([a, b]) => {
+    if (Math.random() < 0.015) {
+      STATE.particles.push({
+        from: a, to: b, t: 0, speed: 0.012 + Math.random() * 0.01,
+        color: '#4ee2ff',
+      });
+    }
+  });
+}
+
+function updateParticles() {
+  spawnParticles();
+  STATE.particles.forEach(p => p.t += p.speed);
+  STATE.particles = STATE.particles.filter(p => p.t < 1);
+}
+
+function drawParticles() {
+  STATE.particles.forEach(p => {
+    const a = getNode(p.from);
+    const b = getNode(p.to);
+    if (!a || !b) return;
+    const x = a.x + (b.x - a.x) * p.t;
+    const y = a.y + (b.y - a.y) * p.t;
+    ctx.fillStyle = hexA(p.color, 0.7);
+    ctx.beginPath();
+    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// ---------- ATTACK CHAIN ANIMATIONS ----------
+function spawnAttackChain(path, kind = 'attack') {
+  STATE.attackChains.push({
+    path: path.slice(),  // array of node ids
+    progress: 0,
+    speed: 0.012,
+    kind,                // 'attack' or 'counter'
+    sparks: [],
+  });
+}
+function updateAttackChains() {
+  STATE.attackChains.forEach(c => {
+    c.progress += c.speed;
+    // emit sparks
+    if (Math.random() < 0.5) {
+      const segIdx = Math.min(Math.floor(c.progress * (c.path.length - 1)), c.path.length - 2);
+      const localT = (c.progress * (c.path.length - 1)) - segIdx;
+      const a = getNode(c.path[segIdx]);
+      const b = getNode(c.path[segIdx + 1]);
+      if (a && b) {
+        c.sparks.push({
+          x: a.x + (b.x - a.x) * localT + (Math.random() - 0.5) * 6,
+          y: a.y + (b.y - a.y) * localT + (Math.random() - 0.5) * 6,
+          life: 1, vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5,
+        });
+      }
+    }
+    c.sparks.forEach(s => { s.life -= 0.05; s.x += s.vx; s.y += s.vy; });
+    c.sparks = c.sparks.filter(s => s.life > 0);
+  });
+  STATE.attackChains = STATE.attackChains.filter(c => c.progress < 1 || c.sparks.length > 0);
+}
+function drawAttackChains() {
+  STATE.attackChains.forEach(c => {
+    const color = c.kind === 'attack' ? '#ff3a3a' : '#5cff8a';
+    // draw progress along path
+    const totalSegs = c.path.length - 1;
+    const filledSegs = Math.floor(c.progress * totalSegs);
+    const localT = (c.progress * totalSegs) - filledSegs;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    for (let i = 0; i < filledSegs; i++) {
+      const a = getNode(c.path[i]);
+      const b = getNode(c.path[i+1]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    if (filledSegs < totalSegs) {
+      const a = getNode(c.path[filledSegs]);
+      const b = getNode(c.path[filledSegs+1]);
+      const x = a.x + (b.x - a.x) * localT;
+      const y = a.y + (b.y - a.y) * localT;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y); ctx.lineTo(x, y);
+      ctx.stroke();
+      // leading dot
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    // sparks
+    c.sparks.forEach(s => {
+      ctx.fillStyle = hexA(color, s.life);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+}
+
+// ---------- SVG PORTRAITS ----------
+// Each agent gets a distinct geometric portrait.
+// State: idle | alert | compromised
+function buildPortraitSVG(agent) {
+  const c = agent.color;
+  const cd = agent.colorDim;
+  let body = '';
+  if (agent.id === 'VIGIL') {
+    // analyst — eye/scope motif
+    body = `
+      <circle cx="22" cy="22" r="20" fill="none" stroke="${cd}" stroke-width="1"/>
+      <circle cx="22" cy="22" r="14" fill="${cd}" opacity="0.2"/>
+      <circle cx="22" cy="22" r="8" fill="none" stroke="${c}" stroke-width="2"/>
+      <circle cx="22" cy="22" r="3" fill="${c}"/>
+      <line x1="22" y1="6" x2="22" y2="10" stroke="${c}" stroke-width="2"/>
+      <line x1="22" y1="34" x2="22" y2="38" stroke="${c}" stroke-width="2"/>
+      <line x1="6" y1="22" x2="10" y2="22" stroke="${c}" stroke-width="2"/>
+      <line x1="34" y1="22" x2="38" y2="22" stroke="${c}" stroke-width="2"/>
+    `;
+  } else if (agent.id === 'WRAITH') {
+    // hunter — angular hood
+    body = `
+      <path d="M 8 36 L 22 6 L 36 36 Z" fill="${cd}" opacity="0.3" stroke="${cd}" stroke-width="1"/>
+      <path d="M 14 32 L 22 14 L 30 32 Z" fill="none" stroke="${c}" stroke-width="2"/>
+      <circle cx="18" cy="24" r="2" fill="${c}"/>
+      <circle cx="26" cy="24" r="2" fill="${c}"/>
+      <line x1="22" y1="32" x2="22" y2="36" stroke="${c}" stroke-width="2"/>
+    `;
+  } else {
+    // anchor — architect, layered shield/keystone
+    body = `
+      <rect x="6" y="8" width="32" height="28" fill="none" stroke="${cd}" stroke-width="1"/>
+      <path d="M 22 10 L 34 18 L 34 30 L 22 36 L 10 30 L 10 18 Z" fill="${cd}" opacity="0.25" stroke="${c}" stroke-width="2"/>
+      <path d="M 22 16 L 28 20 L 28 28 L 22 32 L 16 28 L 16 20 Z" fill="none" stroke="${c}" stroke-width="1.5"/>
+      <circle cx="22" cy="24" r="2.5" fill="${c}"/>
+    `;
+  }
+  return `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" style="display:block;">${body}</svg>`;
+}
+
+// ---------- AGENT INIT ----------
+function setupAgents() {
+  STATE.agents = AGENT_DEFS.map(def => ({
+    ...def,
+    exhausted: false,
+    speaking: false,
+  }));
+  renderAgentStrip();
+}
+
+function renderAgentStrip() {
+  const strip = document.getElementById('agent-strip');
+  strip.innerHTML = '';
+  STATE.agents.forEach((ag, i) => {
+    const el = document.createElement('div');
+    el.className = 'agent-card';
+    el.style.setProperty('--accent', ag.color);
+    el.style.setProperty('--accent-glow', hexA(ag.color, 0.5));
+    if (STATE.selectedAgent === i && STATE.phase === 'PLAN') el.classList.add('active');
+    if (ag.exhausted) el.classList.add('exhausted');
+    if (ag.speaking) el.classList.add('speaking');
+    el.innerHTML = `
+      <div class="agent-portrait">${buildPortraitSVG(ag)}</div>
+      <div class="agent-info">
+        <div class="agent-name">${ag.id}</div>
+        <div class="agent-class">${ag.cls}</div>
+        <div class="agent-status">${ag.exhausted ? 'COMMITTED' : 'READY'}</div>
+      </div>
+    `;
+    el.addEventListener('click', () => onAgentTap(i));
+    strip.appendChild(el);
+  });
+}
+
+function makeAgentSpeak(agentIdx) {
+  const ag = STATE.agents[agentIdx];
+  ag.speaking = true;
+  renderAgentStrip();
+  setTimeout(() => { ag.speaking = false; renderAgentStrip(); }, 800);
+}
+
+// ---------- LOGGING ----------
+function timeStamp() {
+  const t = String(STATE.round).padStart(2, '0');
+  const sub = String(Math.floor(Math.random() * 99)).padStart(2, '0');
+  return `T${t}.${sub}`;
+}
+
+function log(html, cls = 'log-info') {
+  STATE.log.push({ time: timeStamp(), html, cls });
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+
+function logJoshua(text) {
+  STATE.log.push({ time: timeStamp(), html: `JOSHUA: ${text}`, cls: 'log-josh' });
+  if (STATE.activeTab !== 'log' && STATE.activeTab !== 'comms') STATE.unreadComms++;
+  renderTabs();
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+
+function logAgent(agentId, text) {
+  const cls = `log-${agentId.toLowerCase()}`;
+  STATE.log.push({ time: timeStamp(), html: `${agentId} ▸ ${text}`, cls });
+  const ag = STATE.agents.findIndex(a => a.id === agentId);
+  if (ag >= 0) makeAgentSpeak(ag);
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+
+function logTechnique(tid, name) {
+  STATE.log.push({ time: timeStamp(), html: `&nbsp;&nbsp;└ ${tid} — ${name}`, cls: 'log-tech' });
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+
+function logDivider() {
+  STATE.log.push({ html: '─────────────────────────────', cls: 'log-divider', noTime: true });
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+
+// ---------- TERMINAL RENDER ----------
+function renderTerminal() {
+  const el = document.getElementById('terminal-content');
+  if (STATE.activeTab === 'log') {
+    el.innerHTML = STATE.log.map(line => {
+      if (line.noTime) return `<div class="log-line ${line.cls}">${line.html}</div>`;
+      return `<div class="log-line"><span class="log-time">${line.time}</span><span class="${line.cls}">${line.html}</span></div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } else if (STATE.activeTab === 'brief') {
+    el.innerHTML = `
+      <div class="log-line log-cyan" style="font-weight:bold;">// MISSION BRIEF — OP. BLACKFROST</div>
+      <div class="log-line log-divider">─────────────────────────────</div>
+      <div class="log-line">Northeast Power Grid, Sector 7. Eight nodes online: 3 generators, 4 substations, 1 control center.</div>
+      <br>
+      <div class="log-line log-warn">▸ THREAT: Ransomware operation in progress.</div>
+      <div class="log-line">Initial access vector unknown. Adversary is establishing footholds and will pivot to T1486 (Data Encrypted for Impact) once 5+ nodes are staged.</div>
+      <br>
+      <div class="log-line log-good">▸ WIN CONDITIONS:</div>
+      <div class="log-line">&nbsp;&nbsp;1. Survive 10 rounds with fewer than 5 nodes compromised, OR</div>
+      <div class="log-line">&nbsp;&nbsp;2. Sever the adversary C2 node before round 10.</div>
+      <br>
+      <div class="log-line log-crit">▸ LOSS CONDITION:</div>
+      <div class="log-line">&nbsp;&nbsp;5 or more grid nodes compromised at end of any round.</div>
+      <br>
+      <div class="log-line log-cyan">▸ ASSETS DEPLOYED:</div>
+      <div class="log-line"><span class="log-vigil">VIGIL</span> — Detection. SCAN reveals threats. TRACE finds C2.</div>
+      <div class="log-line"><span class="log-wraith">WRAITH</span> — Counter-ops. DISRUPT breaks attacks. SEVER kills C2.</div>
+      <div class="log-line"><span class="log-anchor">ANCHOR</span> — Recovery. HARDEN adds resilience. RESTORE recovers nodes.</div>
+      <br>
+      <div class="log-line log-josh" style="border-left:2px solid var(--cyan);padding-left:6px;">JOSHUA: A strange game. The only winning move is to play it well.</div>
+    `;
+  } else if (STATE.activeTab === 'codex') {
+    el.innerHTML = CODEX_ENTRIES.map(e => `
+      <div class="log-line log-cyan" style="font-weight:bold;">${e.id} — ${e.name}</div>
+      <div class="log-line" style="color:var(--muted); margin-bottom:8px;">${e.text}</div>
+    `).join('');
+  } else if (STATE.activeTab === 'comms') {
+    STATE.unreadComms = 0;
+    renderTabs();
+    const commLines = STATE.log.filter(l =>
+      l.cls === 'log-josh' || l.cls === 'log-vigil' ||
+      l.cls === 'log-wraith' || l.cls === 'log-anchor'
+    );
+    if (commLines.length === 0) {
+      el.innerHTML = `<div class="log-line" style="color:var(--muted);">// no comms traffic yet</div>`;
+    } else {
+      el.innerHTML = commLines.map(line =>
+        `<div class="log-line"><span class="log-time">${line.time}</span><span class="${line.cls}">${line.html}</span></div>`
+      ).join('');
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+}
+
+function renderTabs() {
+  document.querySelectorAll('.term-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === STATE.activeTab);
+    if (b.dataset.tab === 'comms') {
+      const existing = b.querySelector('.badge');
+      if (existing) existing.remove();
+      if (STATE.unreadComms > 0 && STATE.activeTab !== 'comms') {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = STATE.unreadComms;
+        b.appendChild(badge);
+      }
+    }
+  });
+}
+
+document.querySelectorAll('.term-tab').forEach(b => {
+  b.addEventListener('click', () => {
+    STATE.activeTab = b.dataset.tab;
+    renderTabs();
+    renderTerminal();
+  });
+});
+
+// ---------- THREAT AI ----------
+// Ransomware behavior:
+//  - Maintains a hidden C2 node (one of the grid nodes is "the source")
+//  - Each round during RESOLVE, threats progress along kill chain
+//  - Each round during CONSEQ, AI may launch a new attack from C2 or compromised node
+function pickC2() {
+  // pick a node that is NOT control center (too obvious) — prefer a substation
+  const candidates = STATE.nodes.filter(n => n.type !== 'control');
+  STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+}
+
+function aiPlanThreats() {
+  // At the start of each round, if no active threats and we're not done, possibly launch
+  // Goal: try to compromise nodes by progressing through kill chain
+  // A threat occupies a target node and progresses through phases each round
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').length;
+  const attacked = STATE.threats.length;
+  // launch up to 2 simultaneous threats early, more later
+  const desired = STATE.round <= 2 ? 1 : (STATE.round <= 5 ? 2 : 2);
+  const launches = Math.max(0, desired - attacked);
+  for (let i = 0; i < launches; i++) maybeLaunchThreat();
+}
+
+function maybeLaunchThreat() {
+  // pick a target: prefer healthy node, otherwise stressed
+  const c2 = getNode(STATE.c2Node);
+  const candidates = STATE.nodes.filter(n =>
+    n.id !== STATE.c2Node &&
+    n.state !== 'compromised' &&
+    !STATE.threats.some(t => t.target === n.id)
+  );
+  if (candidates.length === 0) return;
+  // weighted: target high-value (control, generators) more often
+  const weighted = [];
+  candidates.forEach(n => {
+    const w = n.type === 'control' ? 3 : (n.type === 'generator' ? 2 : 1);
+    for (let i = 0; i < w; i++) weighted.push(n);
+  });
+  const target = weighted[Math.floor(Math.random() * weighted.length)];
+  // build kill chain path from c2 through links to target (simple BFS)
+  const path = bfsPath(c2.id, target.id);
+  if (!path) return;
+  STATE.threats.push({
+    target: target.id,
+    path,
+    phase: 0,         // 0=access, 1=exec, 2=lateral, 3=impact
+    technique: TECHNIQUES[Math.floor(Math.random() * 3)],  // initial access flavor
+    revealed: false,
+    disrupted: false,
+  });
+  // mark target as attacked
+  target.state = target.state === 'healthy' ? 'attacked' : target.state;
+}
+
+function bfsPath(startId, endId) {
+  const visited = new Set([startId]);
+  const queue = [[startId]];
+  while (queue.length) {
+    const path = queue.shift();
+    const last = path[path.length - 1];
+    if (last === endId) return path;
+    const adj = adjacent(last);
+    for (const n of adj) {
+      if (!visited.has(n.id)) {
+        visited.add(n.id);
+        queue.push([...path, n.id]);
+      }
+    }
+  }
+  return null;
+}
+
+// ---------- PHASE TRANSITIONS ----------
+function setPhase(p) {
+  STATE.phase = p;
+  document.getElementById('stat-phase').textContent = `▸ ${p} PHASE`;
+  updateMainButton();
+  updateStatusBar();
+}
+
+function updateStatusBar() {
+  document.getElementById('stat-round').textContent = `${String(STATE.round).padStart(2,'0')}/${String(STATE.maxRounds).padStart(2,'0')}`;
+  // threat level
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').length;
+  const attacked = STATE.nodes.filter(n => n.state === 'attacked').length;
+  let level = 'LOW', cls = 'threat-low';
+  if (compromised >= 3 || attacked >= 4) { level = 'HIGH'; cls = 'threat-high'; }
+  else if (compromised >= 1 || attacked >= 2) { level = 'MED'; cls = 'threat-med'; }
+  STATE.threatLevel = level;
+  const el = document.getElementById('stat-threat');
+  el.textContent = level;
+  el.className = 'status-val ' + cls;
+  // grid stat
+  const onlineCount = STATE.nodes.filter(n => n.state !== 'compromised').length;
+  document.getElementById('grid-stat').textContent = `NODES: ${onlineCount}/8 ONLINE`;
+}
+
+function updateMainButton() {
+  const main = document.getElementById('btn-main');
+  const back = document.getElementById('btn-back');
+  back.disabled = false;
+  main.classList.remove('attract');
+  switch (STATE.phase) {
+    case 'INTEL':
+      main.textContent = STATE.round === 1 ? '▶ BEGIN PLAN' : 'BEGIN PLAN ▶';
+      main.disabled = false;
+      back.disabled = true;
+      if (STATE.round === 1) main.classList.add('attract');
+      break;
+    case 'PLAN':
+      const remaining = STATE.agents.filter(a => !a.exhausted).length;
+      if (remaining === 0) main.textContent = 'EXECUTE ▶';
+      else main.textContent = `EXECUTE (${STATE.plannedActions.length}/${STATE.agents.length}) ▶`;
+      main.disabled = STATE.plannedActions.length === 0;
+      break;
+    case 'RESOLVE':
+      main.textContent = '⏳ RESOLVING';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+    case 'CONSEQ':
+      main.textContent = '⏳ ADVERSARY';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+    case 'WIN':
+      main.textContent = '◢ MISSION COMPLETE';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+    case 'LOSE':
+      main.textContent = '◢ GRID OFFLINE';
+      main.className = 'action-btn danger';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+  }
+}
+
+// ---------- INTEL PHASE ----------
+function startIntelPhase() {
+  setPhase('INTEL');
+  document.getElementById('tap-hint').textContent = 'INTEL UPDATE — REVIEW LOG';
+  logDivider();
+  log(`<b>// ROUND ${STATE.round} — INTEL PHASE</b>`, 'log-cyan');
+  // Show what we know
+  const visibleThreats = STATE.threats.filter(t => t.revealed);
+  if (visibleThreats.length === 0 && STATE.threats.length > 0) {
+    log('No confirmed threats. Anomalous traffic detected on grid.', 'log-warn');
+  }
+  visibleThreats.forEach(t => {
+    log(`Active threat → ${t.target} [phase ${t.phase}/3]`, 'log-warn');
+    logTechnique(t.technique.id, t.technique.name);
+  });
+  if (STATE.c2Revealed && !STATE.c2Severed) {
+    log(`◢ C2 LOCATED at ${STATE.c2Node}. Recommend SEVER.`, 'log-crit');
+  }
+  if (STATE.round === 1) {
+    setTimeout(() => {
+      logJoshua('Initial access detected. Spearphishing vector likely.');
+    }, 800);
+  } else if (STATE.round === 5 && !STATE.c2Revealed) {
+    setTimeout(() => {
+      logJoshua('Adversary footprint expanding. C2 location still unknown.');
+    }, 600);
+  }
+}
+
+// ---------- PLAN PHASE ----------
+function startPlanPhase() {
+  setPhase('PLAN');
+  STATE.plannedActions = [];
+  STATE.agents.forEach(a => a.exhausted = false);
+  STATE.selectedAgent = null;
+  STATE.selectedTarget = null;
+  document.getElementById('tap-hint').textContent = 'SELECT AGENT, THEN TARGET NODE';
+  logDivider();
+  log('<b>// PLAN PHASE — Queue agent actions</b>', 'log-cyan');
+  renderAgentStrip();
+}
+
+function onAgentTap(i) {
+  if (STATE.phase !== 'PLAN') return;
+  const ag = STATE.agents[i];
+  if (ag.exhausted) {
+    log(`${ag.id} already committed this round.`, 'log-warn');
+    return;
+  }
+  STATE.selectedAgent = i;
+  STATE.selectedTarget = null;
+  renderAgentStrip();
+  showAgentActionModal(i);
+}
+
+function showAgentActionModal(i) {
+  const ag = STATE.agents[i];
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="border-color:${ag.color};box-shadow:0 0 24px ${hexA(ag.color, 0.4)};">
+      <div class="modal-title" style="color:${ag.color};">${ag.id} — ${ag.cls}</div>
+      <div class="modal-body" style="color:var(--muted);font-size:10px;">${ag.desc}</div>
+      <div id="action-list"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="action-btn" id="cancel-action" style="flex:1;">CANCEL</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  const list = modal.querySelector('#action-list');
+  ag.actions.forEach(act => {
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.style.width = '100%';
+    btn.style.marginBottom = '6px';
+    btn.style.textAlign = 'left';
+    btn.style.padding = '8px';
+    btn.innerHTML = `<div style="color:${ag.color};">▸ ${act.name}</div><div style="color:var(--muted);font-size:9px;font-weight:normal;text-transform:none;letter-spacing:0;margin-top:2px;">${act.desc}</div>`;
+    // disable sever if c2 not revealed
+    if (act.id === 'sever' && !STATE.c2Revealed) {
+      btn.disabled = true;
+      btn.innerHTML += `<div style="color:var(--red);font-size:9px;text-transform:none;letter-spacing:0;margin-top:2px;">[REQUIRES C2 REVEALED]</div>`;
+    }
+    btn.addEventListener('click', () => {
+      modal.remove();
+      STATE.selectedAction = act.id;
+      promptForTarget(i, act);
+    });
+    list.appendChild(btn);
+  });
+  modal.querySelector('#cancel-action').addEventListener('click', () => {
+    STATE.selectedAgent = null;
+    renderAgentStrip();
+    modal.remove();
+  });
+}
+
+function promptForTarget(agentIdx, action) {
+  const ag = STATE.agents[agentIdx];
+  // Some actions auto-target (TRACE, SEVER)
+  if (action.id === 'trace') {
+    queueAction(agentIdx, action, null);
+    return;
+  }
+  if (action.id === 'sever') {
+    if (!STATE.c2Revealed) {
+      log('Cannot SEVER — C2 location unknown.', 'log-warn');
+      STATE.selectedAgent = null;
+      renderAgentStrip();
+      return;
+    }
+    queueAction(agentIdx, action, STATE.c2Node);
+    return;
+  }
+  document.getElementById('tap-hint').textContent = `${ag.id} ▸ ${action.name} — TAP TARGET NODE`;
+}
+
+function onMapTap(x, y) {
+  if (STATE.phase !== 'PLAN') {
+    // inspect mode
+    const n = nearestNode(x, y);
+    if (n) inspectNode(n);
+    return;
+  }
+  if (STATE.selectedAgent === null) {
+    // tap-to-select node for inspect even in plan
+    const n = nearestNode(x, y);
+    if (n) inspectNode(n);
+    return;
+  }
+  const n = nearestNode(x, y);
+  if (!n) return;
+  const ag = STATE.agents[STATE.selectedAgent];
+  const action = ag.actions.find(a => a.id === STATE.selectedAction);
+  if (!action) return;
+  queueAction(STATE.selectedAgent, action, n.id);
+}
+
+function queueAction(agentIdx, action, targetId) {
+  const ag = STATE.agents[agentIdx];
+  STATE.plannedActions.push({
+    agent: agentIdx,
+    actionId: action.id,
+    actionName: action.name,
+    target: targetId,
+  });
+  ag.exhausted = true;
+  log(`<span class="log-${ag.id.toLowerCase()}">${ag.id}</span> queued ▸ ${action.name}${targetId ? ' → ' + targetId : ''}`);
+  STATE.selectedAgent = null;
+  STATE.selectedTarget = null;
+  STATE.selectedAction = null;
+  document.getElementById('tap-hint').textContent = 'SELECT AGENT, THEN TARGET NODE';
+  renderAgentStrip();
+  updateMainButton();
+}
+
+function nearestNode(x, y) {
+  let best = null, bestD = 30 * 30;  // 30px tap radius
+  STATE.nodes.forEach(n => {
+    const dx = n.x - x, dy = n.y - y;
+    const d = dx*dx + dy*dy;
+    if (d < bestD) { bestD = d; best = n; }
+  });
+  return best;
+}
+
+function inspectNode(n) {
+  STATE.inspectingNode = n.id;
+  STATE.selectedTarget = n.id;
+  let stateLabel = n.state.toUpperCase();
+  let extra = '';
+  if (n.id === STATE.c2Node && STATE.c2Revealed) extra = ' [◢ C2 ◣]';
+  if (n.resilience > 0) extra += ` [+${n.resilience} HARDENED]`;
+  log(`▸ INSPECT ${n.id} (${n.type}): ${stateLabel}${extra}`, 'log-cyan');
+  // Active threats targeting this node
+  const ts = STATE.threats.filter(t => t.target === n.id && t.revealed);
+  ts.forEach(t => log(`&nbsp;&nbsp;└ INCOMING THREAT phase ${t.phase}/3`, 'log-warn'));
+}
+
+// ---------- RESOLVE PHASE ----------
+function startResolvePhase() {
+  setPhase('RESOLVE');
+  document.getElementById('tap-hint').textContent = 'RESOLVING ACTIONS';
+  logDivider();
+  log('<b>// RESOLVE PHASE — Executing operator actions</b>', 'log-cyan');
+  resolveNextAction(0);
+}
+
+function resolveNextAction(i) {
+  if (i >= STATE.plannedActions.length) {
+    setTimeout(startConseqPhase, 600);
+    return;
+  }
+  const a = STATE.plannedActions[i];
+  const ag = STATE.agents[a.agent];
+  executeAction(ag, a);
+  setTimeout(() => resolveNextAction(i + 1), 900);
+}
+
+function executeAction(ag, a) {
+  const target = a.target ? getNode(a.target) : null;
+  const speak = (txt) => logAgent(ag.id, txt);
+
+  if (a.actionId === 'scan') {
+    speak(`Deep scan on ${target.id}. Adjacent nodes included.`);
+    const reveal = [target, ...adjacent(target.id)];
+    let foundCount = 0;
+    reveal.forEach(n => {
+      STATE.threats.forEach(t => {
+        if (t.target === n.id && !t.revealed) {
+          t.revealed = true;
+          foundCount++;
+          log(`&nbsp;&nbsp;└ Threat exposed at ${n.id}`, 'log-warn');
+          logTechnique(t.technique.id, t.technique.name);
+        }
+      });
+    });
+    if (foundCount === 0) speak('No active threats on scanned nodes.');
+  }
+  else if (a.actionId === 'trace') {
+    speak('Initiating C2 traceback. Correlating beacon traffic...');
+    if (STATE.c2Revealed) {
+      speak('C2 location already known.');
+    } else {
+      // chance scales with revealed threats: each revealed threat +25%
+      const revealedCount = STATE.threats.filter(t => t.revealed).length;
+      const chance = 0.30 + revealedCount * 0.20;
+      if (Math.random() < chance) {
+        STATE.c2Revealed = true;
+        log(`&nbsp;&nbsp;└ <b>C2 IDENTIFIED → ${STATE.c2Node}</b>`, 'log-crit');
+        setTimeout(() => logJoshua(`Adversary command node located. Severing recommended.`), 400);
+      } else {
+        speak('Trace incomplete. Beacon obfuscated. More intel needed.');
+      }
+    }
+  }
+  else if (a.actionId === 'disrupt') {
+    speak(`Disrupting attack chain on ${target.id}.`);
+    const ts = STATE.threats.filter(t => t.target === target.id);
+    if (ts.length === 0) {
+      speak('No active threat on target. Action wasted.');
+    } else {
+      ts.forEach(t => {
+        t.disrupted = true;
+        // visualize counter-chain
+        spawnAttackChain(t.path.slice().reverse(), 'counter');
+        log(`&nbsp;&nbsp;└ Kill chain broken at ${target.id}`, 'log-good');
+      });
+      // Remove threats + restore node state
+      STATE.threats = STATE.threats.filter(t => t.target !== target.id);
+      if (target.state === 'attacked') target.state = 'stressed';
+    }
+  }
+  else if (a.actionId === 'sever') {
+    speak('Cutting C2 link. Burning persistence.');
+    if (!STATE.c2Revealed) {
+      speak('ERROR — C2 location unknown.');
+      return;
+    }
+    STATE.c2Severed = true;
+    // dramatic counter-chain from all corners to c2
+    const c2 = getNode(STATE.c2Node);
+    STATE.nodes.forEach(n => {
+      if (n.id !== c2.id) {
+        const p = bfsPath(n.id, c2.id);
+        if (p) spawnAttackChain(p, 'counter');
+      }
+    });
+    log(`&nbsp;&nbsp;└ <b>C2 SEVERED. Adversary command lost.</b>`, 'log-good');
+    // remove all threats
+    STATE.threats = [];
+    STATE.nodes.forEach(n => { if (n.state === 'attacked') n.state = 'stressed'; });
+    setTimeout(() => {
+      logJoshua('A strange game. The only winning move is to play it well. WELL PLAYED.');
+      checkWinCondition();
+    }, 1200);
+  }
+  else if (a.actionId === 'harden') {
+    speak(`Applying patches and segmentation to ${target.id}.`);
+    target.resilience = Math.min(target.resilience + 1, 3);
+    log(`&nbsp;&nbsp;└ ${target.id} resilience +1 (now ${target.resilience})`, 'log-good');
+  }
+  else if (a.actionId === 'restore') {
+    speak(`Restoring ${target.id} from clean backups.`);
+    if (target.state === 'compromised') {
+      target.state = 'stressed';
+      log(`&nbsp;&nbsp;└ ${target.id} restored to STRESSED`, 'log-good');
+    } else if (target.state === 'attacked') {
+      target.state = 'stressed';
+      log(`&nbsp;&nbsp;└ ${target.id} attack contained`, 'log-good');
+    } else {
+      speak(`${target.id} did not require restoration.`);
+    }
+  }
+}
+
+// ---------- CONSEQUENCES PHASE ----------
+function startConseqPhase() {
+  if (STATE.c2Severed) return; // win path - skip
+  setPhase('CONSEQ');
+  document.getElementById('tap-hint').textContent = 'ADVERSARY ACTING';
+  logDivider();
+  log('<b>// CONSEQUENCES — Adversary advances</b>', 'log-crit');
+  // Each threat advances one phase
+  let actionDelay = 400;
+  STATE.threats.forEach((t, i) => {
+    setTimeout(() => advanceThreat(t), actionDelay);
+    actionDelay += 700;
+  });
+  // After all threats advance, AI may launch new attacks
+  setTimeout(() => {
+    aiPlanThreats();
+    STATE.threats.forEach(t => {
+      const target = getNode(t.target);
+      if (target.state === 'healthy') target.state = 'attacked';
+    });
+    // visualize new threats with chain
+    STATE.threats.forEach(t => {
+      if (t.phase === 0) {
+        spawnAttackChain(t.path, 'attack');
+      }
+    });
+    setTimeout(advanceRound, 1200);
+  }, actionDelay + 200);
+}
+
+function advanceThreat(t) {
+  const target = getNode(t.target);
+  if (!target) return;
+  if (target.state === 'compromised') return;  // already done
+  // resilience can negate one phase advance
+  if (target.resilience > 0 && Math.random() < 0.7) {
+    target.resilience--;
+    log(`Hardening on ${target.id} blunted attack. Resilience -1.`, 'log-good');
+    return;
+  }
+  t.phase++;
+  const phaseTechniques = [
+    TECHNIQUES.find(x => x.id === 'T1059'),  // exec
+    TECHNIQUES.find(x => x.id === 'T1021'),  // lateral
+    TECHNIQUES.find(x => x.id === 'T1486'),  // impact
+  ];
+  const tech = phaseTechniques[Math.min(t.phase - 1, 2)];
+  log(`Threat advances on ${target.id} [phase ${t.phase}/3]`, 'log-warn');
+  if (tech) logTechnique(tech.id, tech.name);
+  spawnAttackChain(t.path, 'attack');
+  if (t.phase >= 3) {
+    target.state = 'compromised';
+    log(`&nbsp;&nbsp;└ <b>${target.id} COMPROMISED</b>`, 'log-crit');
+    // remove this threat (objective achieved by adversary)
+    STATE.threats = STATE.threats.filter(x => x !== t);
+    // cascade: adjacent stressed nodes get attacked
+    adjacent(target.id).forEach(adj => {
+      if (adj.state === 'healthy' && Math.random() < 0.3) {
+        adj.state = 'stressed';
+        log(`&nbsp;&nbsp;└ Cascade stress on ${adj.id}`, 'log-warn');
+      }
+    });
+  }
+}
+
+// ---------- ROUND TRANSITION ----------
+function advanceRound() {
+  // Check loss
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').length;
+  if (compromised >= 5) {
+    triggerLose('Five or more grid nodes compromised. Sector dark.');
+    return;
+  }
+  if (STATE.round >= STATE.maxRounds) {
+    if (compromised < 5) {
+      triggerWin('Survived 10 rounds. Grid integrity maintained.');
+      return;
+    }
+  }
+  STATE.round++;
+  updateStatusBar();
+  startIntelPhase();
+}
+
+function checkWinCondition() {
+  if (STATE.c2Severed) {
+    triggerWin('C2 severed. Adversary command structure neutralized.');
+  }
+}
+
+function triggerWin(reason) {
+  setPhase('WIN');
+  showResultModal(true, reason);
+}
+function triggerLose(reason) {
+  setPhase('LOSE');
+  showResultModal(false, reason);
+}
+
+function showResultModal(win, reason) {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  const color = win ? 'var(--green)' : 'var(--red)';
+  const title = win ? 'MISSION COMPLETE' : 'MISSION FAILED';
+  const joshLine = win
+    ? `JOSHUA: A strange game. The only winning move is to play. Thanks for the game.`
+    : `JOSHUA: How about a nice game of chess?`;
+  const stats = `
+    Compromised nodes: ${STATE.nodes.filter(n => n.state === 'compromised').length}<br>
+    Hardened nodes: ${STATE.nodes.filter(n => n.resilience > 0).length}<br>
+    C2 severed: ${STATE.c2Severed ? 'YES' : 'NO'}<br>
+    Round: ${STATE.round}/${STATE.maxRounds}
+  `;
+  modal.innerHTML = `
+    <div class="modal-content" style="border-color:${color};box-shadow:0 0 24px ${color};">
+      <div class="modal-title" style="color:${color};">${title}</div>
+      <div class="modal-body">
+        <p>${reason}</p>
+        <p style="color:var(--muted);font-size:10px;">${stats}</p>
+        <p class="log-josh" style="border-left:2px solid var(--cyan);padding-left:6px;color:var(--cyan);">${joshLine}</p>
+      </div>
+      <button class="action-btn primary" style="width:100%;" id="restart-btn">▶ NEW MISSION</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  modal.querySelector('#restart-btn').addEventListener('click', () => {
+    location.reload();
+  });
+}
+
+// ---------- INPUT ----------
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  onMapTap(x, y);
+});
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (e.changedTouches.length === 0) return;
+  const t = e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = t.clientX - rect.left;
+  const y = t.clientY - rect.top;
+  onMapTap(x, y);
+}, { passive: false });
+
+document.getElementById('btn-main').addEventListener('click', () => {
+  if (STATE.phase === 'INTEL') startPlanPhase();
+  else if (STATE.phase === 'PLAN') {
+    if (STATE.plannedActions.length === 0) return;
+    startResolvePhase();
+  }
+});
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (STATE.phase === 'PLAN' && STATE.plannedActions.length > 0) {
+    // undo last
+    const last = STATE.plannedActions.pop();
+    const ag = STATE.agents[last.agent];
+    ag.exhausted = false;
+    log(`<span class="log-${ag.id.toLowerCase()}">${ag.id}</span> action recalled.`);
+    renderAgentStrip();
+    updateMainButton();
+  }
+});
+
+// ---------- BOOT SEQUENCE ----------
+const BOOT_LINES = [
+  '> JOSHUA SYSTEM v0.1 // BOOT',
+  '> Initializing operator console...',
+  '> Loading agent roster: VIGIL, WRAITH, ANCHOR ✓',
+  '> Connecting to NE GRID SECTOR 7... ✓',
+  '> Threat intel feed: ACTIVE',
+  '> ',
+  '> JOSHUA: Greetings, Operator.',
+  '> JOSHUA: Shall we play a game?',
+  '> ',
+];
+
+let bootIdx = 0;
+let bootCharIdx = 0;
+let bootFullText = '';
+const bootEl = document.getElementById('boot-text');
+
+function bootTick() {
+  if (bootIdx >= BOOT_LINES.length) {
+    setTimeout(finishBoot, 600);
+    return;
+  }
+  const line = BOOT_LINES[bootIdx];
+  if (bootCharIdx <= line.length) {
+    bootEl.textContent = bootFullText + line.slice(0, bootCharIdx);
+    bootCharIdx++;
+    setTimeout(bootTick, line.length === 0 ? 80 : 18 + Math.random() * 25);
+  } else {
+    bootFullText += line + '\n';
+    bootIdx++;
+    bootCharIdx = 0;
+    setTimeout(bootTick, 180);
+  }
+}
+
+function finishBoot() {
+  const boot = document.getElementById('boot');
+  boot.style.transition = 'opacity 0.6s';
+  boot.style.opacity = '0';
+  setTimeout(() => {
+    boot.remove();
+    beginGame();
+  }, 700);
+}
+
+// ---------- GAME START ----------
+function beginGame() {
+  resizeCanvas();
+  setupGrid();
+  setupAgents();
+  pickC2();
+  log('<b>// JOSHUA PROTOCOL — OP. BLACKFROST</b>', 'log-cyan');
+  log('Northeast Power Grid, Sector 7. Eight nodes online.', 'log-info');
+  logJoshua('Operator, ransomware operation in progress. Initial access vector under analysis.');
+  // pre-launch one threat so round 1 has something to look at
+  maybeLaunchThreat();
+  STATE.threats.forEach(t => {
+    const target = getNode(t.target);
+    if (target.state === 'healthy') target.state = 'attacked';
+    spawnAttackChain(t.path, 'attack');
+  });
+  startIntelPhase();
+  // kick render loop
+  requestAnimationFrame(renderLoop);
+}
+
+function renderLoop() {
+  render();
+  requestAnimationFrame(renderLoop);
+}
+
+// kick boot
+resizeCanvas();
+setTimeout(bootTick, 300);
+</script>
+</body>
+</html>

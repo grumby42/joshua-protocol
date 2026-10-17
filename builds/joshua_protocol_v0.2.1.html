@@ -1,0 +1,3763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#03060a">
+<title>JOSHUA PROTOCOL v0.2.1</title>
+<style>
+  :root {
+    --bg-deep: #03060a;
+    --bg-panel: #06101a;
+    --bg-panel-2: #0a1824;
+    --grid-line: #0e2030;
+    --cyan: #4ee2ff;
+    --cyan-dim: #2a8aa0;
+    --amber: #ffb84d;
+    --amber-dim: #a07028;
+    --magenta: #ff4ea8;
+    --magenta-dim: #a02868;
+    --red: #ff3a3a;
+    --red-dim: #802020;
+    --green: #5cff8a;
+    --white: #e8f4ff;
+    --muted: #5a7080;
+    --term-glow: rgba(78, 226, 255, 0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg-deep); color: var(--white);
+    font-family: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    font-size: 13px; line-height: 1.4;
+    user-select: none; -webkit-user-select: none;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+  #app {
+    width: 100vw; height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
+    position: relative;
+    background: linear-gradient(180deg, #04080d 0%, #03060a 100%);
+    overflow: hidden;
+  }
+  #app::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg, rgba(78,226,255,0.025) 0px, rgba(78,226,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    z-index: 100;
+  }
+  #status-bar {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    background: linear-gradient(180deg, #08141e 0%, #050b13 100%);
+    border-bottom: 1px solid var(--grid-line);
+    display: grid; grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 8px;
+    font-size: 10px; letter-spacing: 0.05em;
+  }
+  .status-tag { color: var(--cyan); text-transform: uppercase; }
+  .status-val { color: var(--white); font-weight: bold; }
+  .status-mid { text-align: center; color: var(--muted); }
+  .threat-low { color: var(--green); }
+  .threat-med { color: var(--amber); }
+  .threat-high { color: var(--red); animation: pulseRed 1.2s infinite; }
+  @keyframes pulseRed { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  #map-area {
+    flex: 1 1 auto;
+    position: relative; overflow: hidden;
+    min-height: 220px;
+  }
+  #map-canvas { width: 100%; height: 100%; display: block; }
+
+  #view-toggle {
+    position: absolute; top: 8px; left: 50%;
+    transform: translateX(-50%);
+    display: none; gap: 0;
+    background: rgba(3, 6, 10, 0.88);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 3px; overflow: hidden;
+    z-index: 5;
+  }
+  #view-toggle.active { display: flex; }
+  .view-btn {
+    padding: 5px 9px;
+    background: transparent; border: none;
+    color: var(--muted);
+    font-family: inherit; font-size: 9px;
+    letter-spacing: 0.1em; cursor: pointer;
+    border-right: 1px solid var(--grid-line);
+    text-transform: uppercase;
+  }
+  .view-btn:last-child { border-right: none; }
+  .view-btn.active {
+    color: var(--cyan);
+    background: rgba(78,226,255,0.1);
+  }
+
+  #settings-btn {
+    position: absolute; top: 6px; right: 6px;
+    width: 28px; height: 28px;
+    background: rgba(3,6,10,0.7);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 3px;
+    color: var(--cyan);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 5; font-size: 14px;
+  }
+
+  .map-overlay-text {
+    position: absolute; pointer-events: none;
+    font-size: 9px; color: var(--cyan-dim);
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .tap-hint {
+    position: absolute; bottom: 4px; left: 0; right: 0;
+    text-align: center;
+    font-size: 9px; color: var(--muted);
+    pointer-events: none;
+    text-transform: uppercase; letter-spacing: 0.1em;
+  }
+
+  #terminal {
+    flex: 0 0 160px; height: 160px; max-height: 160px;
+    background: linear-gradient(180deg, #050d15 0%, #030709 100%);
+    border-top: 1px solid var(--cyan-dim);
+    border-bottom: 1px solid var(--grid-line);
+    display: flex; flex-direction: column;
+    position: relative;
+    box-shadow: inset 0 0 30px var(--term-glow);
+    overflow: hidden;
+  }
+  #terminal-tabs {
+    flex: 0 0 auto; display: flex;
+    border-bottom: 1px solid var(--grid-line);
+    background: #04090e;
+  }
+  .term-tab {
+    flex: 1; padding: 5px 4px;
+    background: transparent; border: none;
+    color: var(--muted);
+    font-family: inherit; font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer;
+    border-right: 1px solid var(--grid-line);
+    transition: all 0.15s;
+  }
+  .term-tab:last-child { border-right: none; }
+  .term-tab.active {
+    color: var(--cyan);
+    background: linear-gradient(180deg, rgba(78,226,255,0.08) 0%, transparent 100%);
+    border-bottom: 2px solid var(--cyan);
+  }
+  .term-tab .badge {
+    display: inline-block; background: var(--red);
+    color: var(--white); font-size: 8px;
+    padding: 1px 4px; border-radius: 6px; margin-left: 2px;
+  }
+  #terminal-content {
+    flex: 1; overflow-y: auto;
+    padding: 6px 8px;
+    font-size: 11px; line-height: 1.5;
+    scroll-behavior: smooth;
+  }
+  #terminal-content::-webkit-scrollbar { width: 4px; }
+  #terminal-content::-webkit-scrollbar-track { background: transparent; }
+  #terminal-content::-webkit-scrollbar-thumb { background: var(--cyan-dim); }
+
+  .log-line { margin-bottom: 3px; word-wrap: break-word; }
+  .log-time { color: var(--muted); margin-right: 6px; }
+  .log-info { color: var(--white); }
+  .log-warn { color: var(--amber); }
+  .log-crit { color: var(--red); }
+  .log-good { color: var(--green); }
+  .log-cyan { color: var(--cyan); }
+  .log-josh { color: var(--cyan); border-left: 2px solid var(--cyan); padding-left: 6px; margin: 4px 0; }
+  .log-vigil { color: var(--cyan); }
+  .log-wraith { color: var(--magenta); }
+  .log-anchor { color: var(--amber); }
+  .log-tech { color: var(--magenta-dim); font-size: 10px; }
+  .log-divider { color: var(--grid-line); margin: 4px 0; letter-spacing: -1px; }
+  .framework-tag {
+    display: inline-block; font-size: 8px;
+    padding: 0 4px; margin-left: 4px;
+    border: 1px solid var(--magenta-dim);
+    color: var(--magenta);
+    border-radius: 2px; letter-spacing: 0.05em;
+  }
+  .framework-tag.attack { border-color: #c04080; color: #ff6090; }
+  .framework-tag.ics { border-color: #c08020; color: #ffaa50; }
+  .framework-tag.sparta { border-color: #4080c0; color: #60a0ff; }
+  .framework-tag.atlas { border-color: #40c080; color: #60ffa0; }
+  .framework-tag.d3fend { border-color: #2a8aa0; color: #4ee2ff; }
+
+  .codex-entry {
+    margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--grid-line);
+  }
+  .codex-id { color: var(--cyan); font-weight: bold; font-size: 11px; }
+  .codex-name { color: var(--white); font-weight: bold; }
+  .codex-desc { color: var(--muted); font-size: 10px; margin-top: 3px; }
+  .codex-tools { color: var(--green); font-size: 9px; margin-top: 3px; }
+  .codex-counters { color: var(--amber); font-size: 9px; margin-top: 2px; }
+
+  #agent-strip {
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    background: #04090e;
+    border-top: 1px solid var(--grid-line);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+  }
+  .agent-card {
+    background: linear-gradient(180deg, #0a141d 0%, #060c14 100%);
+    border: 1px solid var(--grid-line);
+    border-radius: 2px;
+    padding: 3px;
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+    min-height: 44px;
+  }
+  .agent-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  .agent-card.exhausted { opacity: 0.4; }
+  .agent-card.speaking::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 20% 50%, var(--accent-glow) 0%, transparent 60%);
+    pointer-events: none;
+    animation: speakPulse 0.8s ease-out;
+  }
+  @keyframes speakPulse { 0% { opacity: 1; } 100% { opacity: 0; } }
+  .agent-portrait { width: 36px; height: 36px; flex: 0 0 auto; }
+  .agent-info { flex: 1; min-width: 0; }
+  .agent-name {
+    font-size: 11px; font-weight: bold;
+    color: var(--accent); letter-spacing: 0.05em;
+  }
+  .agent-class {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .agent-status {
+    font-size: 9px; color: var(--white);
+    margin-top: 2px;
+  }
+
+  #action-bar {
+    flex: 0 0 auto;
+    padding: 5px 6px 6px;
+    background: #02050a;
+    border-top: 1px solid var(--cyan-dim);
+    display: flex; gap: 5px;
+  }
+  .action-btn {
+    flex: 1;
+    padding: 8px 6px;
+    background: linear-gradient(180deg, #0d1c2a 0%, #07111a 100%);
+    border: 1px solid var(--cyan-dim);
+    color: var(--cyan);
+    font-family: inherit; font-size: 11px;
+    font-weight: bold; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .action-btn.primary {
+    background: linear-gradient(180deg, #0f3848 0%, #082028 100%);
+    border-color: var(--cyan);
+    box-shadow: 0 0 8px rgba(78,226,255,0.3);
+  }
+  .action-btn.danger { border-color: var(--red); color: var(--red); }
+  .action-btn.attract { animation: attractPulse 1.4s ease-in-out infinite; }
+  @keyframes attractPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(78,226,255,0.3); }
+    50% { box-shadow: 0 0 18px rgba(78,226,255,0.85), 0 0 30px rgba(78,226,255,0.4); }
+  }
+
+  .modal {
+    position: absolute; inset: 0;
+    background: rgba(3, 6, 10, 0.92);
+    z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(2px);
+    overflow-y: auto;
+  }
+  .modal-content {
+    width: 100%; max-width: 360px;
+    background: linear-gradient(180deg, #0a1824 0%, #050b13 100%);
+    border: 1px solid var(--cyan);
+    box-shadow: 0 0 24px rgba(78,226,255,0.4);
+    padding: 14px;
+    font-size: 11px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-title {
+    font-size: 13px; font-weight: bold;
+    color: var(--cyan);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--grid-line);
+    padding-bottom: 6px;
+  }
+  .modal-body { margin-bottom: 12px; line-height: 1.6; }
+  .modal-body p { margin-bottom: 8px; }
+
+  .mission-card {
+    background: linear-gradient(180deg, #0a141d 0%, #060c14 100%);
+    border: 1px solid var(--grid-line);
+    border-radius: 2px;
+    padding: 10px; margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mission-card:hover, .mission-card:active {
+    border-color: var(--cyan);
+    box-shadow: 0 0 12px rgba(78,226,255,0.3);
+  }
+  .mission-name {
+    font-size: 12px; font-weight: bold;
+    color: var(--cyan); margin-bottom: 4px;
+    letter-spacing: 0.05em;
+  }
+  .mission-domain {
+    font-size: 9px; color: var(--amber);
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .mission-desc {
+    font-size: 10px; color: var(--muted);
+    line-height: 1.5;
+  }
+
+  #boot {
+    position: absolute; inset: 0;
+    background: var(--bg-deep);
+    z-index: 200;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 20px; font-size: 12px;
+  }
+  #boot-text {
+    width: 100%; max-width: 320px;
+    color: var(--cyan);
+    white-space: pre-wrap;
+    line-height: 1.6;
+    min-height: 280px;
+  }
+  .cursor::after {
+    content: '_';
+    animation: blink 0.8s infinite;
+    color: var(--cyan);
+  }
+  @keyframes blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+
+  #replay-overlay {
+    position: absolute; inset: 0;
+    background: rgba(3,6,10,0.95);
+    z-index: 30;
+    display: none;
+    flex-direction: column;
+    padding: 16px;
+  }
+  #replay-overlay.active { display: flex; }
+  .replay-title {
+    font-size: 11px; color: var(--cyan);
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 8px; text-align: center;
+  }
+  #replay-canvas {
+    flex: 1;
+    width: 100%;
+    border: 1px solid var(--cyan-dim);
+    background: #03060a;
+    min-height: 100px;
+  }
+  .replay-card-stack {
+    display: flex; gap: 6px;
+    overflow-x: auto;
+    padding: 8px 0;
+    flex: 0 0 auto;
+  }
+  .replay-card {
+    flex: 0 0 auto;
+    width: 110px;
+    padding: 6px;
+    background: linear-gradient(180deg, #0a141d 0%, #060c14 100%);
+    border: 1px solid var(--magenta-dim);
+    border-radius: 2px;
+    font-size: 9px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.4s;
+  }
+  .replay-card.shown { opacity: 1; transform: translateY(0); }
+  .replay-card.counter { border-color: var(--green); }
+  .replay-card .rc-id {
+    color: var(--magenta); font-weight: bold;
+    margin-bottom: 2px; font-size: 10px;
+  }
+  .replay-card.counter .rc-id { color: var(--green); }
+  .replay-card .rc-name { color: var(--white); margin-bottom: 3px; }
+  .replay-card .rc-fw {
+    font-size: 8px; color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  #replay-skip { margin-top: 8px; flex: 0 0 auto; }
+
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--grid-line);
+  }
+  .settings-label {
+    color: var(--cyan); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .verbosity-toggle {
+    display: flex; gap: 0;
+    border: 1px solid var(--cyan-dim);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .verbosity-btn {
+    padding: 5px 10px;
+    background: transparent; border: none;
+    color: var(--muted);
+    font-family: inherit; font-size: 10px;
+    cursor: pointer;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border-right: 1px solid var(--grid-line);
+  }
+  .verbosity-btn:last-child { border-right: none; }
+  .verbosity-btn.active {
+    color: var(--cyan);
+    background: rgba(78,226,255,0.15);
+  }
+
+  /* v0.2.1: tappable technique IDs in log */
+  .tech-tap {
+    color: var(--cyan);
+    text-decoration: underline dotted;
+    text-decoration-color: var(--cyan-dim);
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .tech-tap:hover, .tech-tap:active {
+    color: var(--white);
+    background: rgba(78,226,255,0.15);
+    text-decoration-color: var(--cyan);
+  }
+
+  /* v0.2.1: full-screen debrief */
+  .debrief-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #050d15 0%, #03060a 100%);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .debrief-header {
+    flex: 0 0 auto;
+    padding: 14px 16px 10px;
+    background: linear-gradient(180deg, #08141e 0%, #050b13 100%);
+  }
+  .debrief-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    border-bottom: 1px solid var(--grid-line);
+    background: #04090e;
+  }
+  .debrief-tab {
+    flex: 1;
+    padding: 9px 4px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-right: 1px solid var(--grid-line);
+  }
+  .debrief-tab:last-child { border-right: none; }
+  .debrief-tab.active {
+    color: var(--cyan);
+    background: linear-gradient(180deg, rgba(78,226,255,0.08) 0%, transparent 100%);
+    border-bottom: 2px solid var(--cyan);
+  }
+  .debrief-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .debrief-footer {
+    flex: 0 0 auto;
+    padding: 8px;
+    background: #02050a;
+    border-top: 1px solid var(--cyan-dim);
+    display: flex;
+    gap: 6px;
+  }
+
+  .rubric-overall {
+    text-align: center;
+    margin-bottom: 14px;
+    padding: 10px;
+    background: rgba(78,226,255,0.04);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 2px;
+  }
+  .rubric-row {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--grid-line);
+  }
+  .rubric-label {
+    color: var(--cyan);
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .rubric-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .rubric-bar {
+    font-family: monospace;
+    letter-spacing: -1px;
+    font-size: 12px;
+  }
+  .rubric-score {
+    color: var(--white);
+    font-weight: bold;
+    min-width: 28px;
+    text-align: right;
+  }
+  .rubric-tag {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+  .rubric-detail {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 4px;
+  }
+
+  .trend-block {
+    margin-bottom: 12px;
+    padding: 8px;
+    background: rgba(78,226,255,0.03);
+    border: 1px solid var(--grid-line);
+    border-radius: 2px;
+  }
+  .trend-label {
+    color: var(--cyan);
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+  }
+  .trend-spark {
+    font-size: 18px;
+    letter-spacing: 1px;
+    margin: 4px 0;
+    line-height: 1;
+  }
+  .trend-detail {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  .moves-table {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.7;
+  }
+  .moves-row {
+    padding: 2px 4px;
+    border-bottom: 1px dotted var(--grid-line);
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .moves-rnd { color: var(--muted); margin-right: 8px; }
+  .moves-agent { font-weight: bold; margin-right: 6px; }
+  .moves-action { color: var(--cyan-dim); margin-right: 6px; }
+  .moves-target { color: var(--white); margin-right: 6px; }
+  .moves-outcome { font-weight: bold; }
+
+  /* Modal codex card recommendations */
+  .rec-line {
+    line-height: 1.5;
+    color: var(--white);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="status-bar">
+    <div><span class="status-tag">RND</span> <span class="status-val" id="stat-round">01/10</span></div>
+    <div class="status-mid" id="stat-phase">▸ INTEL PHASE</div>
+    <div><span class="status-tag">THREAT</span> <span class="status-val threat-low" id="stat-threat">LOW</span></div>
+  </div>
+
+  <div id="map-area">
+    <canvas id="map-canvas"></canvas>
+    <div class="map-overlay-text" style="top: 6px; left: 8px;" id="sector-label">// LOADING...</div>
+    <div class="map-overlay-text" style="top: 6px; right: 44px;" id="grid-stat"></div>
+    <div id="view-toggle">
+      <button class="view-btn active" data-view="orbital">ORBITAL</button>
+      <button class="view-btn" data-view="ground">GROUND</button>
+      <button class="view-btn" data-view="tactical">TACTICAL</button>
+    </div>
+    <button id="settings-btn" title="Settings">⚙</button>
+    <div class="tap-hint" id="tap-hint">TAP NODE TO INSPECT</div>
+  </div>
+
+  <div id="terminal">
+    <div id="terminal-tabs">
+      <button class="term-tab active" data-tab="log">LOG</button>
+      <button class="term-tab" data-tab="brief">BRIEF</button>
+      <button class="term-tab" data-tab="codex">CODEX</button>
+      <button class="term-tab" data-tab="intel">INTEL</button>
+    </div>
+    <div id="terminal-content"></div>
+  </div>
+
+  <div id="agent-strip"></div>
+
+  <div id="action-bar">
+    <button class="action-btn" id="btn-back">◀ BACK</button>
+    <button class="action-btn primary" id="btn-main">EXECUTE ▶</button>
+  </div>
+
+  <div id="replay-overlay">
+    <div class="replay-title">// KILL CHAIN REPLAY //</div>
+    <canvas id="replay-canvas"></canvas>
+    <div class="replay-card-stack" id="replay-cards"></div>
+    <button class="action-btn primary" id="replay-skip">SKIP REPLAY ▶</button>
+  </div>
+
+  <div id="boot">
+    <div id="boot-text" class="cursor"></div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+// =============================================================================
+// JOSHUA PROTOCOL v0.2
+// 1. Constants & math (AeroSec-Lab orbital propagation)
+// 2. Framework registry (ATT&CK / ICS / SPARTA / ATLAS / D3FEND)
+// 3. Agent definitions
+// 4. Mission registry (BLACKFROST + NIGHTWATCH)
+// 5. Game state
+// 6. Canvas / render core
+// 7. Energy mission
+// 8. Satellite mission (orbital / ground / tactical views)
+// 9. Particles & attack chain animations
+// 10. Threat AI
+// 11. Phase machine
+// 12. UI: agents, terminal, modals, codex
+// 13. Kill chain replay
+// 14. Input
+// 15. Boot & mission select
+// =============================================================================
+
+
+// =============================================================================
+// 1. CONSTANTS & ORBITAL MATH (lifted from AeroSec-Lab — Hack-A-Sat lineage)
+// =============================================================================
+const GM_EARTH = 398600.4418;       // km³/s²
+const R_EARTH  = 6378.137;          // km WGS-84
+const J2       = 1.08263e-3;
+const C        = 299792.458;        // km/s
+const K_BOLT   = -228.6;            // dBW/K/Hz
+const DEG = Math.PI / 180;
+const RAD = 180 / Math.PI;
+
+const deg = r => r * RAD;
+const rad = d => d * DEG;
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+// AeroSec-Lab simplified SGP4 orbit propagation
+function propagateOrbit(orbit, minutesFromEpoch) {
+  const { incl, raan, ecc, aop, ma, mm } = orbit;
+  const a_km = orbit.a_km || Math.pow(GM_EARTH / Math.pow(2*Math.PI*mm/86400, 2), 1/3);
+  const n = mm * 2 * Math.PI / 1440;
+  const M = rad(ma) + n * minutesFromEpoch;
+  let E = M;
+  for (let i = 0; i < 10; i++) E = E - (E - ecc*Math.sin(E) - M)/(1 - ecc*Math.cos(E));
+  const nu = 2 * Math.atan2(Math.sqrt(1+ecc)*Math.sin(E/2), Math.sqrt(1-ecc)*Math.cos(E/2));
+  const r = a_km * (1 - ecc*Math.cos(E));
+  const xp = r * Math.cos(nu);
+  const yp = r * Math.sin(nu);
+  const o = rad(raan), w = rad(aop), i = rad(incl);
+  const cos = Math.cos, sin = Math.sin;
+  const R00 = cos(o)*cos(w)-sin(o)*sin(w)*cos(i);
+  const R01 = -cos(o)*sin(w)-sin(o)*cos(w)*cos(i);
+  const R10 = sin(o)*cos(w)+cos(o)*sin(w)*cos(i);
+  const R11 = -sin(o)*sin(w)+cos(o)*cos(w)*cos(i);
+  const R20 = sin(w)*sin(i);
+  const R21 = cos(w)*sin(i);
+  return {
+    pos: [R00*xp+R01*yp, R10*xp+R11*yp, R20*xp+R21*yp],
+    r,
+    altitude_km: r - R_EARTH,
+  };
+}
+
+function eciToGeodetic(pos_eci, gmst) {
+  const [x, y, z] = pos_eci;
+  const lon_rad = Math.atan2(y, x) - gmst;
+  const lon = ((deg(lon_rad) + 180) % 360 + 360) % 360 - 180;
+  const r = Math.sqrt(x*x + y*y + z*z);
+  const lat = deg(Math.asin(z/r));
+  const alt = r - R_EARTH;
+  return { lat, lon, alt };
+}
+
+
+// =============================================================================
+// 2. FRAMEWORK REGISTRY
+// =============================================================================
+const FRAMEWORKS = {
+  'attack':  { name: 'MITRE ATT&CK',         short: 'ATT&CK', cls: 'attack' },
+  'ics':     { name: 'MITRE ATT&CK for ICS', short: 'ICS',    cls: 'ics' },
+  'sparta':  { name: 'Aerospace SPARTA',     short: 'SPARTA', cls: 'sparta' },
+  'atlas':   { name: 'MITRE ATLAS',          short: 'ATLAS',  cls: 'atlas' },
+  'd3fend':  { name: 'MITRE D3FEND',         short: 'D3FEND', cls: 'd3fend' },
+};
+
+const TECHNIQUES = {
+  // ATT&CK Enterprise
+  'T1566.001': { fw:'attack', name:'Spearphishing Attachment', tactic:'Initial Access',
+    desc:'Adversaries send malicious attachments to gain initial access. Common ICS vector.',
+    novice:'Phishing email with malware attached.',
+    tools:['Suricata','YARA','Sigma','M365 Defender'],
+    counters:['D3-FA: File Analysis','User awareness training'] },
+  'T1190': { fw:'attack', name:'Exploit Public-Facing Application', tactic:'Initial Access',
+    desc:'Adversaries exploit vulnerabilities in internet-facing systems.',
+    novice:'Hacker breaks into a public website or VPN.',
+    tools:['Suricata','Snort','Zeek','WAF'],
+    counters:['D3-NTA: Network Traffic Analysis','Patch management'] },
+  'T1078': { fw:'attack', name:'Valid Accounts', tactic:'Initial Access',
+    desc:'Use of legitimate credentials to bypass detection.',
+    novice:'Adversary uses stolen passwords to log in.',
+    tools:['Sigma','Velociraptor','UEBA platforms'],
+    counters:['D3-MFA: Multi-Factor Authentication','D3-CR: Credential Rotation'] },
+  'T1059': { fw:'attack', name:'Command and Scripting Interpreter', tactic:'Execution',
+    desc:'Execution via PowerShell, Bash, etc.',
+    novice:'Adversary runs malicious commands.',
+    tools:['Sigma','Velociraptor','Sysmon'],
+    counters:['D3-PSA: Process Spawn Analysis','Application allowlisting'] },
+  'T1053': { fw:'attack', name:'Scheduled Task/Job', tactic:'Persistence',
+    desc:'Persistence via scheduled execution.',
+    novice:'Adversary plants a hidden timer to keep coming back.',
+    tools:['Sigma','OSQuery','Velociraptor'],
+    counters:['D3-FCR: File Creation Reaction','Baseline scheduled jobs'] },
+  'T1021': { fw:'attack', name:'Remote Services', tactic:'Lateral Movement',
+    desc:'Lateral movement via RDP, SMB, SSH.',
+    novice:'Adversary spreads to other computers on the network.',
+    tools:['Zeek','Suricata','Sigma'],
+    counters:['D3-NI: Network Isolation','MFA on remote services'] },
+  'T1486': { fw:'attack', name:'Data Encrypted for Impact', tactic:'Impact',
+    desc:'Ransomware encryption stage. Final detonation.',
+    novice:'Ransomware locks files and demands payment.',
+    tools:['EDR','YARA','Suricata'],
+    counters:['D3-FBA: File Backup','Immutable backups'] },
+  'T1490': { fw:'attack', name:'Inhibit System Recovery', tactic:'Impact',
+    desc:'Deletion of shadow copies, backups. Often precedes T1486.',
+    novice:'Adversary destroys backups before encrypting files.',
+    tools:['Sigma','Sysmon'],
+    counters:['D3-FBA: File Backup','Offline backups'] },
+
+  // ATT&CK for ICS
+  'T0883': { fw:'ics', name:'Internet Accessible Device', tactic:'Initial Access (ICS)',
+    desc:'ICS devices reachable from the public internet.',
+    novice:'Industrial system exposed to the open internet.',
+    tools:['Shodan','Censys','GreyNoise'],
+    counters:['Network segmentation','Jump hosts'] },
+  'T0855': { fw:'ics', name:'Unauthorized Command Message', tactic:'Impair Process Control',
+    desc:'Adversary sends unauthorized commands to ICS devices.',
+    novice:'Bad commands sent to industrial equipment.',
+    tools:['Zeek (modbus)','Claroty','Dragos'],
+    counters:['D3-ANA: Authentication','Command authorization'] },
+  'T0832': { fw:'ics', name:'Manipulation of View', tactic:'Impact',
+    desc:'Operator HMI shows false readings while system is being manipulated.',
+    novice:'Operator displays show fake data while attack progresses.',
+    tools:['Process historian baselining','Out-of-band sensors'],
+    counters:['D3-IVV: Independent Variable Verification'] },
+  'T0826': { fw:'ics', name:'Loss of Availability', tactic:'Impact',
+    desc:'Process is rendered inoperable.',
+    novice:'Equipment goes offline or stops working.',
+    tools:['SCADA monitoring','Process historian'],
+    counters:['Redundant systems','Manual failover'] },
+
+  // SPARTA (space)
+  'REC-0001': { fw:'sparta', name:'Gather Spacecraft Design Information', tactic:'Reconnaissance',
+    desc:'Adversary collects spec docs, RF parameters, command sets.',
+    novice:'Adversary studies the satellite to plan attacks.',
+    tools:['OSINT','SatNOGS observations'],
+    counters:['Information control','Classified handling'] },
+  'REC-0006': { fw:'sparta', name:'Gather Mission Communication Data', tactic:'Reconnaissance',
+    desc:'Capture uplink/downlink RF for analysis.',
+    novice:'Adversary intercepts radio traffic to/from satellite.',
+    tools:['SDR','GNU Radio','SatNOGS'],
+    counters:['Encryption','Frequency hopping'] },
+  'EX-0014': { fw:'sparta', name:'Spoofing', tactic:'Execution',
+    desc:'Inject crafted commands or telemetry imitating legitimate source.',
+    novice:'Adversary impersonates legitimate ground station.',
+    tools:['Authentication monitoring','RF fingerprinting'],
+    counters:['Strong cryptographic auth','Command counters'] },
+  'EX-0016.04': { fw:'sparta', name:'Jamming - Uplink', tactic:'Execution',
+    desc:'Overpower legitimate uplink with noise.',
+    novice:'Adversary blasts noise to drown out commands.',
+    tools:['RF spectrum monitoring','Doppler analysis'],
+    counters:['Spread spectrum','Anti-jam waveforms'] },
+  'IA-0008': { fw:'sparta', name:'Rogue RPO', tactic:'Initial Access',
+    desc:'Hostile rendezvous and proximity ops vehicle approaches asset.',
+    novice:'Adversary maneuvers their satellite close to yours.',
+    tools:['SSA/SDA networks','Conjunction screening'],
+    counters:['Maneuver capability','Hardened bus'] },
+  'IMP-0002': { fw:'sparta', name:'Disruption', tactic:'Impact',
+    desc:'Temporarily prevent satellite from completing mission.',
+    novice:'Satellite forced offline temporarily.',
+    tools:['Telemetry monitoring','Anomaly detection'],
+    counters:['Mode resilience','Safe-mode logic'] },
+  'PER-0001': { fw:'sparta', name:'Memory Compromise', tactic:'Persistence',
+    desc:'Modify flight software in spacecraft memory.',
+    novice:'Adversary plants malicious code onboard satellite.',
+    tools:['Software attestation','Memory checksums'],
+    counters:['D3-EI: Executable Integrity','Secure boot'] },
+
+  // ATLAS (AI/ML)
+  'AML.T0020': { fw:'atlas', name:'Poison Training Data', tactic:'Resource Development',
+    desc:'Adversary corrupts training data to influence model behavior.',
+    novice:'Adversary teaches AI wrong things on purpose.',
+    tools:['Data provenance','Statistical anomaly detection'],
+    counters:['Data sanitization','Robust training'] },
+  'AML.T0043': { fw:'atlas', name:'Craft Adversarial Data', tactic:'ML Attack Staging',
+    desc:'Generate inputs designed to cause model misclassification.',
+    novice:'Adversary creates fake images/data that trick AI.',
+    tools:['ART','Garak','Counterfit'],
+    counters:['Adversarial training','Input validation'] },
+  'AML.T0040': { fw:'atlas', name:'ML Model Inference API Access', tactic:'ML Model Access',
+    desc:'Query model API to learn behavior, extract data, or stage attacks.',
+    novice:'Adversary probes AI by sending many queries.',
+    tools:['API rate monitoring','Query pattern analysis'],
+    counters:['Rate limiting','Output perturbation'] },
+};
+
+
+// Augment all techniques with response metadata derived from tactic.
+// This drives the contextual codex recommendations.
+(function augmentTechniques() {
+  Object.values(TECHNIQUES).forEach(T => {
+    const tac = T.tactic;
+    // Default response toolkit by tactic family
+    T.surfaceable_by = ['scan'];        // SCAN reveals nearly everything
+    T.breakable_by   = ['disrupt'];     // DISRUPT breaks active chains
+    T.mitigable_by   = ['harden'];      // HARDEN blunts most attacks
+    T.recoverable_by = ['restore'];     // RESTORE for compromised assets
+    T.attribution    = ['trace'];       // TRACE for C2 attribution
+
+    // Per-tactic specialization
+    if (tac.includes('Reconnaissance')) {
+      // Recon is hard to break (it's just observation) — focus on harden/auth
+      T.breakable_by = [];
+      T.priority = 'low';   // recon alone won't compromise you
+    } else if (tac.includes('Initial Access')) {
+      T.priority = 'high';
+    } else if (tac.includes('Execution') || tac.includes('Persistence')) {
+      T.priority = 'high';
+    } else if (tac.includes('Lateral Movement')) {
+      T.priority = 'high';
+    } else if (tac.includes('Impact') || tac.includes('Loss') ||
+               tac.includes('Manipulation') || tac.includes('Disruption')) {
+      T.priority = 'critical';   // last phase — must stop or restore
+      T.breakable_by = ['disrupt']; // narrow window
+    } else if (tac.includes('ML')) {
+      T.priority = 'high';
+    } else {
+      T.priority = 'medium';
+    }
+  });
+})();
+
+
+// =============================================================================
+// 3. AGENT DEFINITIONS
+// =============================================================================
+const AGENT_DEFS = [
+  {
+    id: 'VIGIL', cls: 'ANALYST',
+    color: '#4ee2ff', colorDim: '#2a8aa0',
+    desc: 'Detection specialist. Reveals hidden threats through telemetry analysis.',
+    actions: [
+      { id: 'scan',  name: 'DEEP SCAN',
+        desc: 'Reveal hidden threats on target node and adjacent nodes.',
+        d3fend: 'D3-NTA: Network Traffic Analysis',
+        tools: ['Suricata','Zeek','Sigma'] },
+      { id: 'trace', name: 'TRACE C2',
+        desc: 'Correlate beacon traffic to locate adversary command node.',
+        d3fend: 'D3-NTA + D3-IPCTA',
+        tools: ['Zeek','MISP','STIX/TAXII'] },
+    ],
+  },
+  {
+    id: 'WRAITH', cls: 'HUNTER',
+    color: '#ff4ea8', colorDim: '#a02868',
+    desc: 'Offensive counter-ops. Disrupts active attacks; severs adversary infrastructure.',
+    actions: [
+      { id: 'disrupt', name: 'DISRUPT',
+        desc: 'Break active attack chain on target node.',
+        d3fend: 'D3-PE: Process Eviction',
+        tools: ['Velociraptor','EDR response'] },
+      { id: 'sever', name: 'SEVER C2',
+        desc: 'Kill adversary command infrastructure. Requires C2 location revealed.',
+        d3fend: 'D3-NI: Network Isolation',
+        tools: ['BGP blackhole','Firewall block'] },
+    ],
+  },
+  {
+    id: 'ANCHOR', cls: 'ARCHITECT',
+    color: '#ffb84d', colorDim: '#a07028',
+    desc: 'Hardening and recovery. Patches systems and restores compromised assets.',
+    actions: [
+      { id: 'harden', name: 'HARDEN',
+        desc: 'Apply patches and segmentation. +1 resilience to target.',
+        d3fend: 'D3-EI: Executable Integrity + D3-NI',
+        tools: ['Ansible','OSQuery','SCAP'] },
+      { id: 'restore', name: 'RESTORE',
+        desc: 'Recover compromised node from clean backups.',
+        d3fend: 'D3-FBA: File Backup',
+        tools: ['Velociraptor','Immutable backups'] },
+    ],
+  },
+];
+
+
+// =============================================================================
+// 4. MISSION REGISTRY
+// =============================================================================
+const MISSIONS = {
+  'BLACKFROST': {
+    id: 'BLACKFROST',
+    name: 'OP. BLACKFROST',
+    domain: 'ENERGY GRID',
+    sector: 'NORTHEAST POWER GRID — SECTOR 7',
+    threat: 'Ransomware Campaign',
+    threatArchetype: 'ransomware',
+    summary: 'Defend an 8-node power grid against an active ransomware operation. Adversary will pivot to T1486 once 5+ nodes are staged.',
+    frameworks: ['attack','ics','d3fend'],
+    maxRounds: 10,
+    loseThreshold: 5,
+    threatMix: ['T1566.001','T1190','T1078','T1059','T1021','T1486','T1490','T0883','T0855'],
+    impactTechs: ['T1486'],
+  },
+  'NIGHTWATCH': {
+    id: 'NIGHTWATCH',
+    name: 'OP. NIGHTWATCH',
+    domain: 'AEROSPACE / SATELLITE',
+    sector: 'IMAGERY CONSTELLATION + GROUND SEGMENT',
+    threat: 'Nation-State APT — Multi-Vector',
+    threatArchetype: 'nation_state',
+    summary: 'Defend a 5-asset satellite constellation through a multi-vector campaign: ground intrusion, uplink jamming, hostile RPO vehicle on LEO-2, possible AI-pipeline poisoning.',
+    frameworks: ['attack','sparta','atlas','d3fend'],
+    maxRounds: 12,
+    loseThreshold: 3,
+    threatMix: ['REC-0001','REC-0006','EX-0014','EX-0016.04','IA-0008','PER-0001','IMP-0002','T1190','T1078','AML.T0043','AML.T0040'],
+    impactTechs: ['IMP-0002','PER-0001'],
+  },
+};
+
+
+// =============================================================================
+// 5. GAME STATE
+// =============================================================================
+const STATE = {
+  phase: 'BOOT',
+  mission: null,
+  round: 1,
+  threatLevel: 'LOW',
+  selectedAgent: null,
+  selectedAction: null,
+  selectedTarget: null,
+  plannedActions: [],
+  resolvedActions: [],
+  nodes: [],
+  links: [],
+  agents: [],
+  threats: [],
+  attackChains: [],
+  particles: [],
+  c2Node: null,
+  c2Revealed: false,
+  c2Severed: false,
+  log: [],
+  activeTab: 'log',
+  unreadComms: 0,
+  tickCount: 0,
+  inspectingNode: null,
+  verbosity: 'operator',
+  satView: 'orbital',
+  simTimeMin: 0,
+  rpoVehicle: null,
+  replayActive: false,
+
+  // v0.2.1: pacing
+  speed: 'manual',  // manual | steady | rapid
+  gateResolved: false,  // resolves to true on player CONTINUE tap
+  gateCallback: null,   // fn to call when gate releases
+
+  // v0.2.1: round metrics + run history
+  metrics: {
+    rounds: [],  // per-round: {round, threatsRevealed, threatsActive, wastedActions, effectiveActions, compromisedThisRound, hardeningSpent, hardeningAbsorbed, detectionLatencyTurns}
+    actions: [], // per-action: {round, agentId, actionId, targetId, outcome, wasteReason, techniqueIds}
+    threatSpawns: [], // per-spawn: {round, target, techniqueId}
+    firstThreatRevealedRound: null,
+    c2RevealedRound: null,
+    c2SeveredRound: null,
+  },
+  observedTTPs: {},  // techId -> count
+  iocs: [],          // strings
+};
+
+
+// =============================================================================
+// 6. CANVAS / RENDER CORE
+// =============================================================================
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+let DPR = 1, CW = 0, CH = 0;
+
+function resizeCanvas() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = canvas.getBoundingClientRect();
+  CW = rect.width;
+  CH = rect.height;
+  canvas.width = Math.floor(CW * DPR);
+  canvas.height = Math.floor(CH * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', () => { resizeCanvas(); layoutNodes(); });
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { resizeCanvas(); layoutNodes(); }, 200);
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    setTimeout(() => { resizeCanvas(); layoutNodes(); }, 50);
+  }
+});
+window.addEventListener('pageshow', () => {
+  setTimeout(() => { resizeCanvas(); layoutNodes(); }, 50);
+});
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => { resizeCanvas(); layoutNodes(); });
+  ro.observe(document.getElementById('map-area'));
+}
+
+function hexA(hex, a) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function nodeColor(n) {
+  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) return '#ff3a3a';
+  if (STATE.c2Severed && n.id === STATE.c2Node) return '#5cff8a';
+  switch (n.state) {
+    case 'healthy':     return '#4ee2ff';
+    case 'stressed':    return '#ffb84d';
+    case 'attacked':    return '#ff4ea8';
+    case 'compromised': return '#ff3a3a';
+  }
+  return '#4ee2ff';
+}
+
+function getNode(id) { return STATE.nodes.find(n => n.id === id); }
+function adjacent(nodeId) {
+  const adj = new Set();
+  STATE.links.forEach(([a,b]) => {
+    if (a === nodeId) adj.add(b);
+    if (b === nodeId) adj.add(a);
+  });
+  return [...adj].map(getNode).filter(Boolean);
+}
+
+function layoutNodes() {
+  if (!STATE.mission) return;
+  if (STATE.mission.id === 'BLACKFROST') layoutEnergyGrid();
+}
+
+function bfsPath(startId, endId) {
+  const visited = new Set([startId]);
+  const queue = [[startId]];
+  while (queue.length) {
+    const path = queue.shift();
+    const last = path[path.length - 1];
+    if (last === endId) return path;
+    const adj = adjacent(last);
+    for (const n of adj) {
+      if (!visited.has(n.id)) {
+        visited.add(n.id);
+        queue.push([...path, n.id]);
+      }
+    }
+  }
+  return null;
+}
+
+function render() {
+  STATE.tickCount++;
+  ctx.fillStyle = '#03060a';
+  ctx.fillRect(0, 0, CW, CH);
+  if (!STATE.mission) return;
+  if (STATE.mission.id === 'BLACKFROST') renderEnergyMap();
+  else if (STATE.mission.id === 'NIGHTWATCH') renderSatelliteMap();
+}
+
+
+// =============================================================================
+// 7. ENERGY MISSION (BLACKFROST)
+// =============================================================================
+function setupEnergyGrid() {
+  const nodeDefs = [
+    { id: 'SUB-A', type: 'substation', label: 'SUB-A' },
+    { id: 'SUB-B', type: 'substation', label: 'SUB-B' },
+    { id: 'SUB-C', type: 'substation', label: 'SUB-C' },
+    { id: 'SUB-D', type: 'substation', label: 'SUB-D' },
+    { id: 'GEN-1', type: 'generator',  label: 'GEN-1' },
+    { id: 'GEN-2', type: 'generator',  label: 'GEN-2' },
+    { id: 'GEN-3', type: 'generator',  label: 'GEN-3' },
+    { id: 'CTRL',  type: 'control',    label: 'CTRL'  },
+  ];
+  STATE.nodes = nodeDefs.map(d => ({
+    ...d, x: 0, y: 0,
+    state: 'healthy',
+    resilience: 0,
+    pulsePhase: Math.random() * Math.PI * 2,
+  }));
+  STATE.links = [
+    ['CTRL','SUB-A'], ['CTRL','SUB-B'], ['CTRL','SUB-C'], ['CTRL','SUB-D'],
+    ['GEN-1','SUB-A'], ['GEN-1','SUB-B'],
+    ['GEN-2','SUB-B'], ['GEN-2','SUB-C'],
+    ['GEN-3','SUB-C'], ['GEN-3','SUB-D'],
+    ['SUB-A','SUB-B'], ['SUB-C','SUB-D'],
+  ];
+  document.getElementById('view-toggle').classList.remove('active');
+  layoutEnergyGrid();
+}
+
+function layoutEnergyGrid() {
+  const margin = 32;
+  const w = CW - margin * 2;
+  const h = CH - margin * 2;
+  const byId = {};
+  STATE.nodes.forEach(n => byId[n.id] = n);
+  ['GEN-1','GEN-2','GEN-3'].forEach((id, i) => {
+    const n = byId[id]; if (!n) return;
+    n.x = margin + w * (0.2 + i * 0.3);
+    n.y = margin + h * 0.18;
+  });
+  ['SUB-A','SUB-B','SUB-C','SUB-D'].forEach((id, i) => {
+    const n = byId[id]; if (!n) return;
+    n.x = margin + w * (0.12 + i * 0.25);
+    n.y = margin + h * 0.55;
+  });
+  if (byId['CTRL']) {
+    byId['CTRL'].x = margin + w * 0.5;
+    byId['CTRL'].y = margin + h * 0.88;
+  }
+}
+
+function renderEnergyMap() {
+  drawBackgroundGrid();
+  STATE.links.forEach(([a, b]) => drawLink(getNode(a), getNode(b)));
+  updateParticles();
+  drawParticles();
+  STATE.nodes.forEach(drawNode);
+  updateAttackChains();
+  drawAttackChains();
+  if (STATE.selectedTarget) {
+    const n = getNode(STATE.selectedTarget);
+    if (n) drawSelectionHalo(n);
+  }
+  STATE.plannedActions.forEach((a, idx) => {
+    const n = getNode(a.target);
+    if (!n) return;
+    const ag = STATE.agents[a.agent];
+    drawQueueMarker(n, ag.color, idx);
+  });
+}
+
+
+// =============================================================================
+// 8. SATELLITE MISSION (NIGHTWATCH)
+// =============================================================================
+function setupSatelliteOps() {
+  const assets = [
+    { id:'NWATCH-1', type:'sat-geo', label:'NWATCH-1',
+      orbit:{ incl: 0.05, raan: 60, ecc: 0.0001, aop: 0, ma: 0, mm: 1.0027 } },
+    { id:'NWATCH-2', type:'sat-leo', label:'NWATCH-2',
+      orbit:{ incl: 97.5, raan: 30, ecc: 0.0012, aop: 0, ma: 0, mm: 15.2 } },
+    { id:'NWATCH-3', type:'sat-leo', label:'NWATCH-3',
+      orbit:{ incl: 97.5, raan: 30, ecc: 0.0012, aop: 0, ma: 180, mm: 15.2 } },
+    { id:'KEYSTONE', type:'ground', label:'KEYSTONE GS', lat: 39.0, lon: -77.0 },
+    { id:'MCC',      type:'mcc',    label:'MISSION CTRL', lat: 34.0, lon: -118.0 },
+  ];
+  STATE.nodes = assets.map(a => ({
+    ...a,
+    state: 'healthy',
+    resilience: 0,
+    pulsePhase: Math.random() * Math.PI * 2,
+    eciPos: null,
+    geoPos: null,
+    x: 0, y: 0,
+  }));
+  STATE.links = [
+    ['NWATCH-1','KEYSTONE'],
+    ['NWATCH-2','KEYSTONE'],
+    ['NWATCH-3','KEYSTONE'],
+    ['KEYSTONE','MCC'],
+  ];
+  STATE.rpoVehicle = {
+    id:'RPO-X', type:'sat-leo', label:'RPO-X',
+    state: 'attacked',
+    orbit: { incl: 97.5, raan: 30, ecc: 0.0012, aop: 0, ma: -15, mm: 15.21 },
+    closingRate: 0.05,
+    eciPos: null, geoPos: null, x: 0, y: 0,
+    pulsePhase: 0,
+  };
+  STATE.simTimeMin = 0;
+  STATE.satView = 'orbital';
+  document.getElementById('view-toggle').classList.add('active');
+}
+
+function projectLatLonToScreen(lat, lon, view) {
+  if (view === 'orbital') {
+    const ea = { x: 0, y: CH * 0.55, w: CW, h: CH * 0.40 };
+    return {
+      x: ea.x + ((lon + 180) / 360) * ea.w,
+      y: ea.y + ((90 - lat) / 180) * ea.h,
+    };
+  } else if (view === 'ground') {
+    return {
+      x: ((lon + 180) / 360) * CW,
+      y: ((90 - lat) / 180) * CH,
+    };
+  }
+  return { x: CW/2, y: CH/2 };
+}
+
+function projectOrbitToScreen(eciPos) {
+  const cx = CW/2, cy = CH * 0.27;
+  const r = Math.min(CW, CH * 0.5) * 0.40;
+  const scale = r / 45000;
+  return { x: cx + eciPos[0] * scale, y: cy - eciPos[1] * scale };
+}
+
+function updateSatellitePositions() {
+  STATE.simTimeMin += 0.4;
+  STATE.nodes.forEach(n => {
+    if (n.type === 'sat-geo' || n.type === 'sat-leo') {
+      const { pos } = propagateOrbit(n.orbit, STATE.simTimeMin);
+      n.eciPos = pos;
+      const gmst = (STATE.simTimeMin / 1440) * 2 * Math.PI;
+      n.geoPos = eciToGeodetic(pos, gmst);
+    }
+  });
+  if (STATE.rpoVehicle) {
+    STATE.rpoVehicle.orbit.ma += STATE.rpoVehicle.closingRate * 0.4;
+    const { pos } = propagateOrbit(STATE.rpoVehicle.orbit, STATE.simTimeMin);
+    STATE.rpoVehicle.eciPos = pos;
+    const gmst = (STATE.simTimeMin / 1440) * 2 * Math.PI;
+    STATE.rpoVehicle.geoPos = eciToGeodetic(pos, gmst);
+  }
+}
+
+function renderSatelliteMap() {
+  updateSatellitePositions();
+  if (STATE.satView === 'orbital')      renderOrbitalView();
+  else if (STATE.satView === 'ground')  renderGroundView();
+  else if (STATE.satView === 'tactical')renderTacticalView();
+  updateAttackChains();
+  drawAttackChains();
+  if (STATE.selectedTarget) {
+    const n = getNode(STATE.selectedTarget);
+    if (n && typeof n.x === 'number') drawSelectionHalo(n);
+  }
+  STATE.plannedActions.forEach((a, idx) => {
+    const n = getNode(a.target);
+    if (!n || typeof n.x !== 'number') return;
+    const ag = STATE.agents[a.agent];
+    drawQueueMarker(n, ag.color, idx);
+  });
+}
+
+function renderOrbitalView() {
+  drawStarfield();
+  drawStylizedEarth();
+  STATE.nodes.forEach(n => {
+    if (n.type === 'sat-geo' || n.type === 'sat-leo') drawOrbitTrace(n, false);
+  });
+  if (STATE.rpoVehicle) drawOrbitTrace(STATE.rpoVehicle, true);
+  STATE.nodes.forEach(n => {
+    if (n.type === 'sat-geo' || n.type === 'sat-leo') drawGroundTrack(n);
+  });
+  STATE.nodes.forEach(n => {
+    if (n.type === 'ground' || n.type === 'mcc') {
+      const p = projectLatLonToScreen(n.lat, n.lon, 'orbital');
+      n.x = p.x; n.y = p.y;
+      drawGroundNode(n);
+    }
+  });
+  STATE.nodes.forEach(n => {
+    if (n.type === 'sat-geo' || n.type === 'sat-leo') {
+      const p = projectOrbitToScreen(n.eciPos);
+      n.x = p.x; n.y = p.y;
+      drawSatNode(n);
+    }
+  });
+  if (STATE.rpoVehicle) {
+    const p = projectOrbitToScreen(STATE.rpoVehicle.eciPos);
+    STATE.rpoVehicle.x = p.x; STATE.rpoVehicle.y = p.y;
+    drawRPONode(STATE.rpoVehicle);
+  }
+  drawSatLinks();
+}
+
+function renderGroundView() {
+  drawWorldMapBackground();
+  STATE.nodes.forEach(n => {
+    if (n.type === 'sat-geo' || n.type === 'sat-leo') drawSatSubpoint(n);
+  });
+  STATE.nodes.forEach(n => {
+    if (n.type === 'ground' || n.type === 'mcc') {
+      const p = projectLatLonToScreen(n.lat, n.lon, 'ground');
+      n.x = p.x; n.y = p.y;
+      drawGroundNode(n);
+    }
+  });
+  const ks = getNode('KEYSTONE'), mcc = getNode('MCC');
+  if (ks && mcc) drawLink(ks, mcc);
+}
+
+function renderTacticalView() {
+  const targetId = STATE.inspectingNode || 'NWATCH-2';
+  const target = getNode(targetId) || getNode('NWATCH-2');
+  if (!target) return;
+  drawStarfield();
+  const cx = CW/2, cy = CH/2;
+  drawTacticalSatDetail(target, cx, cy);
+  if (STATE.rpoVehicle && targetId === 'NWATCH-2') {
+    const dma = ((STATE.rpoVehicle.orbit.ma - target.orbit.ma + 540) % 360) - 180;
+    const proxAngle = dma * DEG;
+    STATE.rpoVehicle.x = cx + Math.cos(proxAngle) * 100;
+    STATE.rpoVehicle.y = cy + Math.sin(proxAngle) * 100;
+    drawRPOClose(STATE.rpoVehicle, target, cx, cy);
+  }
+  drawTacticalTelemetry(target);
+}
+
+
+// ----- Drawing primitives -----
+
+function drawBackgroundGrid() {
+  ctx.strokeStyle = '#0e2030';
+  ctx.lineWidth = 1;
+  const step = 24;
+  ctx.beginPath();
+  for (let x = 0; x < CW; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, CH); }
+  for (let y = 0; y < CH; y += step) { ctx.moveTo(0, y); ctx.lineTo(CW, y); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(78,226,255,0.06)';
+  ctx.beginPath();
+  ctx.ellipse(CW/2, CH/2, CW*0.55, CH*0.45, 0, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function drawLink(a, b) {
+  if (!a || !b) return;
+  const aColor = nodeColor(a);
+  const bColor = nodeColor(b);
+  const compromised = a.state === 'compromised' || b.state === 'compromised';
+  const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+  grad.addColorStop(0, hexA(aColor, 0.4));
+  grad.addColorStop(1, hexA(bColor, 0.4));
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = compromised ? 1 : 1.5;
+  if (compromised) ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawNode(n) {
+  const c = nodeColor(n);
+  const baseR = n.type === 'control' ? 18 : (n.type === 'generator' ? 15 : 13);
+  n.pulsePhase += 0.04;
+  const pulse = Math.sin(n.pulsePhase) * 0.5 + 0.5;
+  const r = baseR + pulse * 1.5;
+  const glow = ctx.createRadialGradient(n.x, n.y, r * 0.5, n.x, n.y, r * 2.4);
+  glow.addColorStop(0, hexA(c, 0.5));
+  glow.addColorStop(1, hexA(c, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(n.x, n.y, r * 2.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#03060a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (n.type === 'control') drawPolygon(n.x, n.y, r, 6);
+  else if (n.type === 'generator') drawPolygon(n.x, n.y, r, 3, -Math.PI/2);
+  else drawPolygon(n.x, n.y, r, 4, Math.PI/4);
+  ctx.fill();
+  ctx.stroke();
+  if (n.state === 'compromised') {
+    ctx.fillStyle = c;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r * 0.35, 0, Math.PI * 2); ctx.fill();
+  } else if (n.state === 'attacked') {
+    ctx.strokeStyle = hexA(c, 0.6 + pulse * 0.4);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r * 0.55, 0, Math.PI * 2); ctx.stroke();
+  }
+  for (let i = 0; i < n.resilience; i++) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.beginPath(); ctx.arc(n.x - 6 + i * 6, n.y - r - 6, 1.8, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = '#5a7080';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(n.label, n.x, n.y + r + 12);
+  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+    ctx.fillStyle = '#ff3a3a';
+    ctx.font = 'bold 8px JetBrains Mono, monospace';
+    ctx.fillText('◢ C2 ◣', n.x, n.y - r - 10);
+  }
+}
+
+function drawPolygon(cx, cy, r, sides, rot = 0) {
+  for (let i = 0; i < sides; i++) {
+    const a = rot + i * (Math.PI * 2 / sides);
+    const px = cx + Math.cos(a) * r;
+    const py = cy + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function drawSelectionHalo(n) {
+  const r = 22 + Math.sin(STATE.tickCount * 0.1) * 2;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawQueueMarker(n, color, idx) {
+  const offset = (idx + 1) * 14;
+  const x = n.x + offset;
+  const y = n.y - 18;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+// Satellite-specific drawing
+function drawStarfield() {
+  ctx.fillStyle = '#03060a';
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  for (let i = 0; i < 80; i++) {
+    const x = ((i * 7919) % 1000) / 1000 * CW;
+    const y = ((i * 6151) % 1000) / 1000 * CH;
+    const tw = Math.sin(STATE.tickCount * 0.02 + i) * 0.3 + 0.7;
+    ctx.globalAlpha = tw * 0.6;
+    ctx.fillRect(x, y, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawStylizedEarth() {
+  const ea = { x: 0, y: CH * 0.55, w: CW, h: CH * 0.40 };
+  ctx.fillStyle = '#041820';
+  ctx.fillRect(ea.x, ea.y, ea.w, ea.h);
+  ctx.strokeStyle = 'rgba(78,226,255,0.10)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 6; i++) {
+    const y = ea.y + ea.h * (i/6);
+    ctx.beginPath(); ctx.moveTo(ea.x, y); ctx.lineTo(ea.x+ea.w, y); ctx.stroke();
+  }
+  for (let i = 1; i < 12; i++) {
+    const x = ea.x + ea.w * (i/12);
+    ctx.beginPath(); ctx.moveTo(x, ea.y); ctx.lineTo(x, ea.y+ea.h); ctx.stroke();
+  }
+  drawContinents(ea);
+  // day/night terminator
+  const termFrac = ((STATE.simTimeMin / 1440) % 1);
+  const termX = ea.x + termFrac * ea.w;
+  const grad = ctx.createLinearGradient(termX - 30, 0, termX + 60, 0);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(termX, ea.y, ea.w, ea.h);
+}
+
+function drawWorldMapBackground() {
+  ctx.fillStyle = '#041820';
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.strokeStyle = 'rgba(78,226,255,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 12; i++) {
+    const y = CH * (i/12);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
+  }
+  for (let i = 1; i < 12; i++) {
+    const x = CW * (i/12);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CH); ctx.stroke();
+  }
+  drawContinents({ x: 0, y: 0, w: CW, h: CH });
+}
+
+function drawContinents(area) {
+  const continents = [
+    [[0.15,0.30],[0.22,0.15],[0.28,0.28],[0.22,0.50],[0.15,0.45]],
+    [[0.27,0.50],[0.32,0.62],[0.28,0.85],[0.23,0.80],[0.24,0.62]],
+    [[0.45,0.25],[0.55,0.18],[0.58,0.40],[0.50,0.52],[0.46,0.47]],
+    [[0.50,0.52],[0.58,0.52],[0.56,0.75],[0.51,0.78]],
+    [[0.78,0.60],[0.85,0.58],[0.86,0.72],[0.79,0.70]],
+  ];
+  ctx.fillStyle = 'rgba(60,140,160,0.25)';
+  ctx.strokeStyle = 'rgba(78,226,255,0.35)';
+  ctx.lineWidth = 1;
+  continents.forEach(poly => {
+    ctx.beginPath();
+    poly.forEach(([fx, fy], i) => {
+      const x = area.x + fx * area.w;
+      const y = area.y + fy * area.h;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+}
+
+function drawOrbitTrace(n, hostile) {
+  ctx.strokeStyle = hostile ? 'rgba(255,58,58,0.25)' : 'rgba(78,226,255,0.15)';
+  ctx.lineWidth = 1;
+  if (hostile) ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  const samples = 64;
+  const period = 1440 / n.orbit.mm;
+  for (let i = 0; i <= samples; i++) {
+    const t = STATE.simTimeMin + (i/samples) * period;
+    const { pos } = propagateOrbit(n.orbit, t);
+    const p = projectOrbitToScreen(pos);
+    if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawGroundTrack(n) {
+  if (!n.geoPos) return;
+  for (let i = 1; i <= 18; i++) {
+    const t = STATE.simTimeMin - i * 2;
+    const { pos } = propagateOrbit(n.orbit, t);
+    const gmst = (t / 1440) * 2 * Math.PI;
+    const geo = eciToGeodetic(pos, gmst);
+    const p = projectLatLonToScreen(geo.lat, geo.lon, 'orbital');
+    ctx.globalAlpha = (1 - i/18) * 0.35;
+    ctx.fillStyle = '#4ee2ff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.2, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawSatSubpoint(n) {
+  if (!n.geoPos) return;
+  const p = projectLatLonToScreen(n.geoPos.lat, n.geoPos.lon, 'ground');
+  const c = nodeColor(n);
+  ctx.fillStyle = c;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = c;
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(n.label, p.x, p.y - 8);
+  n.x = p.x; n.y = p.y;
+}
+
+function drawSatNode(n) {
+  const c = nodeColor(n);
+  n.pulsePhase += 0.05;
+  const pulse = Math.sin(n.pulsePhase) * 0.5 + 0.5;
+  const r = 8 + pulse * 1.5;
+  const glow = ctx.createRadialGradient(n.x, n.y, r*0.5, n.x, n.y, r*2.6);
+  glow.addColorStop(0, hexA(c, 0.6));
+  glow.addColorStop(1, hexA(c, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(n.x, n.y, r*2.6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#03060a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(n.x, n.y - r);
+  ctx.lineTo(n.x + r, n.y);
+  ctx.lineTo(n.x, n.y + r);
+  ctx.lineTo(n.x - r, n.y);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = hexA(c, 0.7);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(n.x - r - 4, n.y); ctx.lineTo(n.x - r, n.y);
+  ctx.moveTo(n.x + r, n.y);     ctx.lineTo(n.x + r + 4, n.y);
+  ctx.stroke();
+  ctx.fillStyle = '#5a7080';
+  ctx.font = '8px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(n.label, n.x, n.y - r - 4);
+  if (n.state === 'compromised') {
+    ctx.fillStyle = '#ff3a3a';
+    ctx.font = 'bold 7px JetBrains Mono, monospace';
+    ctx.fillText('◢ COMP ◣', n.x, n.y + r + 9);
+  }
+  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+    ctx.fillStyle = '#ff3a3a';
+    ctx.font = 'bold 7px JetBrains Mono, monospace';
+    ctx.fillText('◢ C2 ◣', n.x, n.y + r + 9);
+  }
+}
+
+function drawGroundNode(n) {
+  const c = nodeColor(n);
+  n.pulsePhase += 0.04;
+  const pulse = Math.sin(n.pulsePhase) * 0.5 + 0.5;
+  const r = (n.type === 'mcc' ? 11 : 9) + pulse * 1.2;
+  const glow = ctx.createRadialGradient(n.x, n.y, r*0.5, n.x, n.y, r*2.4);
+  glow.addColorStop(0, hexA(c, 0.5));
+  glow.addColorStop(1, hexA(c, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(n.x, n.y, r*2.4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#03060a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (n.type === 'mcc') drawPolygon(n.x, n.y, r, 6);
+  else drawPolygon(n.x, n.y, r, 4, Math.PI/4);
+  ctx.fill(); ctx.stroke();
+  if (n.type === 'ground') {
+    ctx.strokeStyle = c;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y - r - 3, 4, Math.PI, 0);
+    ctx.stroke();
+  }
+  for (let i = 0; i < n.resilience; i++) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.beginPath(); ctx.arc(n.x - 6 + i*6, n.y - r - 8, 1.8, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = '#5a7080';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(n.label, n.x, n.y + r + 12);
+  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+    ctx.fillStyle = '#ff3a3a';
+    ctx.font = 'bold 8px JetBrains Mono, monospace';
+    ctx.fillText('◢ C2 ◣', n.x, n.y - r - 14);
+  }
+}
+
+function drawRPONode(rpo) {
+  const r = 7 + Math.sin(STATE.tickCount * 0.1) * 1.5;
+  const glow = ctx.createRadialGradient(rpo.x, rpo.y, r*0.5, rpo.x, rpo.y, r*3);
+  glow.addColorStop(0, 'rgba(255,58,58,0.7)');
+  glow.addColorStop(1, 'rgba(255,58,58,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(rpo.x, rpo.y, r*3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1a0408';
+  ctx.strokeStyle = '#ff3a3a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(rpo.x, rpo.y - r);
+  ctx.lineTo(rpo.x + r, rpo.y);
+  ctx.lineTo(rpo.x, rpo.y + r);
+  ctx.lineTo(rpo.x - r, rpo.y);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#ff3a3a';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2,2]);
+  ctx.beginPath();
+  ctx.arc(rpo.x, rpo.y, r + 6, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ff3a3a';
+  ctx.font = 'bold 8px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('RPO-X', rpo.x, rpo.y - r - 6);
+  ctx.fillText('◢ HOSTILE ◣', rpo.x, rpo.y + r + 12);
+}
+
+function drawSatLinks() {
+  const ks = getNode('KEYSTONE');
+  if (!ks) return;
+  STATE.nodes.forEach(n => {
+    if (n.type !== 'sat-geo' && n.type !== 'sat-leo') return;
+    const c = nodeColor(n);
+    ctx.strokeStyle = hexA(c, 0.20);
+    ctx.lineWidth = 1;
+    if (n.state === 'compromised') ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.moveTo(n.x, n.y);
+    ctx.lineTo(ks.x, ks.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+}
+
+function drawTacticalSatDetail(target, cx, cy) {
+  const c = nodeColor(target);
+  ctx.fillStyle = '#0a1824';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.fillRect(cx - 30, cy - 22, 60, 44);
+  ctx.strokeRect(cx - 30, cy - 22, 60, 44);
+  ctx.fillStyle = '#04080d';
+  ctx.fillRect(cx - 80, cy - 12, 45, 24);
+  ctx.fillRect(cx + 35, cy - 12, 45, 24);
+  ctx.strokeStyle = hexA(c, 0.6);
+  ctx.strokeRect(cx - 80, cy - 12, 45, 24);
+  ctx.strokeRect(cx + 35, cy - 12, 45, 24);
+  for (let i = 1; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx - 80 + i*9, cy - 12); ctx.lineTo(cx - 80 + i*9, cy + 12);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + 35 + i*9, cy - 12); ctx.lineTo(cx + 35 + i*9, cy + 12);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy - 22, 8, Math.PI, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 22); ctx.lineTo(cx, cy - 14);
+  ctx.stroke();
+  const subs = [
+    { name: 'PWR', x: cx - 22, y: cy - 12, ok: true },
+    { name: 'COM', x: cx - 22, y: cy +  2, ok: target.state !== 'compromised' },
+    { name: 'ADCS',x: cx +  2, y: cy - 12, ok: true },
+    { name: 'PAYL',x: cx +  2, y: cy +  2, ok: target.state === 'healthy' },
+  ];
+  subs.forEach(s => {
+    ctx.fillStyle = s.ok ? '#5cff8a' : '#ff3a3a';
+    ctx.beginPath(); ctx.arc(s.x, s.y, 2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#5a7080';
+    ctx.font = '7px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(s.name, s.x + 4, s.y + 3);
+  });
+  ctx.fillStyle = c;
+  ctx.font = 'bold 11px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(target.label, cx, cy - 50);
+  ctx.fillStyle = '#5a7080';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.fillText('TACTICAL VIEW', cx, cy - 38);
+  target.x = cx; target.y = cy;
+}
+
+function drawRPOClose(rpo, target, cx, cy) {
+  const px = rpo.x, py = rpo.y;
+  const r = 7;
+  ctx.fillStyle = '#1a0408';
+  ctx.strokeStyle = '#ff3a3a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(px, py - r); ctx.lineTo(px + r, py); ctx.lineTo(px, py + r); ctx.lineTo(px - r, py);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,58,58,0.4)';
+  ctx.setLineDash([4,4]);
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.hypot(px-cx, py-cy), 0, Math.PI*2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ff3a3a';
+  ctx.font = 'bold 8px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('RPO-X', px, py - 10);
+}
+
+function drawTacticalTelemetry(target) {
+  const x = 8, y = 8;
+  ctx.fillStyle = 'rgba(3,6,10,0.7)';
+  ctx.fillRect(x, y, 130, 80);
+  ctx.strokeStyle = 'rgba(78,226,255,0.4)';
+  ctx.strokeRect(x, y, 130, 80);
+  ctx.fillStyle = '#4ee2ff';
+  ctx.font = 'bold 9px JetBrains Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('// TELEMETRY', x + 5, y + 12);
+  ctx.fillStyle = '#e8f4ff';
+  ctx.font = '8px JetBrains Mono, monospace';
+  if (target.geoPos) {
+    ctx.fillText(`LAT: ${target.geoPos.lat.toFixed(2)}°`, x+5, y+24);
+    ctx.fillText(`LON: ${target.geoPos.lon.toFixed(2)}°`, x+5, y+34);
+    ctx.fillText(`ALT: ${target.geoPos.alt.toFixed(0)} km`, x+5, y+44);
+  }
+  ctx.fillText(`STATE: ${target.state.toUpperCase()}`, x+5, y+56);
+  ctx.fillText(`HARDEN: +${target.resilience}`, x+5, y+66);
+  if (STATE.rpoVehicle && target.id === 'NWATCH-2') {
+    const dma = ((STATE.rpoVehicle.orbit.ma - target.orbit.ma + 540) % 360) - 180;
+    ctx.fillStyle = Math.abs(dma) < 5 ? '#ff3a3a' : '#ffb84d';
+    ctx.fillText(`RPO Δ: ${dma.toFixed(1)}°`, x+5, y+76);
+  }
+}
+
+
+// =============================================================================
+// 9. PARTICLES & ATTACK CHAIN ANIMATIONS
+// =============================================================================
+function spawnParticles() {
+  STATE.links.forEach(([a, b]) => {
+    if (Math.random() < 0.012) {
+      STATE.particles.push({
+        from: a, to: b, t: 0, speed: 0.012 + Math.random() * 0.01,
+        color: '#4ee2ff',
+      });
+    }
+  });
+}
+function updateParticles() {
+  spawnParticles();
+  STATE.particles.forEach(p => p.t += p.speed);
+  STATE.particles = STATE.particles.filter(p => p.t < 1);
+}
+function drawParticles() {
+  STATE.particles.forEach(p => {
+    const a = getNode(p.from);
+    const b = getNode(p.to);
+    if (!a || !b) return;
+    const x = a.x + (b.x - a.x) * p.t;
+    const y = a.y + (b.y - a.y) * p.t;
+    ctx.fillStyle = hexA(p.color, 0.7);
+    ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+function spawnAttackChain(path, kind) {
+  STATE.attackChains.push({
+    path: path.slice(),
+    progress: 0,
+    speed: 0.012,
+    kind: kind || 'attack',
+    sparks: [],
+  });
+}
+function updateAttackChains() {
+  STATE.attackChains.forEach(c => {
+    c.progress += c.speed;
+    if (Math.random() < 0.5 && c.path.length > 1) {
+      const segIdx = Math.min(Math.floor(c.progress * (c.path.length - 1)), c.path.length - 2);
+      const localT = (c.progress * (c.path.length - 1)) - segIdx;
+      const a = getNode(c.path[segIdx]);
+      const b = getNode(c.path[segIdx + 1]);
+      if (a && b && typeof a.x === 'number' && typeof b.x === 'number') {
+        c.sparks.push({
+          x: a.x + (b.x - a.x) * localT + (Math.random() - 0.5) * 6,
+          y: a.y + (b.y - a.y) * localT + (Math.random() - 0.5) * 6,
+          life: 1, vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5,
+        });
+      }
+    }
+    c.sparks.forEach(s => { s.life -= 0.05; s.x += s.vx; s.y += s.vy; });
+    c.sparks = c.sparks.filter(s => s.life > 0);
+  });
+  STATE.attackChains = STATE.attackChains.filter(c => c.progress < 1 || c.sparks.length > 0);
+}
+function drawAttackChains() {
+  STATE.attackChains.forEach(c => {
+    if (c.path.length < 2) return;
+    const color = c.kind === 'attack' ? '#ff3a3a' : '#5cff8a';
+    const totalSegs = c.path.length - 1;
+    const filledSegs = Math.floor(c.progress * totalSegs);
+    const localT = (c.progress * totalSegs) - filledSegs;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    for (let i = 0; i < filledSegs; i++) {
+      const a = getNode(c.path[i]);
+      const b = getNode(c.path[i+1]);
+      if (!a || !b || typeof a.x !== 'number' || typeof b.x !== 'number') continue;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    if (filledSegs < totalSegs) {
+      const a = getNode(c.path[filledSegs]);
+      const b = getNode(c.path[filledSegs+1]);
+      if (a && b && typeof a.x === 'number' && typeof b.x === 'number') {
+        const x = a.x + (b.x - a.x) * localT;
+        const y = a.y + (b.y - a.y) * localT;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y); ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.shadowBlur = 0;
+    c.sparks.forEach(s => {
+      ctx.fillStyle = hexA(color, s.life);
+      ctx.beginPath(); ctx.arc(s.x, s.y, 1.5, 0, Math.PI * 2); ctx.fill();
+    });
+  });
+}
+
+
+// =============================================================================
+// 10. THREAT AI
+// =============================================================================
+function pickC2() {
+  if (STATE.mission.id === 'BLACKFROST') {
+    const candidates = STATE.nodes.filter(n => n.type !== 'control');
+    STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+  } else if (STATE.mission.id === 'NIGHTWATCH') {
+    STATE.c2Node = Math.random() < 0.5 ? 'KEYSTONE' : 'MCC';
+  }
+}
+
+function aiPlanThreats() {
+  const archetype = STATE.mission.threatArchetype;
+  const attacked = STATE.threats.length;
+  let desired;
+  if (archetype === 'ransomware') {
+    desired = STATE.round <= 2 ? 1 : 2;
+  } else {
+    desired = STATE.round <= 3 ? 1 : 2;
+  }
+  const launches = Math.max(0, desired - attacked);
+  for (let i = 0; i < launches; i++) maybeLaunchThreat();
+}
+
+function maybeLaunchThreat() {
+  const c2 = getNode(STATE.c2Node);
+  if (!c2) return;
+  const candidates = STATE.nodes.filter(n =>
+    n.id !== STATE.c2Node &&
+    n.state !== 'compromised' &&
+    !STATE.threats.some(t => t.target === n.id)
+  );
+  if (candidates.length === 0) return;
+  const weighted = [];
+  candidates.forEach(n => {
+    let w = 1;
+    if (STATE.mission.id === 'BLACKFROST') {
+      if (n.type === 'control') w = 3;
+      else if (n.type === 'generator') w = 2;
+    } else if (STATE.mission.id === 'NIGHTWATCH') {
+      if (n.type === 'sat-leo') w = 3;
+      else if (n.type === 'sat-geo') w = 2;
+      else if (n.type === 'mcc') w = 2;
+    }
+    for (let i = 0; i < w; i++) weighted.push(n);
+  });
+  const target = weighted[Math.floor(Math.random() * weighted.length)];
+  let path = bfsPath(c2.id, target.id) || [c2.id, target.id];
+  const initialTechs = STATE.mission.threatMix.filter(tid => {
+    const t = TECHNIQUES[tid];
+    return t && (t.tactic.includes('Initial Access') || t.tactic.includes('Reconnaissance'));
+  });
+  const techId = initialTechs.length > 0
+    ? initialTechs[Math.floor(Math.random() * initialTechs.length)]
+    : STATE.mission.threatMix[0];
+  STATE.threats.push({
+    target: target.id,
+    path,
+    phase: 0,
+    techniqueId: techId,
+    revealed: false,
+    history: [techId],
+    spawnRound: STATE.round,
+  });
+  STATE.metrics.threatSpawns.push({ round: STATE.round, target: target.id, techniqueId: techId });
+  if (target.state === 'healthy') target.state = 'attacked';
+}
+
+
+// =============================================================================
+// 11. PHASE MACHINE
+// =============================================================================
+
+// v0.2.1: Metrics capture
+function recordAction(agentId, actionId, targetId, outcome, wasteReason, techniqueIds) {
+  STATE.metrics.actions.push({
+    round: STATE.round,
+    agentId, actionId, targetId,
+    outcome,         // 'effective' | 'wasted' | 'partial'
+    wasteReason,     // null or string like 'empty target', 'redundant', 'no c2'
+    techniqueIds: techniqueIds || [],
+  });
+}
+
+function recordTechniqueObserved(tid) {
+  if (!tid) return;
+  STATE.observedTTPs[tid] = (STATE.observedTTPs[tid] || 0) + 1;
+  if (STATE.metrics.firstThreatRevealedRound === null) {
+    STATE.metrics.firstThreatRevealedRound = STATE.round;
+  }
+}
+
+function captureRoundMetrics() {
+  const round = STATE.round;
+  const actionsThisRound = STATE.metrics.actions.filter(a => a.round === round);
+  const effective = actionsThisRound.filter(a => a.outcome === 'effective').length;
+  const wasted = actionsThisRound.filter(a => a.outcome === 'wasted').length;
+  const compromisedNow = STATE.nodes.filter(n => n.state === 'compromised').length;
+  const prev = STATE.metrics.rounds[STATE.metrics.rounds.length - 1];
+  const compromisedThisRound = compromisedNow - (prev ? prev.compromisedTotal : 0);
+  STATE.metrics.rounds.push({
+    round,
+    threatsActive: STATE.threats.length,
+    threatsRevealed: STATE.threats.filter(t => t.revealed).length,
+    effectiveActions: effective,
+    wastedActions: wasted,
+    compromisedTotal: compromisedNow,
+    compromisedThisRound,
+    hardeningCharges: STATE.nodes.reduce((s, n) => s + (n.resilience || 0), 0),
+  });
+}
+
+// Find repeat-failure patterns: same agent doing the same wasteful thing more than once
+function detectRepeatFailures() {
+  const wasted = STATE.metrics.actions.filter(a => a.outcome === 'wasted');
+  const seen = new Map();   // key = `${agent}:${action}:${reason}` -> first round
+  const repeats = [];
+  wasted.forEach(a => {
+    const key = `${a.agentId}:${a.actionId}:${a.wasteReason}`;
+    if (seen.has(key)) {
+      repeats.push({
+        round: a.round, agentId: a.agentId, actionId: a.actionId,
+        wasteReason: a.wasteReason, firstRound: seen.get(key),
+      });
+    } else {
+      seen.set(key, a.round);
+    }
+  });
+  return repeats;
+}
+
+// Compute final rubric scores for debrief
+function computeRubric() {
+  const m = STATE.metrics;
+  const rounds = m.rounds.length || 1;
+  const totalActions = m.actions.length || 1;
+  const effective = m.actions.filter(a => a.outcome === 'effective').length;
+  const wasted = m.actions.filter(a => a.outcome === 'wasted').length;
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').length;
+  const cascadeHits = m.rounds.reduce((s, r) => s + Math.max(0, r.compromisedThisRound - 1), 0);
+
+  // 1. Detection speed: lower round number = better. Score 100 if revealed by round 2.
+  let detectionScore = 0;
+  if (m.firstThreatRevealedRound !== null) {
+    const r = m.firstThreatRevealedRound;
+    detectionScore = Math.max(0, Math.min(100, 100 - (r - 2) * 15));
+  }
+
+  // 2. C2 attribution: optimal by round 4. 100 if revealed early, 0 if never.
+  let attributionScore = 0;
+  if (m.c2RevealedRound !== null) {
+    const r = m.c2RevealedRound;
+    attributionScore = Math.max(0, Math.min(100, 100 - (r - 4) * 12));
+  }
+
+  // 3. Agent efficiency: % effective
+  const efficiencyScore = Math.round((effective / totalActions) * 100);
+
+  // 4. Hardening economy: charges absorbed / charges spent
+  // We don't track absorbed yet — approximate via current resilience vs max ever
+  const hardenActions = m.actions.filter(a => a.actionId === 'harden' && a.outcome === 'effective').length;
+  const restoreActions = m.actions.filter(a => a.actionId === 'restore' && a.outcome === 'effective').length;
+  // Heuristic: if you hardened and few cascade hits = good economy
+  let hardeningScore = 50;
+  if (hardenActions > 0) {
+    const ratio = (hardenActions - cascadeHits) / hardenActions;
+    hardeningScore = Math.round(Math.max(0, Math.min(100, 50 + ratio * 50)));
+  } else if (cascadeHits === 0 && compromised <= 1) {
+    hardeningScore = 70;  // didn't need to harden
+  } else {
+    hardeningScore = 25;  // didn't harden when you should have
+  }
+
+  // 5. Cascade containment
+  const cascadeScore = compromised === 0
+    ? 100
+    : Math.max(0, Math.min(100, 100 - cascadeHits * 25 - compromised * 10));
+
+  // 6. Doctrine
+  let doctrineScore = 0;
+  if (STATE.c2Severed) doctrineScore = 100;
+  else if (STATE.phase === 'WIN') doctrineScore = 70;
+  else doctrineScore = 0;
+
+  return {
+    detection: { score: detectionScore, label: scoreLabel(detectionScore),
+      detail: m.firstThreatRevealedRound !== null
+        ? `First threat revealed: round ${m.firstThreatRevealedRound}/${STATE.mission.maxRounds} (target: ≤2)`
+        : 'No threats revealed during run.' },
+    attribution: { score: attributionScore, label: scoreLabel(attributionScore),
+      detail: m.c2RevealedRound !== null
+        ? `C2 located: round ${m.c2RevealedRound} (optimal: ≤4)`
+        : 'C2 never located.' },
+    efficiency: { score: efficiencyScore, label: scoreLabel(efficiencyScore),
+      detail: `${effective}/${totalActions} actions produced effect (${Math.round(effective/totalActions*100)}%). Wasted: ${wasted}.` },
+    hardening: { score: hardeningScore, label: scoreLabel(hardeningScore),
+      detail: `${hardenActions} HARDEN, ${restoreActions} RESTORE applied. Cascades: ${cascadeHits}.` },
+    cascade: { score: cascadeScore, label: scoreLabel(cascadeScore),
+      detail: `${compromised} compromised, ${cascadeHits} cascade hit${cascadeHits !== 1 ? 's' : ''}.` },
+    doctrine: { score: doctrineScore, label: doctrineLabel(),
+      detail: STATE.c2Severed ? 'C2 severed — adversary command neutralized.'
+        : STATE.phase === 'WIN' ? 'Defense held through round limit.'
+        : 'Defense breached.' },
+  };
+}
+
+function scoreLabel(s) {
+  if (s >= 85) return 'EXCELLENT';
+  if (s >= 65) return 'GOOD';
+  if (s >= 45) return 'ADEQUATE';
+  if (s >= 25) return 'POOR';
+  return 'CRITICAL';
+}
+function doctrineLabel() {
+  if (STATE.c2Severed) return 'DECISIVE';
+  if (STATE.phase === 'WIN') return 'DEFENSIVE HOLD';
+  return 'BREACHED';
+}
+
+function generateCFINote(rubric) {
+  const notes = [];
+  if (rubric.detection.score < 50) notes.push('Detection lag exposed assets early. Front-load VIGIL ▸ DEEP SCAN before committing offensive actions.');
+  if (rubric.attribution.score < 50 && STATE.metrics.c2RevealedRound === null) notes.push('Without C2 attribution, you cannot SEVER. TRACE C2 yields better odds after multiple threats are revealed.');
+  if (rubric.efficiency.score < 60) notes.push('Wasted actions reduced your effective tempo. SCAN before DISRUPT — confirm threat presence first.');
+  if (rubric.hardening.score < 50) notes.push('Hardening economy was inefficient — applied either too late or to wrong targets.');
+  const repeats = detectRepeatFailures();
+  if (repeats.length > 0) notes.push(`${repeats.length} repeat failure pattern${repeats.length > 1 ? 's' : ''} detected — see MOVES tab.`);
+  if (rubric.cascade.score >= 85) notes.push('Excellent cascade containment.');
+  if (rubric.doctrine.score === 100) notes.push('Decisive operational result.');
+  if (notes.length === 0) notes.push('Run within parameters. Consider higher difficulty.');
+  return notes.join(' ');
+}
+
+
+function setPhase(p) {
+  STATE.phase = p;
+  document.getElementById('stat-phase').textContent = `▸ ${p} PHASE`;
+  updateMainButton();
+  updateStatusBar();
+}
+
+function updateStatusBar() {
+  if (!STATE.mission) return;
+  document.getElementById('stat-round').textContent =
+    `${String(STATE.round).padStart(2,'0')}/${String(STATE.mission.maxRounds).padStart(2,'0')}`;
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').length;
+  const attacked = STATE.nodes.filter(n => n.state === 'attacked').length;
+  let level = 'LOW', cls = 'threat-low';
+  if (compromised >= 2 || attacked >= 3) { level = 'HIGH'; cls = 'threat-high'; }
+  else if (compromised >= 1 || attacked >= 2) { level = 'MED'; cls = 'threat-med'; }
+  STATE.threatLevel = level;
+  const el = document.getElementById('stat-threat');
+  el.textContent = level;
+  el.className = 'status-val ' + cls;
+  const stat = document.getElementById('grid-stat');
+  if (STATE.mission.id === 'BLACKFROST') {
+    const onlineCount = STATE.nodes.filter(n => n.state !== 'compromised').length;
+    stat.textContent = `NODES: ${onlineCount}/8`;
+  } else {
+    const sats = STATE.nodes.filter(n => n.type === 'sat-leo' || n.type === 'sat-geo');
+    const satOk = sats.filter(n => n.state !== 'compromised').length;
+    stat.textContent = `SATS: ${satOk}/${sats.length}`;
+  }
+  document.getElementById('sector-label').textContent = `// ${STATE.mission.sector}`;
+}
+
+function updateMainButton() {
+  const main = document.getElementById('btn-main');
+  const back = document.getElementById('btn-back');
+  back.disabled = false;
+  main.classList.remove('attract');
+  main.className = main.className.replace(/\bdanger\b/g, '');
+  switch (STATE.phase) {
+    case 'INTEL':
+      main.textContent = STATE.round === 1 ? '▶ BEGIN PLAN' : 'BEGIN PLAN ▶';
+      main.disabled = false;
+      back.disabled = true;
+      if (STATE.round === 1) main.classList.add('attract');
+      break;
+    case 'PLAN':
+      const remaining = STATE.agents.filter(a => !a.exhausted).length;
+      if (remaining === 0) main.textContent = 'EXECUTE ▶';
+      else main.textContent = `EXECUTE (${STATE.plannedActions.length}/${STATE.agents.length}) ▶`;
+      main.disabled = STATE.plannedActions.length === 0;
+      break;
+    case 'RESOLVE':
+      main.textContent = '⏳ RESOLVING';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+    case 'CONSEQ':
+      main.textContent = '⏳ ADVERSARY';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+    case 'WIN':
+      main.textContent = '◢ MISSION COMPLETE';
+      main.disabled = true;
+      back.disabled = true;
+      break;
+    case 'LOSE':
+      main.textContent = '◢ MISSION FAILED';
+      main.classList.add('danger');
+      main.disabled = true;
+      back.disabled = true;
+      break;
+  }
+}
+
+function startIntelPhase() {
+  setPhase('INTEL');
+  document.getElementById('tap-hint').textContent = 'INTEL UPDATE — REVIEW LOG';
+  logDivider();
+  log(`<b>// ROUND ${STATE.round} — INTEL PHASE</b>`, 'log-cyan');
+  const visibleThreats = STATE.threats.filter(t => t.revealed);
+  if (visibleThreats.length === 0 && STATE.threats.length > 0) {
+    log(verbose('No confirmed threats. Anomalous traffic detected.',
+                'No confirmed threats. Beacon-like patterns observed in egress.',
+                'IDS quiet. Zeek conn.log shows beacon-pattern jitter on egress; no Suricata signature match yet.'),
+        'log-warn');
+  }
+  visibleThreats.forEach(t => {
+    log(`Active threat → ${t.target} [phase ${t.phase}/3]`, 'log-warn');
+    logTechnique(t.techniqueId);
+  });
+  if (STATE.c2Revealed && !STATE.c2Severed) {
+    log(`◢ C2 LOCATED at ${STATE.c2Node}. Recommend SEVER.`, 'log-crit');
+  }
+  if (STATE.round === 1) {
+    setTimeout(() => {
+      logJoshua(STATE.mission.id === 'BLACKFROST'
+        ? 'Initial access detected. Spearphishing vector likely.'
+        : 'Multi-vector campaign converging. Ground intrusion plus suspicious orbital approach.');
+    }, 800);
+  }
+  if (STATE.mission.threatArchetype === 'nation_state' && STATE.round === 4 && !STATE.c2Revealed) {
+    setTimeout(() => {
+      logJoshua('Tradecraft consistent with long-dwell APT. C2 likely on ground segment.');
+    }, 600);
+  }
+}
+
+function startPlanPhase() {
+  setPhase('PLAN');
+  STATE.plannedActions = [];
+  STATE.resolvedActions = [];
+  STATE.agents.forEach(a => a.exhausted = false);
+  STATE.selectedAgent = null;
+  STATE.selectedTarget = null;
+  document.getElementById('tap-hint').textContent = 'SELECT AGENT, THEN TARGET NODE';
+  logDivider();
+  log('<b>// PLAN PHASE — Queue agent actions</b>', 'log-cyan');
+  renderAgentStrip();
+}
+
+function startResolvePhase() {
+  setPhase('RESOLVE');
+  document.getElementById('tap-hint').textContent = 'RESOLVING';
+  logDivider();
+  log('<b>// RESOLVE PHASE — Operator actions</b>', 'log-cyan');
+  resolveNextAction(0);
+}
+
+function resolveNextAction(i) {
+  if (i >= STATE.plannedActions.length) {
+    gate(500, startConseqPhase);
+    return;
+  }
+  const a = STATE.plannedActions[i];
+  const ag = STATE.agents[a.agent];
+  executeAction(ag, a);
+  gate(900, () => resolveNextAction(i + 1));
+}
+
+function executeAction(ag, a) {
+  const target = a.target ? getNode(a.target) : null;
+  const speak = (txt) => logAgent(ag.id, txt);
+  const action = ag.actions.find(x => x.id === a.actionId);
+  STATE.resolvedActions.push({
+    agentId: ag.id, agentColor: ag.color,
+    actionId: a.actionId, actionName: a.actionName,
+    targetId: a.target,
+    d3fend: action ? action.d3fend : null,
+    tools: action ? action.tools : [],
+    kind: 'counter',
+  });
+
+  if (a.actionId === 'scan') {
+    speak(verbose('Deep scan running.',
+                  'Deep scan: Suricata + Zeek correlation on target and adjacent.',
+                  'IDS sweep deployed: Suricata sig hunt + Zeek conn.log diff across target ±1 hop.'));
+    const reveal = [target, ...adjacent(target.id)];
+    let foundCount = 0;
+    const foundTechs = [];
+    reveal.forEach(n => {
+      STATE.threats.forEach(t => {
+        if (t.target === n.id && !t.revealed) {
+          t.revealed = true;
+          foundCount++;
+          foundTechs.push(t.techniqueId);
+          recordTechniqueObserved(t.techniqueId);
+          log(`&nbsp;&nbsp;└ Threat exposed at ${n.id}`, 'log-warn');
+          logTechnique(t.techniqueId);
+        }
+      });
+    });
+    if (foundCount === 0) {
+      speak('No active threats detected on scanned nodes.');
+      recordAction(ag.id, a.actionId, a.target, 'wasted', 'no threats present', []);
+    } else {
+      recordAction(ag.id, a.actionId, a.target, 'effective', null, foundTechs);
+    }
+  }
+  else if (a.actionId === 'trace') {
+    speak(verbose('Tracing C2.',
+                  'Initiating C2 traceback via beacon correlation.',
+                  'C2 trace: pivot/jitter analysis on Zeek conn.log + STIX/TAXII enrichment + MISP cross-ref.'));
+    if (STATE.c2Revealed) {
+      speak('C2 location already known.');
+      recordAction(ag.id, a.actionId, a.target, 'wasted', 'c2 already located', []);
+    } else {
+      const revealedCount = STATE.threats.filter(t => t.revealed).length;
+      const chance = 0.30 + revealedCount * 0.20;
+      if (Math.random() < chance) {
+        STATE.c2Revealed = true;
+        STATE.metrics.c2RevealedRound = STATE.round;
+        log(`&nbsp;&nbsp;└ <b>C2 IDENTIFIED → ${STATE.c2Node}</b>`, 'log-crit');
+        recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
+        // queue an IOC entry
+        STATE.iocs.push(`Beacon source attributed → ${STATE.c2Node}`);
+        setTimeout(() => logJoshua('Adversary command node located. Severing recommended.'), 400);
+      } else {
+        speak('Trace incomplete. Beacon obfuscated. More intel needed.');
+        recordAction(ag.id, a.actionId, a.target, 'wasted', 'insufficient intel', []);
+      }
+    }
+  }
+  else if (a.actionId === 'disrupt') {
+    speak(verbose(`Disrupting attack on ${target.id}.`,
+                  `Disrupting kill chain on ${target.id} via Velociraptor.`,
+                  `Velociraptor flow on ${target.id}: process eviction + memory dump for IOC extraction.`));
+    const ts = STATE.threats.filter(t => t.target === target.id);
+    if (ts.length === 0) {
+      speak('No active threat on target. Action wasted.');
+      recordAction(ag.id, a.actionId, a.target, 'wasted', 'empty target', []);
+    } else {
+      const techs = ts.map(t => t.techniqueId);
+      ts.forEach(t => {
+        spawnAttackChain(t.path.slice().reverse(), 'counter');
+        log(`&nbsp;&nbsp;└ Kill chain broken at ${target.id}`, 'log-good');
+      });
+      STATE.threats = STATE.threats.filter(t => t.target !== target.id);
+      if (target.state === 'attacked') target.state = 'stressed';
+      recordAction(ag.id, a.actionId, a.target, 'effective', null, techs);
+    }
+  }
+  else if (a.actionId === 'sever') {
+    speak(verbose('Cutting C2 link.',
+                  'Severing C2 — burning persistence, isolating egress.',
+                  'BGP blackhole + firewall block + cred rotation. Burning all observed adversary infra.'));
+    if (!STATE.c2Revealed) {
+      speak('ERROR — C2 location unknown.');
+      recordAction(ag.id, a.actionId, a.target, 'wasted', 'c2 not revealed', []);
+      return;
+    }
+    STATE.c2Severed = true;
+    STATE.metrics.c2SeveredRound = STATE.round;
+    const c2 = getNode(STATE.c2Node);
+    STATE.nodes.forEach(n => {
+      if (n.id !== c2.id) {
+        const p = bfsPath(n.id, c2.id);
+        if (p) spawnAttackChain(p, 'counter');
+      }
+    });
+    log(`&nbsp;&nbsp;└ <b>C2 SEVERED. Adversary command lost.</b>`, 'log-good');
+    STATE.threats = [];
+    STATE.nodes.forEach(n => { if (n.state === 'attacked') n.state = 'stressed'; });
+    recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
+    setTimeout(() => {
+      logJoshua('A strange game. The only winning move is to play it well. WELL PLAYED.');
+      checkWinCondition();
+    }, 1200);
+  }
+  else if (a.actionId === 'harden') {
+    speak(verbose(`Hardening ${target.id}.`,
+                  `Applying patches and segmentation to ${target.id}.`,
+                  `Ansible hardening + SCAP baseline + microsegmentation push to ${target.id}.`));
+    if (target.resilience >= 3) {
+      speak(`${target.id} already at maximum resilience.`);
+      recordAction(ag.id, a.actionId, a.target, 'wasted', 'already maxed', []);
+    } else {
+      target.resilience = Math.min(target.resilience + 1, 3);
+      log(`&nbsp;&nbsp;└ ${target.id} resilience +1 (now ${target.resilience})`, 'log-good');
+      recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
+    }
+  }
+  else if (a.actionId === 'restore') {
+    speak(verbose(`Restoring ${target.id}.`,
+                  `Restoring ${target.id} from clean backups.`,
+                  `Velociraptor IR collection complete. Restoring ${target.id} from immutable backup; rotating creds.`));
+    if (target.state === 'compromised') {
+      target.state = 'stressed';
+      log(`&nbsp;&nbsp;└ ${target.id} restored to STRESSED`, 'log-good');
+      recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
+    } else if (target.state === 'attacked') {
+      target.state = 'stressed';
+      log(`&nbsp;&nbsp;└ ${target.id} attack contained`, 'log-good');
+      recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
+    } else {
+      speak(`${target.id} did not require restoration.`);
+      recordAction(ag.id, a.actionId, a.target, 'wasted', 'target healthy', []);
+    }
+  }
+}
+
+function startConseqPhase() {
+  if (STATE.c2Severed) return;
+  setPhase('CONSEQ');
+  document.getElementById('tap-hint').textContent = 'ADVERSARY ACTING';
+  logDivider();
+  log('<b>// CONSEQUENCES — Adversary advances</b>', 'log-crit');
+  // Snapshot threats before advancement so AI launch doesn't mix in
+  const threatsToAdvance = STATE.threats.slice();
+  advanceThreatGated(threatsToAdvance, 0);
+}
+
+function advanceThreatGated(threatList, i) {
+  if (i >= threatList.length) {
+    // After all threats advanced, AI plans new launches
+    aiPlanThreats();
+    STATE.threats.forEach(t => {
+      const target = getNode(t.target);
+      if (target && target.state === 'healthy') target.state = 'attacked';
+    });
+    STATE.threats.forEach(t => {
+      if (t.phase === 0) spawnAttackChain(t.path, 'attack');
+    });
+    gate(900, () => {
+      // Capture metrics for this round before potentially advancing
+      captureRoundMetrics();
+      if (STATE.resolvedActions.length > 0) {
+        showKillChainReplay(() => advanceRound());
+      } else {
+        advanceRound();
+      }
+    });
+    return;
+  }
+  advanceThreat(threatList[i]);
+  gate(700, () => advanceThreatGated(threatList, i + 1));
+}
+
+function advanceThreat(t) {
+  const target = getNode(t.target);
+  if (!target) return;
+  if (target.state === 'compromised') return;
+  STATE.resolvedActions.push({
+    agentId: 'ADVERSARY',
+    actionName: 'KILL CHAIN ADVANCE',
+    targetId: t.target,
+    techniqueId: t.techniqueId,
+    kind: 'attack',
+  });
+  if (target.resilience > 0 && Math.random() < 0.7) {
+    target.resilience--;
+    log(`Hardening on ${target.id} blunted attack. Resilience -1.`, 'log-good');
+    return;
+  }
+  t.phase++;
+  const nextTech = pickNextPhaseTech(t);
+  if (nextTech) {
+    t.techniqueId = nextTech;
+    t.history.push(nextTech);
+  }
+  log(`Threat advances on ${target.id} [phase ${t.phase}/3]`, 'log-warn');
+  logTechnique(t.techniqueId);
+  recordTechniqueObserved(t.techniqueId);
+  spawnAttackChain(t.path, 'attack');
+  if (t.phase >= 3) {
+    target.state = 'compromised';
+    log(`&nbsp;&nbsp;└ <b>${target.id} COMPROMISED</b>`, 'log-crit');
+    STATE.threats = STATE.threats.filter(x => x !== t);
+    adjacent(target.id).forEach(adj => {
+      if (adj.state === 'healthy' && Math.random() < 0.3) {
+        adj.state = 'stressed';
+        log(`&nbsp;&nbsp;└ Cascade stress on ${adj.id}`, 'log-warn');
+      }
+    });
+  }
+}
+
+function pickNextPhaseTech(t) {
+  const phaseTactics = {
+    1: ['Execution','Persistence','ML Attack Staging'],
+    2: ['Lateral Movement','Persistence','Impair Process Control','Execution'],
+    3: ['Impact','Loss','Manipulation','Disruption'],
+  };
+  const allowed = phaseTactics[t.phase] || ['Impact'];
+  const matches = STATE.mission.threatMix.filter(tid => {
+    const T = TECHNIQUES[tid];
+    return T && allowed.some(a => T.tactic.includes(a)) && !t.history.includes(tid);
+  });
+  if (matches.length > 0) return matches[Math.floor(Math.random() * matches.length)];
+  const impactMatches = STATE.mission.impactTechs.filter(tid => !t.history.includes(tid));
+  return impactMatches[0] || t.techniqueId;
+}
+
+function advanceRound() {
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').length;
+  if (compromised >= STATE.mission.loseThreshold) {
+    triggerLose(`${compromised} assets compromised. Threshold breached.`);
+    return;
+  }
+  if (STATE.round >= STATE.mission.maxRounds) {
+    if (compromised < STATE.mission.loseThreshold) {
+      triggerWin(`Survived ${STATE.mission.maxRounds} rounds. Defense held.`);
+      return;
+    }
+  }
+  STATE.round++;
+  updateStatusBar();
+  startIntelPhase();
+}
+
+function checkWinCondition() {
+  if (STATE.c2Severed) {
+    triggerWin('C2 severed. Adversary command structure neutralized.');
+  }
+}
+
+function triggerWin(reason) {
+  setPhase('WIN');
+  // Capture final round metrics (in case advanceRound never gets called)
+  if (STATE.metrics.rounds.length === 0 || STATE.metrics.rounds[STATE.metrics.rounds.length-1].round !== STATE.round) {
+    captureRoundMetrics();
+  }
+  // Play final replay if any actions happened, then show debrief
+  if (STATE.resolvedActions.length > 0) {
+    showKillChainReplay(() => showDebrief(true, reason));
+  } else {
+    showDebrief(true, reason);
+  }
+}
+function triggerLose(reason) {
+  setPhase('LOSE');
+  if (STATE.metrics.rounds.length === 0 || STATE.metrics.rounds[STATE.metrics.rounds.length-1].round !== STATE.round) {
+    captureRoundMetrics();
+  }
+  if (STATE.resolvedActions.length > 0) {
+    showKillChainReplay(() => showDebrief(false, reason));
+  } else {
+    showDebrief(false, reason);
+  }
+}
+
+// v0.2.1: Full-screen Pylons-style debrief with RUBRIC / TRENDS / MOVES tabs
+function showDebrief(win, reason) {
+  const overlay = document.createElement('div');
+  overlay.id = 'debrief-overlay';
+  overlay.className = 'debrief-overlay';
+  const color = win ? 'var(--green)' : 'var(--red)';
+  const title = win ? 'MISSION COMPLETE' : 'MISSION FAILED';
+  const rubric = computeRubric();
+  const cfiNote = generateCFINote(rubric);
+
+  overlay.innerHTML = `
+    <div class="debrief-header" style="border-bottom:2px solid ${color};">
+      <div style="color:${color};font-size:14px;font-weight:bold;letter-spacing:0.15em;">${title}</div>
+      <div style="color:var(--muted);font-size:10px;margin-top:2px;">${STATE.mission.name} · Round ${STATE.round}/${STATE.mission.maxRounds} · ${reason}</div>
+    </div>
+    <div class="debrief-tabs">
+      <button class="debrief-tab active" data-dtab="rubric">RUBRIC</button>
+      <button class="debrief-tab" data-dtab="trends">TRENDS</button>
+      <button class="debrief-tab" data-dtab="moves">MOVES</button>
+    </div>
+    <div class="debrief-body" id="debrief-body"></div>
+    <div class="debrief-footer">
+      <button class="action-btn" id="db-mission-select" style="flex:1;">◀ MISSION SELECT</button>
+      <button class="action-btn primary" id="db-retry" style="flex:1;">▶ RETRY</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(overlay);
+
+  let dtab = 'rubric';
+  function renderDtab() {
+    const body = document.getElementById('debrief-body');
+    if (dtab === 'rubric') body.innerHTML = renderRubricTab(rubric, cfiNote, win);
+    else if (dtab === 'trends') body.innerHTML = renderTrendsTab();
+    else if (dtab === 'moves') body.innerHTML = renderMovesTab();
+  }
+  renderDtab();
+
+  overlay.querySelectorAll('.debrief-tab').forEach(b => {
+    b.addEventListener('click', () => {
+      dtab = b.dataset.dtab;
+      overlay.querySelectorAll('.debrief-tab').forEach(x => x.classList.toggle('active', x.dataset.dtab === dtab));
+      renderDtab();
+    });
+  });
+  overlay.querySelector('#db-retry').addEventListener('click', () => location.reload());
+  overlay.querySelector('#db-mission-select').addEventListener('click', () => location.reload());
+}
+
+function renderRubricTab(rubric, cfiNote, win) {
+  const order = ['detection', 'attribution', 'efficiency', 'hardening', 'cascade', 'doctrine'];
+  const labels = {
+    detection: 'DETECTION SPEED',
+    attribution: 'C2 ATTRIBUTION',
+    efficiency: 'AGENT EFFICIENCY',
+    hardening: 'HARDENING ECONOMY',
+    cascade: 'CASCADE CONTAINMENT',
+    doctrine: 'DOCTRINE',
+  };
+  const rows = order.map(k => {
+    const r = rubric[k];
+    const barColor = r.score >= 65 ? 'var(--green)' : r.score >= 45 ? 'var(--cyan)' : r.score >= 25 ? 'var(--amber)' : 'var(--red)';
+    const filled = Math.round(r.score / 10);
+    const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+    return `
+      <div class="rubric-row">
+        <div class="rubric-label">${labels[k]}</div>
+        <div class="rubric-bar-row">
+          <span class="rubric-bar" style="color:${barColor};">${bar}</span>
+          <span class="rubric-score">${r.score}</span>
+          <span class="rubric-tag" style="color:${barColor};">${r.label}</span>
+        </div>
+        <div class="rubric-detail">${r.detail}</div>
+      </div>
+    `;
+  }).join('');
+  const overall = Math.round(order.reduce((s, k) => s + rubric[k].score, 0) / order.length);
+  return `
+    <div class="rubric-overall">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:0.1em;">OVERALL</div>
+      <div style="font-size:24px;font-weight:bold;color:${overall >= 65 ? 'var(--green)' : overall >= 45 ? 'var(--cyan)' : 'var(--amber)'};">${overall}</div>
+      <div style="font-size:10px;color:var(--muted);">${scoreLabel(overall)}</div>
+    </div>
+    ${rows}
+    <div class="cfi-note" style="margin-top:14px;border-left:3px solid var(--cyan);padding-left:8px;">
+      <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.05em;margin-bottom:4px;">▸ JOSHUA — DEBRIEF NOTE</div>
+      <div style="font-size:11px;line-height:1.6;color:var(--white);">${cfiNote}</div>
+    </div>
+  `;
+}
+
+function renderTrendsTab() {
+  const m = STATE.metrics;
+  if (m.rounds.length === 0) {
+    return '<div style="color:var(--muted);">No round data captured.</div>';
+  }
+  function sparkline(values, max, color) {
+    const blocks = '▁▂▃▄▅▆▇█';
+    return values.map(v => {
+      const idx = Math.min(blocks.length - 1, Math.round((v / Math.max(1, max)) * (blocks.length - 1)));
+      return `<span style="color:${color};">${blocks[idx]}</span>`;
+    }).join('');
+  }
+  const compromiseSeries = m.rounds.map(r => r.compromisedTotal);
+  const wastedSeries = m.rounds.map(r => r.wastedActions);
+  const effectiveSeries = m.rounds.map(r => r.effectiveActions);
+  const threatsActiveSeries = m.rounds.map(r => r.threatsActive);
+  const maxComp = STATE.mission.loseThreshold;
+  const maxWaste = Math.max(1, ...wastedSeries);
+  const maxEff = Math.max(1, ...effectiveSeries);
+  const maxAct = Math.max(1, ...threatsActiveSeries);
+
+  // Improvement detection
+  const repeats = detectRepeatFailures();
+  const totalWasted = m.actions.filter(a => a.outcome === 'wasted').length;
+  const totalEff = m.actions.filter(a => a.outcome === 'effective').length;
+  const earlyRounds = m.rounds.slice(0, Math.ceil(m.rounds.length / 2));
+  const lateRounds = m.rounds.slice(Math.ceil(m.rounds.length / 2));
+  const earlyWaste = earlyRounds.reduce((s, r) => s + r.wastedActions, 0);
+  const lateWaste = lateRounds.reduce((s, r) => s + r.wastedActions, 0);
+  const trend = lateWaste < earlyWaste ? 'IMPROVING' : lateWaste === earlyWaste ? 'FLAT' : 'DECLINING';
+  const trendColor = trend === 'IMPROVING' ? 'var(--green)' : trend === 'FLAT' ? 'var(--amber)' : 'var(--red)';
+
+  const repeatHTML = repeats.length === 0
+    ? '<div style="color:var(--green);font-size:10px;">▸ No repeat failure patterns detected. You learned from your mistakes.</div>'
+    : repeats.map(r => `<div style="color:var(--amber);font-size:10px;">▸ R${r.round}: ${r.agentId} ▸ ${r.actionId.toUpperCase()} (${r.wasteReason}) — also at R${r.firstRound}</div>`).join('');
+
+  const roundLabel = m.rounds.map(r => String(r.round).padStart(2,' ')).join(' ');
+
+  return `
+    <div style="margin-bottom:14px;">
+      <div style="color:var(--cyan);font-size:11px;font-weight:bold;letter-spacing:0.05em;">▸ ROUND-OVER-ROUND TREND</div>
+      <div style="font-size:11px;margin-top:4px;">Wasted-action trend: <b style="color:${trendColor};">${trend}</b></div>
+      <div style="color:var(--muted);font-size:9px;margin-top:2px;">Early rounds: ${earlyWaste} wasted · Late rounds: ${lateWaste} wasted</div>
+    </div>
+
+    <div class="trend-block">
+      <div class="trend-label">COMPROMISE COUNT</div>
+      <div class="trend-spark">${sparkline(compromiseSeries, maxComp, 'var(--red)')}</div>
+      <div class="trend-detail">Loss threshold: ${STATE.mission.loseThreshold}. Final: ${compromiseSeries[compromiseSeries.length-1]}.</div>
+    </div>
+
+    <div class="trend-block">
+      <div class="trend-label">WASTED ACTIONS / RND</div>
+      <div class="trend-spark">${sparkline(wastedSeries, maxWaste, 'var(--amber)')}</div>
+      <div class="trend-detail">Total wasted: ${totalWasted}. Lower is better.</div>
+    </div>
+
+    <div class="trend-block">
+      <div class="trend-label">EFFECTIVE ACTIONS / RND</div>
+      <div class="trend-spark">${sparkline(effectiveSeries, maxEff, 'var(--green)')}</div>
+      <div class="trend-detail">Total effective: ${totalEff}.</div>
+    </div>
+
+    <div class="trend-block">
+      <div class="trend-label">ACTIVE THREATS / RND</div>
+      <div class="trend-spark">${sparkline(threatsActiveSeries, maxAct, 'var(--magenta)')}</div>
+      <div class="trend-detail">Should bend down once you sever C2 or break chains effectively.</div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div style="color:var(--cyan);font-size:11px;font-weight:bold;letter-spacing:0.05em;">▸ REPEAT FAILURE PATTERNS</div>
+      <div style="margin-top:6px;">${repeatHTML}</div>
+    </div>
+  `;
+}
+
+function renderMovesTab() {
+  const m = STATE.metrics;
+  if (m.actions.length === 0) {
+    return '<div style="color:var(--muted);">No actions recorded.</div>';
+  }
+  const rows = m.actions.map(a => {
+    const colorMap = { effective: 'var(--green)', wasted: 'var(--red)', partial: 'var(--amber)' };
+    const color = colorMap[a.outcome] || 'var(--white)';
+    const symbol = a.outcome === 'effective' ? '✓' : a.outcome === 'wasted' ? '✗' : '~';
+    const target = a.targetId || '—';
+    const note = a.wasteReason ? ` <span style="color:var(--muted);font-size:9px;">(${a.wasteReason})</span>` : '';
+    const techs = a.techniqueIds && a.techniqueIds.length > 0
+      ? ' ' + a.techniqueIds.map(t => `<span class="tech-tap" data-tid="${t}" style="color:var(--magenta-dim);font-size:9px;">${t}</span>`).join(' ')
+      : '';
+    return `
+      <div class="moves-row">
+        <span class="moves-rnd">R${String(a.round).padStart(2,'0')}</span>
+        <span class="moves-agent log-${a.agentId.toLowerCase()}">${a.agentId.padEnd(7,' ')}</span>
+        <span class="moves-action">${a.actionId.toUpperCase().padEnd(8,' ')}</span>
+        <span class="moves-target">${target.padEnd(10,' ')}</span>
+        <span class="moves-outcome" style="color:${color};">${symbol}</span>${note}${techs}
+      </div>
+    `;
+  }).join('');
+
+  const summary = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+      <div style="background:#0a141d;padding:6px;border:1px solid var(--green);border-radius:2px;text-align:center;">
+        <div style="color:var(--green);font-size:14px;font-weight:bold;">${m.actions.filter(a => a.outcome === 'effective').length}</div>
+        <div style="color:var(--muted);font-size:8px;">EFFECTIVE</div>
+      </div>
+      <div style="background:#0a141d;padding:6px;border:1px solid var(--red);border-radius:2px;text-align:center;">
+        <div style="color:var(--red);font-size:14px;font-weight:bold;">${m.actions.filter(a => a.outcome === 'wasted').length}</div>
+        <div style="color:var(--muted);font-size:8px;">WASTED</div>
+      </div>
+      <div style="background:#0a141d;padding:6px;border:1px solid var(--cyan);border-radius:2px;text-align:center;">
+        <div style="color:var(--cyan);font-size:14px;font-weight:bold;">${m.actions.length}</div>
+        <div style="color:var(--muted);font-size:8px;">TOTAL</div>
+      </div>
+    </div>
+  `;
+  return summary + '<div class="moves-table">' + rows + '</div>';
+}
+
+
+// =============================================================================
+// 12. UI: AGENTS, TERMINAL, MODALS, CODEX
+// =============================================================================
+function setupAgents() {
+  STATE.agents = AGENT_DEFS.map(def => ({ ...def, exhausted: false, speaking: false }));
+  renderAgentStrip();
+}
+
+function renderAgentStrip() {
+  const strip = document.getElementById('agent-strip');
+  strip.innerHTML = '';
+  STATE.agents.forEach((ag, i) => {
+    const el = document.createElement('div');
+    el.className = 'agent-card';
+    el.style.setProperty('--accent', ag.color);
+    el.style.setProperty('--accent-glow', hexA(ag.color, 0.5));
+    if (STATE.selectedAgent === i && STATE.phase === 'PLAN') el.classList.add('active');
+    if (ag.exhausted) el.classList.add('exhausted');
+    if (ag.speaking) el.classList.add('speaking');
+    el.innerHTML = `
+      <div class="agent-portrait">${buildPortraitSVG(ag)}</div>
+      <div class="agent-info">
+        <div class="agent-name">${ag.id}</div>
+        <div class="agent-class">${ag.cls}</div>
+        <div class="agent-status">${ag.exhausted ? 'COMMITTED' : 'READY'}</div>
+      </div>
+    `;
+    el.addEventListener('click', () => onAgentTap(i));
+    strip.appendChild(el);
+  });
+}
+
+function buildPortraitSVG(agent) {
+  const c = agent.color;
+  const cd = agent.colorDim;
+  let body = '';
+  if (agent.id === 'VIGIL') {
+    body = `
+      <circle cx="22" cy="22" r="20" fill="none" stroke="${cd}" stroke-width="1"/>
+      <circle cx="22" cy="22" r="14" fill="${cd}" opacity="0.2"/>
+      <circle cx="22" cy="22" r="8" fill="none" stroke="${c}" stroke-width="2"/>
+      <circle cx="22" cy="22" r="3" fill="${c}"/>
+      <line x1="22" y1="6" x2="22" y2="10" stroke="${c}" stroke-width="2"/>
+      <line x1="22" y1="34" x2="22" y2="38" stroke="${c}" stroke-width="2"/>
+      <line x1="6" y1="22" x2="10" y2="22" stroke="${c}" stroke-width="2"/>
+      <line x1="34" y1="22" x2="38" y2="22" stroke="${c}" stroke-width="2"/>`;
+  } else if (agent.id === 'WRAITH') {
+    body = `
+      <path d="M 8 36 L 22 6 L 36 36 Z" fill="${cd}" opacity="0.3" stroke="${cd}" stroke-width="1"/>
+      <path d="M 14 32 L 22 14 L 30 32 Z" fill="none" stroke="${c}" stroke-width="2"/>
+      <circle cx="18" cy="24" r="2" fill="${c}"/>
+      <circle cx="26" cy="24" r="2" fill="${c}"/>
+      <line x1="22" y1="32" x2="22" y2="36" stroke="${c}" stroke-width="2"/>`;
+  } else {
+    body = `
+      <rect x="6" y="8" width="32" height="28" fill="none" stroke="${cd}" stroke-width="1"/>
+      <path d="M 22 10 L 34 18 L 34 30 L 22 36 L 10 30 L 10 18 Z" fill="${cd}" opacity="0.25" stroke="${c}" stroke-width="2"/>
+      <path d="M 22 16 L 28 20 L 28 28 L 22 32 L 16 28 L 16 20 Z" fill="none" stroke="${c}" stroke-width="1.5"/>
+      <circle cx="22" cy="24" r="2.5" fill="${c}"/>`;
+  }
+  return `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" style="display:block;">${body}</svg>`;
+}
+
+function makeAgentSpeak(agentIdx) {
+  const ag = STATE.agents[agentIdx];
+  if (!ag) return;
+  ag.speaking = true;
+  renderAgentStrip();
+  setTimeout(() => { ag.speaking = false; renderAgentStrip(); }, 800);
+}
+
+function timeStamp() {
+  const t = String(STATE.round).padStart(2, '0');
+  const sub = String(Math.floor(Math.random() * 99)).padStart(2, '0');
+  return `T${t}.${sub}`;
+}
+
+function verbose(novice, operator, analyst) {
+  if (STATE.verbosity === 'novice')  return novice;
+  if (STATE.verbosity === 'analyst') return analyst;
+  return operator;
+}
+
+// v0.2.1: Speed-based gating. When MANUAL, wait for player CONTINUE tap.
+// When STEADY/RAPID, just delay by ms.
+function gate(ms, callback) {
+  if (STATE.speed === 'manual') {
+    STATE.gateResolved = false;
+    STATE.gateCallback = callback;
+    showContinuePrompt();
+  } else {
+    const delay = STATE.speed === 'rapid' ? Math.min(ms, 400) : ms;
+    setTimeout(callback, delay);
+  }
+}
+
+function showContinuePrompt() {
+  const main = document.getElementById('btn-main');
+  main.textContent = '▶ CONTINUE';
+  main.classList.add('attract');
+  main.disabled = false;
+  document.getElementById('tap-hint').textContent = 'TAP CONTINUE TO ADVANCE';
+}
+
+function releaseGate() {
+  if (STATE.gateResolved) return;
+  STATE.gateResolved = true;
+  const cb = STATE.gateCallback;
+  STATE.gateCallback = null;
+  const main = document.getElementById('btn-main');
+  main.classList.remove('attract');
+  if (cb) cb();
+}
+
+function log(html, cls) {
+  STATE.log.push({ time: timeStamp(), html, cls: cls || 'log-info' });
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+function logJoshua(text) {
+  STATE.log.push({ time: timeStamp(), html: `JOSHUA: ${text}`, cls: 'log-josh' });
+  if (STATE.activeTab !== 'log' && STATE.activeTab !== 'intel') STATE.unreadComms++;
+  renderTabs();
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+function logAgent(agentId, text) {
+  const cls = `log-${agentId.toLowerCase()}`;
+  STATE.log.push({ time: timeStamp(), html: `${agentId} ▸ ${text}`, cls });
+  const ag = STATE.agents.findIndex(a => a.id === agentId);
+  if (ag >= 0) makeAgentSpeak(ag);
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+function logTechnique(tid) {
+  const T = TECHNIQUES[tid];
+  if (!T) return;
+  const fw = FRAMEWORKS[T.fw];
+  const tappable = `<span class="tech-tap" data-tid="${tid}">${tid}</span>`;
+  let line;
+  if (STATE.verbosity === 'novice') {
+    line = `&nbsp;&nbsp;└ ${T.novice || T.name}`;
+  } else if (STATE.verbosity === 'operator') {
+    line = `&nbsp;&nbsp;└ ${tappable} — ${T.name}<span class="framework-tag ${fw.cls}">${fw.short}</span>`;
+  } else {
+    const tools = T.tools ? ` <span style="color:var(--green);font-size:9px;">[${T.tools.slice(0,2).join(', ')}]</span>` : '';
+    line = `&nbsp;&nbsp;└ ${tappable} — ${T.name}<span class="framework-tag ${fw.cls}">${fw.short}</span> ${T.tactic}${tools}`;
+  }
+  STATE.log.push({ time: timeStamp(), html: line, cls: 'log-tech' });
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+function logDivider() {
+  STATE.log.push({ html: '─────────────────────────────', cls: 'log-divider', noTime: true });
+  if (STATE.activeTab === 'log') renderTerminal();
+}
+
+function renderTerminal() {
+  const el = document.getElementById('terminal-content');
+  if (STATE.activeTab === 'log') {
+    el.innerHTML = STATE.log.map(line => {
+      if (line.noTime) return `<div class="log-line ${line.cls}">${line.html}</div>`;
+      return `<div class="log-line"><span class="log-time">${line.time}</span><span class="${line.cls}">${line.html}</span></div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } else if (STATE.activeTab === 'brief') {
+    renderBriefTab(el);
+  } else if (STATE.activeTab === 'codex') {
+    renderCodexTab(el);
+  } else if (STATE.activeTab === 'intel') {
+    STATE.unreadComms = 0;
+    renderTabs();
+    renderIntelTab(el);
+  }
+}
+
+function renderBriefTab(el) {
+  const m = STATE.mission;
+  if (!m) return;
+  // v0.2.1: Live mission dashboard (was: static brief)
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised');
+  const attacked = STATE.nodes.filter(n => n.state === 'attacked');
+  const stressed = STATE.nodes.filter(n => n.state === 'stressed');
+  const hardened = STATE.nodes.filter(n => n.resilience > 0);
+  const revealed = STATE.threats.filter(t => t.revealed);
+  const hidden = STATE.threats.filter(t => !t.revealed);
+  const fwBadges = m.frameworks.map(fw => {
+    const F = FRAMEWORKS[fw];
+    return `<span class="framework-tag ${F.cls}">${F.short}</span>`;
+  }).join(' ');
+
+  const compHTML = compromised.length > 0
+    ? compromised.map(n => `<span class="log-crit">${n.id}</span>`).join(', ')
+    : '<span class="log-good">none</span>';
+  const attHTML = attacked.length > 0
+    ? attacked.map(n => `<span class="log-warn">${n.id}</span>`).join(', ')
+    : 'none';
+  const hardHTML = hardened.length > 0
+    ? hardened.map(n => `${n.id}+${n.resilience}`).join(', ')
+    : 'none';
+
+  const revealedThreatsHTML = revealed.length > 0
+    ? revealed.map(t => `<div class="log-line">&nbsp;&nbsp;└ ${t.target} <span class="log-warn">[phase ${t.phase}/3]</span> <span class="tech-tap" data-tid="${t.techniqueId}">${t.techniqueId}</span></div>`).join('')
+    : '<div class="log-line" style="color:var(--muted);">&nbsp;&nbsp;└ none confirmed</div>';
+
+  el.innerHTML = `
+    <div class="log-line log-cyan" style="font-weight:bold;">// LIVE BRIEF — ${m.name}</div>
+    <div class="log-line log-divider">─────────────────────────────</div>
+    <div class="log-line"><span style="color:var(--amber);">RND:</span> ${STATE.round}/${m.maxRounds} &nbsp;<span style="color:var(--amber);">PHASE:</span> ${STATE.phase}</div>
+    <div class="log-line"><span style="color:var(--amber);">FRAMEWORKS:</span> ${fwBadges}</div>
+    <br>
+    <div class="log-line log-cyan">▸ ASSET STATUS</div>
+    <div class="log-line">&nbsp;&nbsp;Compromised: ${compHTML} (${compromised.length}/${m.loseThreshold} loss threshold)</div>
+    <div class="log-line">&nbsp;&nbsp;Under attack: ${attHTML}</div>
+    <div class="log-line">&nbsp;&nbsp;Hardened: ${hardHTML}</div>
+    <br>
+    <div class="log-line log-warn">▸ ACTIVE THREATS (${STATE.threats.length})</div>
+    ${revealedThreatsHTML}
+    ${hidden.length > 0 ? `<div class="log-line" style="color:var(--muted);">&nbsp;&nbsp;└ <i>${hidden.length} unrevealed — VIGIL ▸ DEEP SCAN</i></div>` : ''}
+    <br>
+    <div class="log-line log-crit">▸ C2 STATUS</div>
+    <div class="log-line">&nbsp;&nbsp;${STATE.c2Severed ? '<span class="log-good">SEVERED — adversary command lost</span>' : STATE.c2Revealed ? `<span class="log-crit">LOCATED at ${STATE.c2Node}</span> — WRAITH ▸ SEVER recommended` : 'unknown — VIGIL ▸ TRACE C2'}</div>
+    <br>
+    <div class="log-line log-good">▸ WIN CONDITIONS</div>
+    <div class="log-line">&nbsp;&nbsp;1. Survive ${m.maxRounds} rounds with &lt;${m.loseThreshold} compromised, OR</div>
+    <div class="log-line">&nbsp;&nbsp;2. SEVER C2.</div>
+  `;
+}
+
+function renderCodexTab(el) {
+  // v0.2.1: contextual codex - active first, then mission, then global
+  const grouped = {};
+  Object.entries(TECHNIQUES).forEach(([tid, T]) => {
+    if (!grouped[T.fw]) grouped[T.fw] = [];
+    grouped[T.fw].push({ tid, ...T });
+  });
+  const activeRunTechs = Object.keys(STATE.observedTTPs);
+  const missionFrameworks = STATE.mission ? STATE.mission.frameworks : [];
+
+  function renderEntry(e, F, isActive) {
+    const desc = STATE.verbosity === 'novice' ? (e.novice || e.desc) : e.desc;
+    const tools = e.tools ? `<div class="codex-tools">▸ Tools: ${e.tools.join(', ')}</div>` : '';
+    const counters = e.counters ? `<div class="codex-counters">▸ Counters: ${e.counters.join(', ')}</div>` : '';
+    const observed = STATE.observedTTPs[e.tid] || 0;
+    const obsBadge = observed > 0
+      ? `<span style="color:var(--amber);font-size:9px;margin-left:4px;">[${observed}× this run]</span>`
+      : '';
+    const rowStyle = isActive ? 'border-left:2px solid var(--amber);padding-left:6px;' : '';
+    return `
+      <div class="codex-entry tech-tap" data-tid="${e.tid}" style="cursor:pointer;${rowStyle}">
+        <div><span class="codex-id">${e.tid}</span> <span class="framework-tag ${F.cls}">${F.short}</span>${obsBadge}</div>
+        <div class="codex-name">${e.name}</div>
+        <div class="codex-desc"><i>${e.tactic}</i></div>
+        <div class="codex-desc">${desc}</div>
+        ${STATE.verbosity !== 'novice' ? tools : ''}
+        ${STATE.verbosity === 'analyst' ? counters : ''}
+        <div style="color:var(--cyan);font-size:9px;margin-top:4px;">▸ TAP for response options</div>
+      </div>
+    `;
+  }
+
+  let html = '';
+  // Section 1: Active this run
+  if (activeRunTechs.length > 0) {
+    html += `<div class="log-line log-cyan" style="font-weight:bold;font-size:12px;margin-top:4px;">// ACTIVE THIS RUN</div>`;
+    activeRunTechs.forEach(tid => {
+      const T = TECHNIQUES[tid];
+      if (!T) return;
+      const F = FRAMEWORKS[T.fw];
+      html += renderEntry({ tid, ...T }, F, true);
+    });
+  }
+  // Section 2: Mission frameworks
+  html += `<div class="log-line log-cyan" style="font-weight:bold;font-size:12px;margin-top:8px;">// MISSION FRAMEWORKS</div>`;
+  missionFrameworks.forEach(fwId => {
+    const F = FRAMEWORKS[fwId];
+    if (!F) return;
+    const list = grouped[fwId] || [];
+    html += `<div class="log-line" style="color:var(--cyan-dim);font-size:10px;margin-top:4px;">${F.name}</div>`;
+    list.forEach(e => {
+      if (activeRunTechs.includes(e.tid)) return;  // skip if already in active section
+      html += renderEntry(e, F, false);
+    });
+  });
+  // Section 3: Global (other frameworks)
+  const otherFwIds = Object.keys(FRAMEWORKS).filter(fw => !missionFrameworks.includes(fw));
+  if (otherFwIds.length > 0) {
+    html += `<div class="log-line log-cyan" style="font-weight:bold;font-size:12px;margin-top:8px;color:var(--muted);">// GLOBAL (other frameworks)</div>`;
+    otherFwIds.forEach(fwId => {
+      const F = FRAMEWORKS[fwId];
+      const list = grouped[fwId] || [];
+      list.forEach(e => {
+        if (activeRunTechs.includes(e.tid)) return;
+        html += renderEntry(e, F, false);
+      });
+    });
+  }
+  el.innerHTML = html;
+}
+
+function renderIntelTab(el) {
+  const m = STATE.mission;
+  if (!m) { el.innerHTML = '<div class="log-line">No mission active.</div>'; return; }
+
+  const observedList = Object.entries(STATE.observedTTPs).sort((a,b) => b[1] - a[1]);
+  const observedHTML = observedList.length === 0
+    ? '<div class="log-line" style="color:var(--muted);">&nbsp;&nbsp;└ none yet — run VIGIL ▸ DEEP SCAN</div>'
+    : observedList.map(([tid, count]) => {
+        const T = TECHNIQUES[tid];
+        if (!T) return '';
+        const fw = FRAMEWORKS[T.fw];
+        return `<div class="log-line">&nbsp;&nbsp;└ <span class="tech-tap" data-tid="${tid}">${tid}</span> ${T.name} <span class="framework-tag ${fw.cls}">${fw.short}</span> <span style="color:var(--amber);">[${count}×]</span></div>`;
+      }).join('');
+
+  // Confidence: rises with observed TTP count
+  const confidence = Math.min(100, observedList.length * 12 + (STATE.c2Revealed ? 30 : 0));
+
+  // C2 + IOCs
+  const c2Line = STATE.c2Severed
+    ? `<div class="log-line log-good">&nbsp;&nbsp;└ SEVERED — adversary command neutralized</div>`
+    : STATE.c2Revealed
+    ? `<div class="log-line log-crit">&nbsp;&nbsp;└ LOCATED at ${STATE.c2Node}</div><div class="log-line log-warn">&nbsp;&nbsp;└ RECOMMENDATION: WRAITH ▸ SEVER C2</div>`
+    : `<div class="log-line" style="color:var(--muted);">&nbsp;&nbsp;└ unknown — TRACE C2 required</div>`;
+
+  const iocsHTML = STATE.iocs.length === 0
+    ? '<div class="log-line" style="color:var(--muted);">&nbsp;&nbsp;└ none collected yet</div>'
+    : STATE.iocs.map(i => `<div class="log-line">&nbsp;&nbsp;└ ${i}</div>`).join('');
+
+  // Hardening inventory
+  const hardened = STATE.nodes.filter(n => n.resilience > 0);
+  const hardHTML = hardened.length === 0
+    ? '<div class="log-line" style="color:var(--muted);">&nbsp;&nbsp;└ no nodes hardened</div>'
+    : hardened.map(n => `<div class="log-line">&nbsp;&nbsp;└ ${n.id}: +${n.resilience} resilience</div>`).join('');
+
+  el.innerHTML = `
+    <div class="log-line log-cyan" style="font-weight:bold;">// THREAT INTEL</div>
+    <div class="log-line log-divider">─────────────────────────────</div>
+    <div class="log-line"><span style="color:var(--amber);">ARCHETYPE:</span> ${m.threatArchetype === 'nation_state' ? 'Nation-State APT' : 'Ransomware Operation'}</div>
+    <div class="log-line"><span style="color:var(--amber);">CONFIDENCE:</span> ${confidence}%</div>
+    <div class="log-line"><span style="color:var(--amber);">ACTIVE CAMPAIGNS:</span> ${STATE.threats.length}</div>
+    <br>
+    <div class="log-line log-cyan">▸ OBSERVED TTPs</div>
+    ${observedHTML}
+    <br>
+    <div class="log-line log-crit">▸ C2 STATUS</div>
+    ${c2Line}
+    <br>
+    <div class="log-line log-good">▸ IOCs</div>
+    ${iocsHTML}
+    <br>
+    <div class="log-line log-cyan">▸ HARDENING INVENTORY</div>
+    ${hardHTML}
+  `;
+}
+
+function renderTabs() {
+  document.querySelectorAll('.term-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === STATE.activeTab);
+    if (b.dataset.tab === 'intel') {
+      const existing = b.querySelector('.badge');
+      if (existing) existing.remove();
+      if (STATE.unreadComms > 0 && STATE.activeTab !== 'intel') {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = STATE.unreadComms;
+        b.appendChild(badge);
+      }
+    }
+  });
+}
+
+document.querySelectorAll('.term-tab').forEach(b => {
+  b.addEventListener('click', () => {
+    STATE.activeTab = b.dataset.tab;
+    renderTabs();
+    renderTerminal();
+  });
+});
+
+// v0.2.1: Delegated tap handler for technique IDs anywhere in app
+document.getElementById('app').addEventListener('click', (e) => {
+  const t = e.target.closest('.tech-tap');
+  if (t && t.dataset.tid) {
+    e.stopPropagation();
+    showTechniqueCard(t.dataset.tid);
+  }
+});
+
+
+// =============================================================================
+// 13. KILL CHAIN REPLAY
+// =============================================================================
+const replayCanvas = document.getElementById('replay-canvas');
+const replayCtx = replayCanvas.getContext('2d');
+
+function showKillChainReplay(onDone) {
+  if (STATE.resolvedActions.length === 0) { onDone(); return; }
+  STATE.replayActive = true;
+  const overlay = document.getElementById('replay-overlay');
+  overlay.classList.add('active');
+  const stack = document.getElementById('replay-cards');
+  stack.innerHTML = '';
+  STATE.resolvedActions.forEach((a) => {
+    const card = document.createElement('div');
+    card.className = 'replay-card' + (a.kind === 'counter' ? ' counter' : '');
+    let id = a.techniqueId || a.actionId || '';
+    let name = a.actionName || (a.techniqueId && TECHNIQUES[a.techniqueId] ? TECHNIQUES[a.techniqueId].name : '');
+    let fw = '';
+    if (a.techniqueId && TECHNIQUES[a.techniqueId]) {
+      fw = FRAMEWORKS[TECHNIQUES[a.techniqueId].fw].short;
+    } else if (a.d3fend) {
+      fw = 'D3FEND';
+    }
+    card.innerHTML = `
+      <div class="rc-id">${id}</div>
+      <div class="rc-name">${name}</div>
+      <div class="rc-fw">${a.agentId || ''} ${fw ? '· '+fw : ''}</div>
+    `;
+    stack.appendChild(card);
+  });
+  // Sized canvas
+  const overlayRect = overlay.getBoundingClientRect();
+  replayCanvas.width = Math.floor((overlayRect.width - 32) * (window.devicePixelRatio || 1));
+  replayCanvas.height = Math.floor(160 * (window.devicePixelRatio || 1));
+  replayCanvas.style.width = (overlayRect.width - 32) + 'px';
+  replayCanvas.style.height = '160px';
+  replayCtx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+  const startTime = performance.now();
+  const cards = stack.querySelectorAll('.replay-card');
+  function tick(now) {
+    if (!STATE.replayActive) return;
+    const elapsed = (now - startTime) / 1000;
+    const total = STATE.resolvedActions.length * 0.5 + 1;
+    drawReplayCanvas(elapsed, overlayRect.width - 32, 160);
+    cards.forEach((c, i) => {
+      if (elapsed > i * 0.4) c.classList.add('shown');
+    });
+    if (elapsed < total) {
+      requestAnimationFrame(tick);
+    } else {
+      setTimeout(() => endReplay(onDone), 1500);
+    }
+  }
+  requestAnimationFrame(tick);
+  document.getElementById('replay-skip').onclick = () => endReplay(onDone);
+}
+
+function drawReplayCanvas(elapsed, w, h) {
+  replayCtx.fillStyle = '#03060a';
+  replayCtx.fillRect(0, 0, w, h);
+  replayCtx.strokeStyle = 'rgba(78,226,255,0.1)';
+  replayCtx.lineWidth = 1;
+  for (let x = 0; x < w; x += 20) {
+    replayCtx.beginPath(); replayCtx.moveTo(x,0); replayCtx.lineTo(x,h); replayCtx.stroke();
+  }
+  for (let y = 0; y < h; y += 20) {
+    replayCtx.beginPath(); replayCtx.moveTo(0,y); replayCtx.lineTo(w,y); replayCtx.stroke();
+  }
+  const n = STATE.resolvedActions.length;
+  const slotW = w / Math.max(n, 1);
+  STATE.resolvedActions.forEach((a, i) => {
+    const cx = slotW * i + slotW / 2;
+    const cy = h / 2;
+    const showAt = i * 0.4;
+    if (elapsed < showAt) return;
+    const localT = Math.min(1, (elapsed - showAt) / 0.5);
+    const color = a.kind === 'counter' ? '#5cff8a' : '#ff3a3a';
+    const r = 10 + Math.sin(elapsed * 4 + i) * 2;
+    const grad = replayCtx.createRadialGradient(cx, cy, r*0.5, cx, cy, r*3);
+    grad.addColorStop(0, hexA(color, 0.6 * localT));
+    grad.addColorStop(1, hexA(color, 0));
+    replayCtx.fillStyle = grad;
+    replayCtx.beginPath(); replayCtx.arc(cx, cy, r*3, 0, Math.PI*2); replayCtx.fill();
+    replayCtx.fillStyle = '#03060a';
+    replayCtx.strokeStyle = color;
+    replayCtx.lineWidth = 2;
+    replayCtx.beginPath(); replayCtx.arc(cx, cy, r * localT, 0, Math.PI*2);
+    replayCtx.fill(); replayCtx.stroke();
+    if (i > 0 && elapsed > showAt + 0.1) {
+      const px = slotW * (i-1) + slotW / 2;
+      const lerpT = Math.min(1, (elapsed - showAt - 0.1) / 0.3);
+      replayCtx.strokeStyle = color;
+      replayCtx.lineWidth = 1.5;
+      replayCtx.shadowColor = color;
+      replayCtx.shadowBlur = 6;
+      replayCtx.beginPath();
+      replayCtx.moveTo(px, cy);
+      replayCtx.lineTo(px + (cx - px) * lerpT, cy);
+      replayCtx.stroke();
+      replayCtx.shadowBlur = 0;
+    }
+    replayCtx.fillStyle = color;
+    replayCtx.font = 'bold 8px JetBrains Mono, monospace';
+    replayCtx.textAlign = 'center';
+    replayCtx.fillText((a.agentId || 'ADV').slice(0,4), cx, cy + r + 14);
+  });
+}
+
+function endReplay(onDone) {
+  STATE.replayActive = false;
+  document.getElementById('replay-overlay').classList.remove('active');
+  if (onDone) onDone();
+}
+
+
+// =============================================================================
+// 14. INPUT
+// =============================================================================
+function onAgentTap(i) {
+  if (STATE.phase !== 'PLAN') return;
+  const ag = STATE.agents[i];
+  if (ag.exhausted) {
+    log(`${ag.id} already committed this round.`, 'log-warn');
+    return;
+  }
+  STATE.selectedAgent = i;
+  STATE.selectedTarget = null;
+  renderAgentStrip();
+  showAgentActionModal(i);
+}
+
+function showAgentActionModal(i) {
+  const ag = STATE.agents[i];
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="border-color:${ag.color};box-shadow:0 0 24px ${hexA(ag.color, 0.4)};">
+      <div class="modal-title" style="color:${ag.color};">${ag.id} — ${ag.cls}</div>
+      <div class="modal-body" style="color:var(--muted);font-size:10px;">${ag.desc}</div>
+      <div id="action-list"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="action-btn" id="cancel-action" style="flex:1;">CANCEL</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  const list = modal.querySelector('#action-list');
+  ag.actions.forEach(act => {
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.style.width = '100%';
+    btn.style.marginBottom = '6px';
+    btn.style.textAlign = 'left';
+    btn.style.padding = '8px';
+    let extra = '';
+    if (STATE.verbosity !== 'novice') {
+      extra = `<div style="color:var(--green);font-size:8px;text-transform:none;letter-spacing:0;margin-top:3px;">${act.d3fend || ''}</div>`;
+    }
+    btn.innerHTML = `<div style="color:${ag.color};">▸ ${act.name}</div>
+      <div style="color:var(--muted);font-size:9px;font-weight:normal;text-transform:none;letter-spacing:0;margin-top:2px;">${act.desc}</div>
+      ${extra}`;
+    if (act.id === 'sever' && !STATE.c2Revealed) {
+      btn.disabled = true;
+      btn.innerHTML += `<div style="color:var(--red);font-size:9px;text-transform:none;letter-spacing:0;margin-top:2px;">[REQUIRES C2 REVEALED]</div>`;
+    }
+    btn.addEventListener('click', () => {
+      modal.remove();
+      STATE.selectedAction = act.id;
+      promptForTarget(i, act);
+    });
+    list.appendChild(btn);
+  });
+  modal.querySelector('#cancel-action').addEventListener('click', () => {
+    STATE.selectedAgent = null;
+    renderAgentStrip();
+    modal.remove();
+  });
+}
+
+function promptForTarget(agentIdx, action) {
+  const ag = STATE.agents[agentIdx];
+  if (action.id === 'trace') {
+    queueAction(agentIdx, action, null);
+    return;
+  }
+  if (action.id === 'sever') {
+    if (!STATE.c2Revealed) return;
+    queueAction(agentIdx, action, STATE.c2Node);
+    return;
+  }
+  document.getElementById('tap-hint').textContent = `${ag.id} ▸ ${action.name} — TAP TARGET NODE`;
+}
+
+function onMapTap(x, y) {
+  if (STATE.phase !== 'PLAN') {
+    const n = nearestNode(x, y);
+    if (n) inspectNode(n);
+    return;
+  }
+  if (STATE.selectedAgent === null) {
+    const n = nearestNode(x, y);
+    if (n) inspectNode(n);
+    return;
+  }
+  const n = nearestNode(x, y);
+  if (!n) return;
+  const ag = STATE.agents[STATE.selectedAgent];
+  const action = ag.actions.find(a => a.id === STATE.selectedAction);
+  if (!action) return;
+  queueAction(STATE.selectedAgent, action, n.id);
+}
+
+function queueAction(agentIdx, action, targetId) {
+  const ag = STATE.agents[agentIdx];
+  STATE.plannedActions.push({
+    agent: agentIdx,
+    actionId: action.id,
+    actionName: action.name,
+    target: targetId,
+  });
+  ag.exhausted = true;
+  log(`<span class="log-${ag.id.toLowerCase()}">${ag.id}</span> queued ▸ ${action.name}${targetId ? ' → ' + targetId : ''}`);
+  STATE.selectedAgent = null;
+  STATE.selectedTarget = null;
+  STATE.selectedAction = null;
+  document.getElementById('tap-hint').textContent = 'SELECT AGENT, THEN TARGET NODE';
+  renderAgentStrip();
+  updateMainButton();
+}
+
+function nearestNode(x, y) {
+  let best = null, bestD = 32 * 32;
+  STATE.nodes.forEach(n => {
+    if (typeof n.x !== 'number' || typeof n.y !== 'number') return;
+    const dx = n.x - x, dy = n.y - y;
+    const d = dx*dx + dy*dy;
+    if (d < bestD) { bestD = d; best = n; }
+  });
+  return best;
+}
+
+function inspectNode(n) {
+  STATE.inspectingNode = n.id;
+  STATE.selectedTarget = n.id;
+  let stateLabel = n.state.toUpperCase();
+  let extra = '';
+  if (n.id === STATE.c2Node && STATE.c2Revealed) extra = ' [◢ C2 ◣]';
+  if (n.resilience > 0) extra += ` [+${n.resilience} HARDENED]`;
+  log(`▸ INSPECT ${n.id} (${n.type}): ${stateLabel}${extra}`, 'log-cyan');
+  const ts = STATE.threats.filter(t => t.target === n.id && t.revealed);
+  ts.forEach(t => log(`&nbsp;&nbsp;└ INCOMING THREAT phase ${t.phase}/3`, 'log-warn'));
+}
+
+document.querySelectorAll('.view-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.view-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    STATE.satView = b.dataset.view;
+    document.getElementById('tap-hint').textContent =
+      STATE.satView === 'orbital' ? 'ORBITAL VIEW — ASSETS IN MOTION' :
+      STATE.satView === 'ground' ? 'GROUND SEGMENT VIEW' :
+      'TACTICAL VIEW — TAP NODE TO FOCUS';
+  });
+});
+
+document.getElementById('settings-btn').addEventListener('click', showSettingsModal);
+
+// v0.2.1: Codex-as-decision-support modal. Tap T-ID in log -> this card.
+function showTechniqueCard(tid) {
+  const T = TECHNIQUES[tid];
+  if (!T) return;
+  const fw = FRAMEWORKS[T.fw];
+  // Determine recommendations based on game state + technique tags
+  const activeThreats = STATE.threats.filter(t => t.techniqueId === tid && t.revealed);
+  const compromisedNodes = STATE.nodes.filter(n => n.state === 'compromised');
+  const recs = [];
+
+  if (T.surfaceable_by && T.surfaceable_by.includes('scan')) {
+    recs.push({ urgency: 'detect', text: 'VIGIL ▸ DEEP SCAN reveals threats on target node and adjacent nodes.' });
+  }
+  if (T.attribution && T.attribution.includes('trace') && !STATE.c2Revealed) {
+    recs.push({ urgency: 'detect', text: 'VIGIL ▸ TRACE C2 — chance increases as more threats are revealed.' });
+  }
+  if (T.breakable_by && T.breakable_by.includes('disrupt') && activeThreats.length > 0) {
+    const targets = [...new Set(activeThreats.map(t => t.target))];
+    recs.push({ urgency: 'high', text: `WRAITH ▸ DISRUPT on ${targets.join(', ')} breaks the active chain.` });
+  } else if (T.breakable_by && T.breakable_by.includes('disrupt')) {
+    recs.push({ urgency: 'medium', text: 'WRAITH ▸ DISRUPT — applies if this technique becomes active on a node.' });
+  }
+  if (STATE.c2Revealed && !STATE.c2Severed) {
+    recs.push({ urgency: 'critical', text: `WRAITH ▸ SEVER C2 — adversary command at ${STATE.c2Node} is exposed. Severing ends the campaign.` });
+  }
+  if (T.mitigable_by && T.mitigable_by.includes('harden')) {
+    recs.push({ urgency: 'medium', text: 'ANCHOR ▸ HARDEN target — adds resilience charge to absorb the next phase advance.' });
+  }
+  if (T.recoverable_by && T.recoverable_by.includes('restore') && compromisedNodes.length > 0) {
+    recs.push({ urgency: 'high', text: `ANCHOR ▸ RESTORE — recover compromised: ${compromisedNodes.map(n => n.id).join(', ')}` });
+  }
+  if (T.priority === 'critical') {
+    recs.unshift({ urgency: 'critical', text: 'CRITICAL — this is an Impact-tactic technique. Allowing it to complete causes asset compromise.' });
+  }
+
+  const recsHTML = recs.map(r => {
+    const colorMap = { critical: 'var(--red)', high: 'var(--magenta)', medium: 'var(--amber)', detect: 'var(--cyan)', low: 'var(--muted)' };
+    return `<div class="rec-line" style="border-left:2px solid ${colorMap[r.urgency]};padding-left:6px;margin-bottom:4px;font-size:10px;">${r.text}</div>`;
+  }).join('');
+
+  const observed = STATE.observedTTPs[tid] || 0;
+  const observedLine = observed > 0
+    ? `<div style="color:var(--amber);font-size:9px;margin-top:4px;">▸ Observed ${observed}× this run</div>`
+    : '';
+
+  const desc = STATE.verbosity === 'novice' ? (T.novice || T.desc) : T.desc;
+  const tools = T.tools ? `<div style="color:var(--green);font-size:9px;margin-top:6px;">▸ Detection tools: ${T.tools.join(', ')}</div>` : '';
+  const counters = T.counters ? `<div style="color:var(--cyan);font-size:9px;margin-top:4px;">▸ D3FEND: ${T.counters.join('; ')}</div>` : '';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:340px;">
+      <div class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <span style="color:var(--cyan);">${tid}</span>
+        <span class="framework-tag ${fw.cls}">${fw.short}</span>
+      </div>
+      <div style="color:var(--white);font-weight:bold;margin-bottom:4px;">${T.name}</div>
+      <div style="color:var(--muted);font-size:10px;font-style:italic;">${T.tactic}</div>
+      ${observedLine}
+      <div style="margin-top:10px;color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.05em;">▸ WHAT IT IS</div>
+      <div style="color:var(--white);font-size:11px;margin-top:3px;line-height:1.5;">${desc}</div>
+      ${STATE.verbosity !== 'novice' ? tools : ''}
+      ${STATE.verbosity === 'analyst' ? counters : ''}
+      <div style="margin-top:10px;color:var(--green);font-size:10px;font-weight:bold;letter-spacing:0.05em;">▸ RECOMMENDED RESPONSE</div>
+      <div style="margin-top:4px;">${recsHTML || '<div style="color:var(--muted);font-size:10px;">No specific countermeasure available — focus on hardening.</div>'}</div>
+      <button class="action-btn primary" id="techcard-close" style="width:100%;margin-top:12px;">CLOSE</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  modal.querySelector('#techcard-close').addEventListener('click', () => modal.remove());
+  // Tap-outside to dismiss
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+}
+
+function showSettingsModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-title">SETTINGS</div>
+      <div class="settings-label">VERBOSITY</div>
+      <div style="color:var(--muted);font-size:9px;margin:2px 0 6px;">Detail level for logs and codex.</div>
+      <div class="verbosity-toggle" style="width:100%;justify-content:space-evenly;">
+        <button class="verbosity-btn ${STATE.verbosity==='novice'?'active':''}" data-v="novice">NOVICE</button>
+        <button class="verbosity-btn ${STATE.verbosity==='operator'?'active':''}" data-v="operator">OPERATOR</button>
+        <button class="verbosity-btn ${STATE.verbosity==='analyst'?'active':''}" data-v="analyst">ANALYST</button>
+      </div>
+      <div style="margin-top:14px;" class="settings-label">PACING</div>
+      <div style="color:var(--muted);font-size:9px;margin:2px 0 6px;">How fast resolve/conseq events advance.</div>
+      <div class="verbosity-toggle" style="width:100%;justify-content:space-evenly;">
+        <button class="verbosity-btn ${STATE.speed==='manual'?'active':''}" data-s="manual">MANUAL</button>
+        <button class="verbosity-btn ${STATE.speed==='steady'?'active':''}" data-s="steady">STEADY</button>
+        <button class="verbosity-btn ${STATE.speed==='rapid'?'active':''}" data-s="rapid">RAPID</button>
+      </div>
+      <div style="color:var(--muted);font-size:10px;margin-top:10px;line-height:1.5;">
+        <b>MANUAL:</b> Tap CONTINUE between events. Read everything.<br>
+        <b>STEADY:</b> Auto-advance ~900ms (default).<br>
+        <b>RAPID:</b> Auto-advance ~400ms.
+      </div>
+      <button class="action-btn primary" id="settings-close" style="width:100%;margin-top:12px;">CLOSE</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  modal.querySelectorAll('[data-v]').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.verbosity = b.dataset.v;
+      modal.querySelectorAll('[data-v]').forEach(x => x.classList.toggle('active', x.dataset.v === STATE.verbosity));
+      renderTerminal();
+    });
+  });
+  modal.querySelectorAll('[data-s]').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.speed = b.dataset.s;
+      modal.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('active', x.dataset.s === STATE.speed));
+    });
+  });
+  modal.querySelector('#settings-close').addEventListener('click', () => modal.remove());
+}
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  onMapTap(e.clientX - rect.left, e.clientY - rect.top);
+});
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (e.changedTouches.length === 0) return;
+  const t = e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  onMapTap(t.clientX - rect.left, t.clientY - rect.top);
+}, { passive: false });
+
+document.getElementById('btn-main').addEventListener('click', () => {
+  // v0.2.1: gate release in manual mode takes priority
+  if (STATE.speed === 'manual' && STATE.gateCallback) {
+    releaseGate();
+    return;
+  }
+  if (STATE.phase === 'INTEL') startPlanPhase();
+  else if (STATE.phase === 'PLAN') {
+    if (STATE.plannedActions.length === 0) return;
+    startResolvePhase();
+  }
+});
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (STATE.phase === 'PLAN' && STATE.plannedActions.length > 0) {
+    const last = STATE.plannedActions.pop();
+    const ag = STATE.agents[last.agent];
+    ag.exhausted = false;
+    log(`<span class="log-${ag.id.toLowerCase()}">${ag.id}</span> action recalled.`);
+    renderAgentStrip();
+    updateMainButton();
+  }
+});
+
+
+// =============================================================================
+// 15. BOOT & MISSION SELECT
+// =============================================================================
+const BOOT_LINES = [
+  '> JOSHUA SYSTEM v0.2.1 // BOOT',
+  '> Initializing operator console...',
+  '> Loading agent roster: VIGIL, WRAITH, ANCHOR ✓',
+  '> Loading framework registry: ATT&CK, ICS, SPARTA, ATLAS, D3FEND ✓',
+  '> Loading orbital propagator (AeroSec-Lab) ✓',
+  '> Codex decision-support: ONLINE',
+  '> Threat intel feed: ACTIVE',
+  '> ',
+  '> JOSHUA: Greetings, Operator.',
+  '> JOSHUA: Shall we play a game?',
+  '> ',
+];
+
+let bootIdx = 0;
+let bootCharIdx = 0;
+let bootFullText = '';
+const bootEl = document.getElementById('boot-text');
+
+function bootTick() {
+  if (bootIdx >= BOOT_LINES.length) {
+    setTimeout(showMissionSelect, 600);
+    return;
+  }
+  const line = BOOT_LINES[bootIdx];
+  if (bootCharIdx <= line.length) {
+    bootEl.textContent = bootFullText + line.slice(0, bootCharIdx);
+    bootCharIdx++;
+    setTimeout(bootTick, line.length === 0 ? 80 : 16 + Math.random() * 22);
+  } else {
+    bootFullText += line + '\n';
+    bootIdx++;
+    bootCharIdx = 0;
+    setTimeout(bootTick, 160);
+  }
+}
+
+function showMissionSelect() {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'mission-select-modal';
+  let cards = '';
+  Object.values(MISSIONS).forEach(m => {
+    const fwBadges = m.frameworks.map(fw => {
+      const F = FRAMEWORKS[fw];
+      return `<span class="framework-tag ${F.cls}">${F.short}</span>`;
+    }).join(' ');
+    cards += `
+      <div class="mission-card" data-mid="${m.id}">
+        <div class="mission-name">${m.name}</div>
+        <div class="mission-domain">${m.domain} · ${m.threat}</div>
+        <div class="mission-desc">${m.summary}</div>
+        <div style="margin-top:6px;">${fwBadges}</div>
+      </div>
+    `;
+  });
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:380px;">
+      <div class="modal-title">// MISSION SELECT</div>
+      <div class="modal-body">
+        <p style="color:var(--muted);font-size:10px;">Operator, choose your engagement. Each mission uses a different framework stack.</p>
+      </div>
+      ${cards}
+      <button class="action-btn" id="ms-settings" style="width:100%;margin-top:6px;">⚙ SETTINGS</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  const boot = document.getElementById('boot');
+  boot.style.transition = 'opacity 0.6s';
+  boot.style.opacity = '0';
+  setTimeout(() => boot.remove(), 700);
+  modal.querySelectorAll('.mission-card').forEach(c => {
+    c.addEventListener('click', () => {
+      const mid = c.dataset.mid;
+      modal.remove();
+      beginGame(mid);
+    });
+  });
+  modal.querySelector('#ms-settings').addEventListener('click', () => {
+    showSettingsModal();
+  });
+}
+
+function beginGame(missionId) {
+  STATE.mission = MISSIONS[missionId];
+  STATE.round = 1;
+  STATE.threats = [];
+  STATE.attackChains = [];
+  STATE.particles = [];
+  STATE.log = [];
+  STATE.resolvedActions = [];
+  STATE.c2Revealed = false;
+  STATE.c2Severed = false;
+  resizeCanvas();
+  if (STATE.mission.id === 'BLACKFROST') setupEnergyGrid();
+  else if (STATE.mission.id === 'NIGHTWATCH') setupSatelliteOps();
+  setupAgents();
+  pickC2();
+  log(`<b>// JOSHUA PROTOCOL — ${STATE.mission.name}</b>`, 'log-cyan');
+  log(`${STATE.mission.sector}`, 'log-info');
+  logJoshua(STATE.mission.id === 'BLACKFROST'
+    ? 'Operator, ransomware operation in progress. Initial access vector under analysis.'
+    : 'Operator, multi-vector campaign detected against the constellation. Stand by.');
+  maybeLaunchThreat();
+  STATE.threats.forEach(t => {
+    const target = getNode(t.target);
+    if (target && target.state === 'healthy') target.state = 'attacked';
+    spawnAttackChain(t.path, 'attack');
+  });
+  startIntelPhase();
+  requestAnimationFrame(renderLoop);
+}
+
+function renderLoop() {
+  render();
+  requestAnimationFrame(renderLoop);
+}
+
+resizeCanvas();
+setTimeout(bootTick, 300);
+</script>
+</body>
+</html>
