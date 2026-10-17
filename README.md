@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.1)
+## What's in the box (v0.9.2)
 
 ### Three missions, each grounded in real incident patterns
 
@@ -131,6 +131,11 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - **TIDEMARK cellular-modem signature (ZPMC pattern)** — new `cellularBeaconMode: true` flag + 5 new ATT&CK techniques (T1205 Traffic Signaling, T1571 Non-Standard Port, T1573 Encrypted Channel, T0885 Commonly Used Port ICS, T0845 Program Upload ICS). Dedicated codex entry on the 2024 U.S. House Select Committee on CCP ZPMC report + USCG MARSEC Directive 105-6 + EO 14116. DETECTIONS.md Play 6 extended with sub-play 6B — a procurement + physical + carrier-metadata hunt, because enterprise NetFlow is blind to this traffic.
 - **TIDEBREAK Maersk-scale consequence** — mission tightened: `maxRounds: 11→9`, `loseThreshold: 4→3`. New `sectorCascade` mechanic: when TOS compromises, both cranes become operationally stressed (not just adjacent-cascade stressed) because manifest truth is lost — the Maersk NotPetya 2017 pattern ($300M loss, 76 terminals offline, 10-day recovery). CFI debrief references Port of Houston 2021 (CVE-2021-40539, Volt Typhoon via ManageEngine) when the mission ends in loss.
 
+### v0.9.2: Priority 3 — KINGFISHER depth + seeded replay URLs
+
+- **KINGFISHER aerospace APT depth** — the actor now has a 7-stage `aerospaceChain` (RF+OSINT Recon → Ground-IT Initial Access → MCC Lateral → Operator-Identity Theft → Uplink Staging → On-Orbit Payload Delivery → Mission Impact), each stage tagged with its SPARTA/ATT&CK TTPs and a documented real-world incident anchor. 5 new SPARTA techniques added (REC-0005 Eavesdropping, EX-0010 Malicious Code, EX-0012 Modify On-Board Values, IMP-0005 Denial, LM-0001 Lateral Movement) with full descriptions grounded in CSIS Space Threat Assessment, Secure World Foundation, USSF Space Delta 15, Mandiant M-Trends aerospace, CISA ViaSat KA-SAT 2022 analysis, Russia-Ukraine theater jamming reporting, and Black Sea GPS-spoofing campaigns. NIGHTWATCH threatMix extended, intro card renders the chain, dedicated codex entry carries the stage-by-stage tool + incident mapping, CFI debrief has an aerospace-APT-aware doctrine note.
+- **Deterministic seeded replay URLs** — append `?seed=…` to the game URL and every random draw becomes deterministic. Seeds accept decimal, hex (`0x…`), or human-friendly strings (FNV-1a normalized). The debrief header shows the active seed; a new **SHARE** button on the debrief copies a shareable `?seed=…` URL to the clipboard. Case-log JSON export now carries the seed. mulberry32 PRNG — small, uniform, deterministic. Share your runs; peers can replay the exact scenario, actor, and attack sequence you faced.
+
 ---
 
 ## Framework references and provenance
@@ -211,4 +216,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.1** (October 2026) · BUILD `HUNT-20261017-1459Z`
+Current version: **v0.9.2** (October 2026) · BUILD `HUNT-20261017-1555Z`

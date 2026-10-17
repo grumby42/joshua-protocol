@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.1</title>
+<title>JOSHUA PROTOCOL v0.9.2</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,77 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1459Z';
-const STAMP_UTC = '2026-10-17T14:59Z';
-const APP_VERSION = 'v0.9.1';
+const BUILD_ID = 'HUNT-20261017-1555Z';
+const STAMP_UTC = '2026-10-17T15:55Z';
+const APP_VERSION = 'v0.9.2';
+
+// v0.9.2: Deterministic seeded replay URLs.
+// mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
+// perfectly adequate for game RNG where "same seed = same run" is the goal.
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+// Parse the URL for ?seed=<32-bit uint> on load. If present, lock Math.random
+// to the seeded PRNG so every random draw in the game reproduces across runs.
+// We expose JOSHUA_SEED on STATE so the share button can rebuild the URL.
+let JOSHUA_SEED = null;
+function initSeedFromURL() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('seed');
+    if (raw != null && raw.length > 0) {
+      // Accept a decimal, hex (0x…), or short alphanumeric slug. Normalize
+      // to a 32-bit uint via a stable string hash so human-friendly seeds work.
+      let seed;
+      if (/^-?\d+$/.test(raw)) {
+        seed = parseInt(raw, 10) >>> 0;
+      } else if (/^0x[0-9a-fA-F]+$/.test(raw)) {
+        seed = parseInt(raw, 16) >>> 0;
+      } else {
+        // String seed: FNV-1a 32-bit hash — deterministic across devices.
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < raw.length; i++) {
+          h ^= raw.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+        }
+        seed = h;
+      }
+      JOSHUA_SEED = { raw, int: seed };
+      const prng = mulberry32(seed);
+      // Override Math.random for the entire session. Game RNG is now
+      // deterministic given the same seed + action sequence.
+      Math.random = prng;
+      console.log('[JOSHUA] Seeded RNG active: raw="' + raw + '", uint=' + seed);
+    }
+  } catch (e) { /* no window / no URLSearchParams — fine, use default RNG */ }
+}
+initSeedFromURL();
+
+// Build a shareable URL for the current run's seed. If no seed was set at
+// boot, mint a short random one so a share from an unseeded run is still
+// reproducible — but we do NOT reinitialize the live Math.random, because
+// that would desync the run already in progress.
+function buildShareURL(forceNewSeed) {
+  let seedStr;
+  if (JOSHUA_SEED && !forceNewSeed) {
+    seedStr = JOSHUA_SEED.raw;
+  } else {
+    // 6-char base36 — human-copyable, 2^31 search space
+    seedStr = Math.floor(Math.random() * 2176782336).toString(36).padStart(6, '0').slice(0, 6);
+  }
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set('seed', seedStr);
+    u.hash = '';
+    return u.toString();
+  } catch (e) { return 'about:blank?seed=' + seedStr; }
+}
 
 // v0.8: Local save/load namespace keys.
 const LS_SAVE_KEY = 'joshua_protocol.save.v1';
@@ -1383,40 +1451,66 @@ const TECHNIQUES = {
 
   // SPARTA (space)
   'REC-0001': { fw:'sparta', name:'Gather Spacecraft Design Information', tactic:'Reconnaissance',
-    desc:'Adversary collects spec docs, RF parameters, command sets.',
+    desc:'Adversary collects spacecraft spec docs, RF command schedules, command sets, Keplerian elements, software release notes, and ground-station maintenance patterns. In documented aerospace-APT campaigns (Mandiant / CrowdStrike reporting on PRC- and Russia-nexus actors), reconnaissance precedes any ground-segment compromise by months — the adversary needs to know how the system is operated before they can impersonate the operator.',
     novice:'Adversary studies the satellite to plan attacks.',
-    tools:['OSINT','SatNOGS observations'],
-    counters:['Information control','Classified handling'] },
+    tools:['OSINT (manufacturer press releases, launch manifests)','SatNOGS observations','Public FCC license filings','Vendor documentation leaks'],
+    counters:['Information control (classify design, publish only what\'s needed)','Red-team OSINT exposure review','Operator-schedule obfuscation'] },
   'REC-0003': { fw:'sparta', name:'Gather Spacecraft Communications Information', tactic:'Reconnaissance',
-    desc:'Capture uplink/downlink RF for analysis.',
+    desc:'Capture uplink/downlink RF for analysis — frame structure, encoding, authentication tokens (if cleartext), command-counter patterns. The Black Sea 2017+ GPS-spoofing campaigns against merchant vessels and the ViaSat KA-SAT Feb 2022 incident both show that RF reconnaissance of operator traffic is the precursor to successful spoofing or jamming.',
     novice:'Adversary intercepts radio traffic to/from satellite.',
-    tools:['SDR','GNU Radio','SatNOGS'],
-    counters:['Encryption','Frequency hopping'] },
+    tools:['SDR (HackRF, USRP, LimeSDR)','GNU Radio','gr-satellites','SatNOGS network'],
+    counters:['Encryption (TRANSEC + COMSEC)','Frequency hopping','Spread spectrum','Anti-replay command counters','Operator-identity authentication (not just RF location)'] },
   'EX-0014': { fw:'sparta', name:'Spoofing', tactic:'Execution',
-    desc:'Inject crafted commands or telemetry imitating legitimate source.',
+    desc:'Inject crafted commands or telemetry imitating a legitimate source. GPS-spoofing in the Black Sea 2017+ (merchant-vessel receivers reporting wrong positions) and uplink spoofing against SATCOM terminals are the documented archetypes. In LEO imagery contexts, spoofing of tasking commands can misdirect a satellite\'s imaging schedule without ever touching the bus.',
     novice:'Adversary impersonates legitimate ground station.',
-    tools:['Authentication monitoring','RF fingerprinting'],
-    counters:['Strong cryptographic auth','Command counters'] },
+    tools:['Authentication monitoring','RF fingerprinting','Operator-pattern UEBA'],
+    counters:['Strong cryptographic auth with per-command signatures','Monotonic command counters','Dual-source command verification','Ground-station mutual authentication'] },
   'EX-0016.01': { fw:'sparta', name:'Uplink Jamming', tactic:'Execution',
-    desc:'Overpower legitimate uplink with noise.',
+    desc:'Overpower legitimate uplink with noise or deception. Documented at scale during the Russia-Ukraine war (GPS/Starlink/Iridium jamming). Jamming is loud, attributable, and often paired with a quieter spoofing or command-injection operation that fires while operators are reacting to the jamming.',
     novice:'Adversary blasts noise to drown out commands.',
-    tools:['RF spectrum monitoring','Doppler analysis'],
-    counters:['Spread spectrum','Anti-jam waveforms'] },
+    tools:['RF spectrum monitoring (per-site, continuous)','Doppler analysis','Direction-finding'],
+    counters:['Spread spectrum','Anti-jam waveforms','Frequency agility','Multi-site diversity for commanding'] },
   'IA-0005': { fw:'sparta', name:'Rendezvous & Proximity Operations', tactic:'Initial Access',
-    desc:'Hostile rendezvous and proximity ops vehicle approaches asset.',
+    desc:'Hostile rendezvous-and-proximity-ops (RPO) vehicle approaches asset for close-range reconnaissance, inspection, interference, or interception. USSF Space Delta 15 and Secure World Foundation Space Threat Assessment reports document ongoing RPO activity by Russian and Chinese assets against U.S. commercial and government payloads.',
     novice:'Adversary maneuvers their satellite close to yours.',
-    tools:['SSA/SDA networks','Conjunction screening'],
-    counters:['Maneuver capability','Hardened bus'] },
+    tools:['SSA / SDA networks (18 SDS, LeoLabs, Numerica)','Conjunction screening (Celestrak, Space-Track)','Optical and radar imaging of unknown approachers'],
+    counters:['Maneuver capability','Hardened bus (sensor shielding)','RPO-detection sensors','Mission-mode fallbacks for suspected interference'] },
   'IMP-0002': { fw:'sparta', name:'Disruption', tactic:'Impact',
-    desc:'Temporarily prevent satellite from completing mission.',
+    desc:'Temporarily prevent satellite from completing mission — safe-mode entry, imaging schedule corruption, downlink denial. The ViaSat KA-SAT 2022 incident (AcidRain wiper deployed via management plane) is the archetypal large-scale disruption, taking down ~5,800 wind turbines in Germany and tens of thousands of commercial SATCOM modems in Europe.',
     novice:'Satellite forced offline temporarily.',
-    tools:['Telemetry monitoring','Anomaly detection'],
-    counters:['Mode resilience','Safe-mode logic'] },
+    tools:['Telemetry monitoring','Anomaly detection','Mission-mode state tracking'],
+    counters:['Mode resilience','Safe-mode logic that distinguishes attack from fault','Multi-constellation redundancy for critical downlinks','Operator-side recovery runbooks tested annually'] },
   'PER-0001': { fw:'sparta', name:'Memory Compromise', tactic:'Persistence',
-    desc:'Modify flight software in spacecraft memory.',
+    desc:'Modify flight software (FSW) in spacecraft memory — bootloader, FSW application image, or configuration tables. The highest-leverage persistence in orbit: once FSW is modified, no ground-side containment removes it; the adversary waits for a future trigger (specific uplink pattern, orbital event, timed activation) to disable or redirect the asset. Mandiant and CrowdStrike have reported state-nexus actors staging capability for FSW compromise against commercial and defense payloads.',
     novice:'Adversary plants malicious code onboard satellite.',
-    tools:['Software attestation','Memory checksums'],
-    counters:['D3-EI: Executable Integrity','Secure boot'] },
+    tools:['Software attestation (per-boot cryptographic measurement)','Memory checksums','Secure-boot chain verification','Ground-side build artifact signing'],
+    counters:['D3-EI: Executable Integrity','Secure boot with hardware root of trust','Signed FSW uploads with per-image counter','Dual-authority FSW upload approval'] },
+  // v0.9.2: additional SPARTA entries needed for KINGFISHER depth chain
+  'REC-0005': { fw:'sparta', name:'Eavesdropping', tactic:'Reconnaissance',
+    desc:'Passive capture of mission data downlink or telemetry downlink — imagery, SIGINT, bus-state telemetry, operator voice loops over SATCOM. Non-intrusive; detectable only by signal-strength or quality-of-service inference. Industry baseline assumption on sensitive orbits: assume adversary SIGINT coverage of all unencrypted downlinks.',
+    novice:'Adversary silently listens to data coming down from satellite.',
+    tools:['Signal-strength and QoS monitoring','Downlink-footprint modeling','Mission-data-encryption posture review'],
+    counters:['Encrypt mission downlinks end-to-end','Multi-site reception + XOR schemes','Spot-beam over wide-beam where mission allows'] },
+  'EX-0010': { fw:'sparta', name:'Malicious Code', tactic:'Execution',
+    desc:'Execute attacker-supplied code on spacecraft or ground segment — either via T1190 edge-exploit of ground infra, via supply-chain injection into an FSW build, or via a crafted uplink exploiting a bus protocol parser. Public ViaSat KA-SAT 2022 incident is the archetype on the ground-segment side (AcidRain wiper deployed via compromised management plane). On-orbit malicious-code deployment is rarer in public reporting but is the adversary objective.',
+    novice:'Adversary runs their own code on a system in the mission chain.',
+    tools:['FSW build-artifact signing','Ground-segment EDR','RF-side command-schema validation'],
+    counters:['Signed FSW uploads','Supply-chain assurance (CMMC, SBOMs)','Ground-segment EDR with aerospace-aware rules'] },
+  'EX-0012': { fw:'sparta', name:'Modify On-Board Values', tactic:'Execution',
+    desc:'Modify configuration or telemetry values stored in spacecraft memory — attitude-control gains, imaging parameters, thermal-control thresholds, mission-timeline tables. Lower-leverage than full FSW compromise, but harder to detect (no new code loaded; just numeric changes), and the operational impact can match: a thermal threshold shift can cause thermal shutdown within an orbit, an attitude-gain change can degrade pointing without ever producing an anomaly flag.',
+    novice:'Adversary changes a setting on the satellite that quietly breaks it.',
+    tools:['Config-value baseline + alert on drift','Dual-authority configuration upload','Routine health checks against known-good values'],
+    counters:['Configuration integrity monitoring','Dual-sign on parameter uploads','Health-check comparison against FSW gold image'] },
+  'IMP-0005': { fw:'sparta', name:'Denial', tactic:'Impact',
+    desc:'Full denial of mission — the asset is unrecoverable or recovery is deferred beyond the operational window. Permanent memory corruption, uncommandable attitude, battery damage from thermal cycling. Documented in effect by the KA-SAT 2022 wiper (modems bricked; replacement was the only remediation).',
+    novice:'Satellite is unusable; needs replacement or extended recovery.',
+    tools:['Mode-recovery runbooks','Replacement-asset inventory','Operator-side insurance posture'],
+    counters:['Redundant payloads','Pre-staged replacement capacity','Automated safe-mode with hardware watchdog recovery'] },
+  'LM-0001': { fw:'sparta', name:'Lateral Movement', tactic:'Lateral Movement (SPARTA)',
+    desc:'Movement from one mission-segment asset to another — ground station to MCC, MCC to spacecraft (via uplink), spacecraft to ground via downlink injection, or (in constellation operations) spacecraft-to-spacecraft via inter-satellite links. The multi-asset constellation is particularly exposed: once a single bus is compromised, lateral spread to adjacent nodes via ISL can be rapid.',
+    novice:'Adversary moves from one asset to another in the mission.',
+    tools:['Per-asset network segmentation','ISL authentication','Ground-segment micro-segmentation'],
+    counters:['Zero-trust between mission segments','ISL cryptographic authentication','Operator-side detection of unexpected ISL traffic'] },
 
   // ATLAS (AI/ML)
   'AML.T0020': { fw:'atlas', name:'Poison Training Data', tactic:'Resource Development',
@@ -1676,17 +1770,53 @@ const THREAT_ACTORS = {
     tagline: 'Aerospace APT',
     silhouette: 'eye',
     color: '#60a0ff',
-    summary: 'Long-dwell nation-state actor with aerospace targeting history. Patient, stealthy, adaptive. Will pivot when pushed back. Known for SPARTA-tactic operations.',
-    pattern: 'Tradecraft consistent with multi-year aerospace intrusion campaigns — RF reconnaissance, command spoofing, attempts at flight software persistence.',
+    summary: 'Long-dwell state-nexus actor with aerospace targeting history. Patient, stealthy, adaptive. Operates across both ground segment (IT exploitation, management-plane compromise per ViaSat KA-SAT Feb 2022 archetype) and RF (reconnaissance, spoofing, jamming per Black Sea 2017+ GPS spoofing and ongoing Ukraine theater reporting). Will pivot to an adjacent node when pushed back. Objective is typically persistence through FSW compromise or operator-identity theft, not fast disruption.',
+    pattern: 'Tradecraft consistent with multi-year aerospace intrusion campaigns documented by CSIS Space Threat Assessment, Secure World Foundation Global Counterspace Capabilities, Mandiant M-Trends aerospace-sector reporting, and USSF Space Delta 15 briefings. Phased: RF + OSINT reconnaissance over months, ground-segment IT exploitation of an operator or vendor, lateral into mission-control, uplink staging, and finally either spoofing/command-injection OR flight-software persistence.',
     adaptive: true,                // pivots to adjacent node when DISRUPT-ed
     spawnRateMod: 0.8,             // fewer simultaneous threats
     detectionWindow: 2.0,          // recon hidden longer
     cascadeChance: 0.2,
-    techniqueAffinity: ['REC-0001','REC-0003','EX-0014','EX-0016.01','IA-0005','PER-0001','IMP-0002','T1190','T1078','AML.T0043','AML.T0040'],
+    // v0.9.2: expanded with lateral movement + eavesdropping + on-board modify
+    techniqueAffinity: ['REC-0001','REC-0003','REC-0005','EX-0014','EX-0010','EX-0012','EX-0016.01','IA-0005','PER-0001','IMP-0002','IMP-0005','LM-0001','T1190','T1078','T1133','T1555.003','AML.T0043','AML.T0040'],
     impactBias: 'PER-0001',
-    biasInitialAccess: ['REC-0001','REC-0003','T1190'],
-    biasExecution: ['EX-0014','EX-0016.01','PER-0001'],
-    biasImpact: ['IMP-0002','PER-0001'],
+    biasInitialAccess: ['REC-0001','REC-0003','REC-0005','T1190','T1133'],
+    biasExecution: ['EX-0014','EX-0016.01','EX-0010','EX-0012','PER-0001'],
+    biasImpact: ['IMP-0002','PER-0001','IMP-0005'],
+    // v0.9.2: stage-aware aerospace chain per SPARTA + public incident reporting.
+    // Each stage names the SPARTA technique(s), real tools/vectors the stage uses,
+    // and a documented incident the stage echoes.
+    aerospaceChain: [
+      { stage:'Reconnaissance (RF + OSINT)', ttp:'REC-0001, REC-0003, REC-0005',
+        tools:['SDR capture (HackRF, USRP) of operator uplink/downlink','gr-satellites, SatNOGS','FCC license filings','Vendor documentation OSINT'],
+        incident:'Months of pre-attack RF survey precedes nearly every documented aerospace incident. Black Sea 2017+ GPS spoofing against merchant vessels is the clearest open-source signature pattern.' },
+      { stage:'Ground-Segment Initial Access', ttp:'T1190, T1133',
+        tools:['Edge-appliance exploit (VPN, Citrix, Fortinet, Ivanti)','Infostealer-sourced VPN credentials','Supply-chain / vendor-contractor access (T1133)'],
+        incident:'ViaSat KA-SAT Feb 2022: adversary accessed KA-SAT management plane through a VPN-adjacent vector, then deployed AcidRain wiper to ~tens of thousands of modems across Europe.' },
+      { stage:'Lateral into Mission-Control', ttp:'LM-0001, T1078',
+        tools:['Credentialed lateral from ground-ops IT to MCC segment','Jump-host abuse','Dual-authority bypass via social engineering'],
+        incident:'Mandiant M-Trends aerospace-sector cases 2022-2025 document ground-ops → MCC lateral movement as the pivot that converts an IT compromise into a mission-threat compromise.' },
+      { stage:'Operator-Identity Theft / Credential Access', ttp:'T1555.003, T1078',
+        tools:['Infostealer-sourced operator browser creds (Lumma, RedLine)','PAM session hijack','Legitimate console abuse during operator shift'],
+        incident:'The 2026 infostealer market produced valid operator credentials for sale against identifiable aerospace targets per Flare / Hudson Rock market reporting (sector-level, not org-level attribution).' },
+      { stage:'Uplink Staging', ttp:'EX-0014 (Spoofing), EX-0016.01 (Jamming)',
+        tools:['RF transmitter in asset footprint','Compromised ground-station transmitter','Software-defined uplink stack built on captured command schema'],
+        incident:'Russia-Ukraine theater GPS/Starlink/Iridium jamming (2022-2025) and persistent GPS-spoofing campaigns in Eastern Mediterranean + Baltic + Black Sea document uplink-side execution capability at scale.' },
+      { stage:'On-Orbit Payload Delivery', ttp:'EX-0010 (Malicious Code), EX-0012 (Modify On-Board Values), PER-0001 (FSW Compromise)',
+        tools:['Crafted FSW upload (requires either stolen signing keys or an unsigned upload path)','Parameter-table modification (lower bar — no new code)','Timed-trigger logic patch'],
+        incident:'Public reporting is thin on confirmed FSW compromises (the capability is highly classified), but CSIS Space Threat Assessment 2024-2026 reports warn of pre-positioned FSW payloads as the strategic concern.' },
+      { stage:'Mission Impact', ttp:'IMP-0002 (Disruption) / IMP-0005 (Denial)',
+        tools:['Timed FSW trigger','Attitude-control misalignment','Battery damage via thermal-threshold shift','Imaging-schedule corruption'],
+        incident:'KA-SAT: 2 months of ground recovery before full service restoration; ~5,800 wind turbines in Germany lost remote-management for months.' },
+    ],
+    source: 'Composite of CSIS Space Threat Assessment series, Secure World Foundation Global Counterspace Capabilities annual, USSF Space Delta 15 briefings, Mandiant M-Trends aerospace-sector, CISA / NSA space-sector advisories, and the public ViaSat KA-SAT Feb 2022 incident analysis.',
+    sources: [
+      'CISA Alert: Russian Military Cyber Actors (ViaSat KA-SAT, Feb 2022)',
+      'CSIS Space Threat Assessment (annual series)',
+      'Secure World Foundation: Global Counterspace Capabilities (annual series)',
+      'USSF Space Delta 15 public threat briefings',
+      'Mandiant M-Trends aerospace-sector incident analyses (2022-2026)',
+      'Public reporting on Black Sea / Eastern Mediterranean GPS-spoofing campaigns (2017-2025)',
+    ],
   },
   // v0.9: IRONHAZE reworked around 2024-2026 hacktivist reality — DDoS-primary
   // tradecraft with botnet-driven volumetric floods (NoName057(16) DDOSIA pattern,
@@ -2177,7 +2307,8 @@ const MISSIONS = {
     maxRounds: 12,
     loseThreshold: 3,
     // v0.9: added HOLLOWKEY cred-theft + WARDEN broker-recon TTPs
-    threatMix: ['REC-0001','REC-0003','EX-0014','EX-0016.01','IA-0005','PER-0001','IMP-0002','T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1021.001','T1087.001','AML.T0043','AML.T0040'],
+    // v0.9.2: added KINGFISHER aerospace-chain SPARTA TTPs (REC-0005, EX-0010, EX-0012, IMP-0005, LM-0001)
+    threatMix: ['REC-0001','REC-0003','REC-0005','EX-0014','EX-0010','EX-0012','EX-0016.01','IA-0005','PER-0001','IMP-0002','IMP-0005','LM-0001','T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1021.001','T1087.001','AML.T0043','AML.T0040'],
     impactTechs: ['IMP-0002','PER-0001'],
     validActors: ['KINGFISHER','GHOSTWIRE','HOLLOWKEY','WARDEN'],
     defaultActor: 'KINGFISHER',
@@ -4195,6 +4326,8 @@ function generateCFINote(rubric) {
       notes.push(`Faced ${A.name} — compromised credentials, not a real insider. Per Ponemon 2025, this is ~20% of what organizations label "insider threats." Response differs: rotate credentials, kill sessions, enforce device-bound tokens — do not treat the account owner as hostile.`);
     } else if (A.archetype === 'hacktivist' && A.availabilityFocused) {
       notes.push(`Faced ${A.name} — DDoS-primary hacktivist in the NoName057(16) / CyberAv3ngers mold. Availability was the target, not persistence. Mitigation lives at the edge (CDN scrubbing, rate limiting, BCP 38) more than at the endpoint.`);
+    } else if (A.archetype === 'nation_state' && A.aerospaceChain) {
+      notes.push(`Faced ${A.name} — aerospace APT in the composite ViaSat-KA-SAT (ground-segment) + Black-Sea-GPS-spoofing (RF) mold per CSIS Space Threat Assessment and USSF Space Delta 15 reporting. Phased kill chain is Recon(RF+OSINT) → Ground-IT access → MCC lateral → operator-identity theft → uplink staging → on-orbit payload. The catch window is before uplink staging; past that, in-orbit effects are hard to reverse. Treat ground-segment IT as mission-critical, not corporate.`);
     }
   }
 
@@ -4964,6 +5097,7 @@ function showDebrief(win, reason) {
     <div class="debrief-header" style="border-bottom:2px solid ${color};">
       <div style="color:${color};font-size:14px;font-weight:bold;letter-spacing:0.15em;">${title}</div>
       <div style="color:var(--muted);font-size:10px;margin-top:2px;">${STATE.mission.name} · Round ${STATE.round}/${STATE.mission.maxRounds} · ${reason}</div>
+      ${JOSHUA_SEED ? `<div style="color:var(--cyan-dim);font-size:9px;margin-top:2px;font-family:monospace;">seed: ${JOSHUA_SEED.raw} · deterministic replay</div>` : ''}
     </div>
     <div class="debrief-tabs">
       <button class="debrief-tab active" data-dtab="rubric">RUBRIC</button>
@@ -4973,6 +5107,7 @@ function showDebrief(win, reason) {
     <div class="debrief-body" id="debrief-body"></div>
     <div class="debrief-footer">
       <button class="action-btn" id="db-mission-select" style="flex:1;">◀ MISSION SELECT</button>
+      <button class="action-btn" id="db-share" style="flex:0 0 auto;" title="Copy a shareable replay URL (?seed=…) to clipboard — same seed reproduces this run.">SHARE</button>
       <button class="action-btn" id="db-export" style="flex:0 0 auto;" title="Export case log as JSON — dfir-trainers compatible">EXPORT</button>
       <button class="action-btn primary" id="db-retry" style="flex:1;">▶ RETRY</button>
     </div>
@@ -5041,6 +5176,31 @@ function showDebrief(win, reason) {
   if (exportBtn) {
     exportBtn.addEventListener('click', () => exportCaseLog(rubric, cfiNote, win, reason));
   }
+  // v0.9.2: SHARE — copy a seeded replay URL to the clipboard. If the current
+  // run was not seeded at boot, mint a short seed from current Math.random so
+  // the share is still reproducible (noting we don't retro-reseed this run).
+  const shareBtn = overlay.querySelector('#db-share');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+      const forceNew = !JOSHUA_SEED;  // only mint if no seed is live
+      const url = buildShareURL(forceNew);
+      const label = JOSHUA_SEED ? ('reproduces this run — seed: ' + JOSHUA_SEED.raw) : 'opens a new seeded run (minted)';
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(
+            () => { shareBtn.textContent = '✓ COPIED'; setTimeout(() => shareBtn.textContent = 'SHARE', 1800); },
+            () => { prompt('Copy this replay URL:\n(' + label + ')', url); }
+          );
+          copied = true;
+        }
+      } catch (e) { /* fall through */ }
+      if (!copied) {
+        // Fallback: prompt the user with the URL so they can copy manually.
+        try { prompt('Copy this replay URL:\n(' + label + ')', url); } catch (e) {}
+      }
+    });
+  }
 }
 
 // v0.8: Case-log export in a dfir-trainers-compatible shape. JSON blob
@@ -5076,6 +5236,8 @@ function exportCaseLog(rubric, cfiNote, win, reason) {
       speed: STATE.speed,
       action_budget: STATE.actionBudget,
     },
+    // v0.9.2: seed capture — present when the run was launched via ?seed=…
+    seed: JOSHUA_SEED ? { raw: JOSHUA_SEED.raw, int: JOSHUA_SEED.int } : null,
     final_round: STATE.round,
     c2: {
       node: STATE.c2Node,
@@ -5743,6 +5905,33 @@ function renderCodexTab(el) {
     </div>
     <div class="codex-counters" style="margin-top:4px;">▸ Hunt artifacts: physical cellular-radio inventory of OT equipment; carrier-provided SIM-activity reports for all enterprise-contracted SIMs; RF survey around crane housings; vendor-contract audit for undocumented radios. Enterprise NetFlow will not see this traffic — carrier-level visibility is the only path.</div>
     <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: U.S. House Select Committee on the CCP + House Homeland Security Committee joint investigation report on ZPMC STS cranes (Feb 2024); USCG MARSEC Directive 105-6; Executive Order 14116. In-game: TIDEMARK models this behavior via cellularBeaconMode.</div>
+  </div>`;
+
+  // v0.9.2: Aerospace APT codex entry
+  html += `<div class="codex-entry" style="border-left:2px solid #60a0ff;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#60a0ff;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ AEROSPACE APT PATTERN (SPARTA + public reporting composite)</span></div>
+    <div class="codex-desc" style="margin-top:3px;">Multi-year state-nexus intrusion pattern against space-sector operators and their ground segments. Phased: months of RF + OSINT reconnaissance, ground-segment IT exploitation of operator or vendor, lateral into MCC, uplink staging via spoofed command schema, and (as objective) flight-software persistence or operator-identity theft. The ViaSat KA-SAT Feb 2022 incident is the archetypal large-scale ground-segment case; the Black Sea GPS-spoofing campaigns (2017-ongoing) are the archetypal RF-side case; FSW compromise is a strategic concern per CSIS and USSF reporting but less documented in the open literature.</div>
+    <div class="codex-tools" style="margin-top:6px;">
+      <div style="color:var(--amber);font-weight:bold;font-size:10px;margin-bottom:3px;">▸ STAGE-BY-STAGE</div>
+      <div style="font-size:10px;line-height:1.6;">
+      <b style="color:var(--cyan);">RECON (RF + OSINT)</b> — <span style="color:var(--cyan-dim);">REC-0001 + REC-0003 + REC-0005</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ SDR capture (HackRF, USRP) of operator uplink/downlink + gr-satellites, SatNOGS + FCC license filings + vendor doc OSINT. Black Sea 2017+ GPS spoofing was preceded by exactly this phase.</span><br>
+      <b style="color:var(--cyan);">GROUND-SEGMENT INITIAL ACCESS</b> — <span style="color:var(--cyan-dim);">T1190 edge-exploit + T1133 valid VPN creds</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ ViaSat KA-SAT Feb 2022: VPN-adjacent vector → management plane → AcidRain wiper to tens of thousands of modems across Europe.</span><br>
+      <b style="color:var(--cyan);">LATERAL INTO MCC</b> — <span style="color:var(--cyan-dim);">LM-0001 + T1078 valid accounts</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ ground-ops IT → MCC segment pivot. Mandiant M-Trends aerospace cases document this consistently as the step that converts IT compromise into mission-threat compromise.</span><br>
+      <b style="color:var(--cyan);">OPERATOR-IDENTITY THEFT</b> — <span style="color:var(--cyan-dim);">T1555.003 (infostealer) + T1078</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ Lumma / RedLine / Vidar sourced browser credentials for operator consoles. The 2026 infostealer market produced sector-identifiable listings per Flare + Hudson Rock reporting.</span><br>
+      <b style="color:var(--cyan);">UPLINK STAGING</b> — <span style="color:var(--cyan-dim);">EX-0014 Spoofing / EX-0016.01 Uplink Jamming</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ RF transmitter in asset footprint or compromised ground-station transmitter + software-defined uplink built on captured schema. Documented at theater scale: Russia-Ukraine war GPS/Starlink/Iridium jamming + persistent Eastern Mediterranean / Baltic spoofing.</span><br>
+      <b style="color:var(--cyan);">ON-ORBIT DELIVERY</b> — <span style="color:var(--cyan-dim);">EX-0010 Malicious Code / EX-0012 Modify On-Board Values / PER-0001 Memory Compromise</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ Crafted FSW upload (requires signing-key compromise or unsigned path) OR parameter-table modification (lower bar — no new code). The strategic concern per CSIS Space Threat Assessment 2024-2026 is pre-positioned FSW payloads.</span><br>
+      <b style="color:var(--cyan);">MISSION IMPACT</b> — <span style="color:var(--cyan-dim);">IMP-0002 Disruption / IMP-0005 Denial</span><br>
+      <span style="color:var(--muted);font-size:9px;">↳ Timed trigger, attitude misalignment, thermal-threshold shift, imaging-schedule corruption. KA-SAT required ~2 months of ground recovery; ~5,800 German wind turbines lost remote management for months.</span>
+      </div>
+    </div>
+    <div class="codex-counters" style="margin-top:6px;">▸ Hunt artifacts: dual-authority FSW upload approval; monotonic command-counter audit; config-value drift alert; operator-shift UEBA; carrier-side signal-strength monitoring of your own downlinks; routine conjunction + RPO screening. Treat ground-segment IT as mission-critical, not corporate-IT.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Sources: CISA Alert on ViaSat KA-SAT (Feb 2022); CSIS Space Threat Assessment (annual); Secure World Foundation Global Counterspace Capabilities (annual); USSF Space Delta 15 briefings; Mandiant M-Trends aerospace-sector; public GPS-spoofing campaign reporting (Black Sea / Eastern Med 2017-2025). In-game: KINGFISHER actor archetype models this behavior.</div>
   </div>`;
 
   // Section 1: Active this run
@@ -7287,6 +7476,7 @@ function showThreatActorIntro(onDone) {
       ${A.cellularBeaconMode ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ OUT-OF-BAND C2 — vendor-equipment cellular modem bypasses your IT firewall entirely. Traffic is invisible to NetFlow. Carrier-level SIM visibility is the only enterprise detection path.</div>' : ''}
       ${A.lolBins ? '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--grid-line);"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ LIVING-OFF-THE-LAND TOOLING</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;font-family:monospace;">' + A.lolBins.join(' · ') + '</div></div>' : ''}
       ${A.lolChain ? '<div style="margin-top:6px;"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ STAGE CHAIN (per advisory)</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;">' + A.lolChain.map(s => '<span style="color:var(--amber)">' + s.stage + '</span>: <span style="font-family:monospace;color:var(--cyan-dim);">' + s.tools.slice(0,3).join(', ') + (s.tools.length > 3 ? '…' : '') + '</span>').join('<br>') + '</div><div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Full command fingerprints in CODEX ▸ Volt Typhoon pattern.</div></div>' : ''}
+      ${A.aerospaceChain ? '<div style="margin-top:6px;"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ AEROSPACE KILL CHAIN (SPARTA + public reporting)</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;">' + A.aerospaceChain.map(s => '<span style="color:var(--amber)">' + s.stage + '</span> <span style="color:var(--cyan-dim);font-family:monospace;">[' + s.ttp + ']</span>').join('<br>') + '</div><div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Full tools + documented incidents in CODEX ▸ Aerospace APT pattern.</div></div>' : ''}
       ${A.sources && A.sources.length ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model sources: ' + A.sources.join(' · ') + '</div>' : (A.source ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model source: ' + A.source + '</div>' : '')}
       <button class="action-btn primary" id="actor-intro-ack" style="width:100%;margin-top:14px;">▶ ACKNOWLEDGE</button>
     </div>
