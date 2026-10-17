@@ -2,7 +2,8 @@
 
 A single-file HTML5 tactical cybersecurity strategy game. Mobile-playable. No install, no backend, no account.
 
-**Play:** open `index.html` in any modern browser.
+**▶ Play in your browser: [grumby42.github.io/joshua-protocol/](https://grumby42.github.io/joshua-protocol/)**
+Or open `index.html` locally in any modern browser.
 
 > *"A strange game. The only winning move is not to play."*
 
@@ -25,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.7)
+## What's in the box (v0.8)
 
 ### Three missions, each grounded in real incident patterns
 
@@ -99,6 +100,14 @@ New in v0.7, inspired by [grumby42/dfir-trainers](https://github.com/grumby42/df
 - **BUILD stamping** — every build carries `BUILD_ID = HUNT-YYYYMMDD-HHMMZ` + `STAMP_UTC` surfaced in-boot. Pattern borrowed from DFIR Trainers.
 - **[DETECTIONS.md](DETECTIONS.md)** companion — one starter detection *play* per threat actor archetype, authored to the seven-field schema from Bollinger/Enright/Valites' *Crafting the InfoSec Playbook* and Murdoch's *Blue Team Handbook*. Teaches how to author detections, not what rules to paste.
 
+### v0.8: Ship-ready polish
+
+- **First-launch onboarding** — one-time card explaining the game, agents, archetypes, and letting you calibrate difficulty + pacing. Settings persist on your device.
+- **Save & resume** — the game snapshots your run at every round boundary and on tab close. Mission select shows a RESUME banner when a save exists. Clear it with DISCARD.
+- **Preferences persistence** — difficulty, verbosity, and pacing stick between sessions.
+- **Case-log JSON export** — EXPORT button on the debrief downloads a `joshua-protocol.case-log.v1` JSON file compatible with [grumby42/dfir-trainers](https://github.com/grumby42/dfir-trainers) case-log schema. Share your runs; compare notes with peers.
+- **Trends-tab NaN safety** — defensive normalization on round-metric fields so a missing field can't poison the sparkline rendering with literal "NaN" strings.
+
 ---
 
 ## Framework references and provenance
@@ -131,11 +140,9 @@ Every actor and codex entry with a real-world attribution has an in-game source 
 
 ## Install
 
-Download `index.html` and open it in a browser.
+Easiest: **[play it in your browser](https://grumby42.github.io/joshua-protocol/)** — nothing to install.
 
-That's it.
-
-To play on a phone: email it to yourself, open with your mobile browser, or use a USB cable + a file manager. Chrome on Android (`file://` or `content://` URLs) works. Portrait or landscape both supported — the UI reflows.
+Offline / mobile: download `index.html` from this repo and open it in any modern browser. Email it to yourself, open with your mobile browser, or sideload via USB. Portrait or landscape both supported — the UI reflows.
 
 Older builds are archived in `builds/` for reference.
 
@@ -181,4 +188,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.7** (October 2026) · BUILD `HUNT-20261017-1121Z`
+Current version: **v0.8** (October 2026) · BUILD `HUNT-20261017-1221Z`

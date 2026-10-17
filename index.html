@@ -999,11 +999,114 @@
 <script>
 'use strict';
 
-// v0.7: Build stamping — borrowed from DFIR Trainers convention. Surfaced
+// v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1121Z';
-const STAMP_UTC = '2026-10-17T11:21Z';
-const APP_VERSION = 'v0.7';
+const BUILD_ID = 'HUNT-20261017-1221Z';
+const STAMP_UTC = '2026-10-17T12:21Z';
+const APP_VERSION = 'v0.8';
+
+// v0.8: Local save/load namespace keys.
+const LS_SAVE_KEY = 'joshua_protocol.save.v1';
+const LS_PREFS_KEY = 'joshua_protocol.prefs.v1';
+const LS_ONBOARDING_KEY = 'joshua_protocol.onboarded.v1';
+
+// v0.8: Persistence — snapshot & restore the live run. Keeps only serializable
+// state. Non-serializable things (DOM, canvas) are reconstructed on load. We
+// save on round transition and on page unload. Loading reseats the player at
+// the start of INTEL for the saved round.
+function saveRun() {
+  try {
+    if (!STATE.mission || STATE.phase === 'BOOT' || STATE.phase === 'WIN' || STATE.phase === 'LOSE') return;
+    const snapshot = {
+      v: 1,
+      build: BUILD_ID,
+      savedAt: new Date().toISOString(),
+      mission: STATE.mission.id,
+      round: STATE.round,
+      difficulty: STATE.difficulty,
+      verbosity: STATE.verbosity,
+      speed: STATE.speed,
+      activeActorId: STATE.activeActor && STATE.activeActor.id,
+      c2Node: STATE.c2Node,
+      c2Revealed: STATE.c2Revealed,
+      c2Severed: STATE.c2Severed,
+      actorRevealed: STATE.actorRevealed,
+      actorAttribution: STATE.actorAttribution,
+      observedTTPs: STATE.observedTTPs || {},
+      iocs: STATE.iocs || [],
+      pivotEvents: STATE.pivotEvents || [],
+      combosTriggered: STATE.combosTriggered || [],
+      dwellRoundsAccumulated: STATE.dwellRoundsAccumulated || 0,
+      reasoningShown: STATE.reasoningShown || {},
+      achGatePassed: !!STATE.achGatePassed,
+      metrics: STATE.metrics || {rounds:[],actions:[],threatSpawns:[]},
+      nodeStates: (STATE.nodes || []).map(n => ({
+        id: n.id,
+        state: n.state,
+        resilience: n.resilience || 0,
+        operatorState: n.operatorState || null,
+      })),
+      threats: (STATE.threats || []).map(t => ({
+        target: t.target,
+        path: t.path,
+        phase: t.phase,
+        techniqueId: t.techniqueId,
+        revealed: !!t.revealed,
+        history: t.history,
+        spawnRound: t.spawnRound,
+        pivotedFrom: t.pivotedFrom || null,
+      })),
+    };
+    localStorage.setItem(LS_SAVE_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    // Save is best-effort; private browsing, quota, etc. — not a fail.
+  }
+}
+
+function loadSavedRun() {
+  try {
+    const raw = localStorage.getItem(LS_SAVE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1) return null;
+    return s;
+  } catch (e) { return null; }
+}
+
+function clearSavedRun() {
+  try { localStorage.removeItem(LS_SAVE_KEY); } catch (e) {}
+}
+
+function hasSavedRun() {
+  return !!loadSavedRun();
+}
+
+// v0.8: Preferences persistence (verbosity, difficulty, speed)
+function savePrefs() {
+  try {
+    localStorage.setItem(LS_PREFS_KEY, JSON.stringify({
+      verbosity: STATE.verbosity,
+      difficulty: STATE.difficulty,
+      speed: STATE.speed,
+    }));
+  } catch (e) {}
+}
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(LS_PREFS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) { return null; }
+}
+
+// v0.8: One-time first-launch flag
+function hasOnboarded() {
+  try { return !!localStorage.getItem(LS_ONBOARDING_KEY); } catch (e) { return false; }
+}
+function markOnboarded() {
+  try { localStorage.setItem(LS_ONBOARDING_KEY, '1'); } catch (e) {}
+}
 
 // v0.7: Framework meters model — the live state of four reasoning frameworks
 // as the player works. All four are widely-published analyst frameworks:
@@ -4486,6 +4589,8 @@ function advanceRound() {
   STATE.round++;
   STATE.killBoxActive = false;  // v0.4: combo effect expires at round end
   updateStatusBar();
+  // v0.8: snapshot the run at each round boundary so a tab close doesn't lose progress
+  if (!STATE.demoMode) saveRun();
   startIntelPhase();
 }
 
@@ -4501,6 +4606,7 @@ function triggerWin(reason) {
   if (STATE.metrics.rounds.length === 0 || STATE.metrics.rounds[STATE.metrics.rounds.length-1].round !== STATE.round) {
     captureRoundMetrics();
   }
+  clearSavedRun();  // v0.8: completed run — nothing to resume
   // v0.5: demo outro before replay/debrief
   const finishWin = () => {
     if (STATE.resolvedActions.length > 0) {
@@ -4530,6 +4636,7 @@ function triggerLose(reason) {
   if (STATE.metrics.rounds.length === 0 || STATE.metrics.rounds[STATE.metrics.rounds.length-1].round !== STATE.round) {
     captureRoundMetrics();
   }
+  clearSavedRun();  // v0.8: completed run — nothing to resume
   if (STATE.resolvedActions.length > 0) {
     showKillChainReplay(() => showDebrief(false, reason));
   } else {
@@ -4569,6 +4676,7 @@ function showDebrief(win, reason) {
     <div class="debrief-body" id="debrief-body"></div>
     <div class="debrief-footer">
       <button class="action-btn" id="db-mission-select" style="flex:1;">◀ MISSION SELECT</button>
+      <button class="action-btn" id="db-export" style="flex:0 0 auto;" title="Export case log as JSON — dfir-trainers compatible">EXPORT</button>
       <button class="action-btn primary" id="db-retry" style="flex:1;">▶ RETRY</button>
     </div>
   `;
@@ -4632,6 +4740,77 @@ function showDebrief(win, reason) {
   });
   overlay.querySelector('#db-retry').addEventListener('click', () => location.reload());
   overlay.querySelector('#db-mission-select').addEventListener('click', () => location.reload());
+  const exportBtn = overlay.querySelector('#db-export');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => exportCaseLog(rubric, cfiNote, win, reason));
+  }
+}
+
+// v0.8: Case-log export in a dfir-trainers-compatible shape. JSON blob
+// downloaded to the user's device for sharing / comparing with peers. Includes:
+// build stamp, mission/actor/difficulty, rubric scores, per-round metrics,
+// per-action log, combos triggered, pivots, IOCs. Nothing sensitive — this
+// is a game record, no personal data.
+function exportCaseLog(rubric, cfiNote, win, reason) {
+  const now = new Date();
+  const payload = {
+    schema: 'joshua-protocol.case-log.v1',
+    build: BUILD_ID,
+    stamp_utc: STAMP_UTC,
+    exported_at: now.toISOString(),
+    outcome: win ? 'WIN' : 'LOSE',
+    outcome_reason: reason,
+    mission: {
+      id: STATE.mission && STATE.mission.id,
+      name: STATE.mission && STATE.mission.name,
+      domain: STATE.mission && STATE.mission.domain,
+      max_rounds: STATE.mission && STATE.mission.maxRounds,
+      lose_threshold: STATE.mission && STATE.mission.loseThreshold,
+    },
+    adversary: {
+      id: STATE.activeActor && STATE.activeActor.id,
+      archetype: STATE.activeActor && STATE.activeActor.archetype,
+      attribution_pct: STATE.actorAttribution || 0,
+      source: STATE.activeActor && STATE.activeActor.source || null,
+    },
+    settings: {
+      difficulty: STATE.difficulty,
+      verbosity: STATE.verbosity,
+      speed: STATE.speed,
+      action_budget: STATE.actionBudget,
+    },
+    final_round: STATE.round,
+    c2: {
+      node: STATE.c2Node,
+      revealed_round: (STATE.metrics && STATE.metrics.c2RevealedRound) || null,
+      severed_round: (STATE.metrics && STATE.metrics.c2SeveredRound) || null,
+    },
+    rubric,
+    cfi_note: cfiNote,
+    rounds: (STATE.metrics && STATE.metrics.rounds) || [],
+    actions: (STATE.metrics && STATE.metrics.actions) || [],
+    threat_spawns: (STATE.metrics && STATE.metrics.threatSpawns) || [],
+    combos_triggered: STATE.combosTriggered || [],
+    pivot_events: STATE.pivotEvents || [],
+    observed_ttps: STATE.observedTTPs || {},
+    iocs: STATE.iocs || [],
+    diamond: {
+      adversary: !!STATE.actorRevealed,
+      capability: Object.keys(STATE.observedTTPs || {}).length > 0,
+      infrastructure: !!STATE.c2Revealed,
+      victim: !!STATE.mission,
+    },
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = now.toISOString().replace(/[:.]/g,'-').replace('T','_').slice(0,19);
+  a.href = url;
+  a.download = `joshua-protocol-caselog-${(STATE.mission && STATE.mission.id) || 'mission'}-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
 }
 
 function renderRubricTab(rubric, cfiNote, win) {
@@ -4683,15 +4862,28 @@ function renderTrendsTab() {
   }
   function sparkline(values, max, color) {
     const blocks = '▁▂▃▄▅▆▇█';
+    const safeMax = (typeof max === 'number' && isFinite(max) && max > 0) ? max : 1;
     return values.map(v => {
-      const idx = Math.min(blocks.length - 1, Math.round((v / Math.max(1, max)) * (blocks.length - 1)));
+      // v0.8: NaN/undefined safety — a missing round-metric field was producing
+      // literal "NaN" strings in the trends panel. Coerce to a valid rung.
+      const safeV = (typeof v === 'number' && isFinite(v)) ? Math.max(0, v) : 0;
+      const idx = Math.min(blocks.length - 1, Math.max(0, Math.round((safeV / safeMax) * (blocks.length - 1))));
       return `<span style="color:${color};">${blocks[idx]}</span>`;
     }).join('');
   }
-  const compromiseSeries = m.rounds.map(r => r.compromisedTotal);
-  const wastedSeries = m.rounds.map(r => r.wastedActions);
-  const effectiveSeries = m.rounds.map(r => r.effectiveActions);
-  const threatsActiveSeries = m.rounds.map(r => r.threatsActive);
+  // v0.8: Normalize every round-metric field at read-time so a missing field
+  // can't poison the whole pipeline.
+  const safe = r => ({
+    compromisedTotal: Number(r.compromisedTotal) || 0,
+    wastedActions:    Number(r.wastedActions)    || 0,
+    effectiveActions: Number(r.effectiveActions) || 0,
+    threatsActive:    Number(r.threatsActive)    || 0,
+  });
+  const safeRounds = m.rounds.map(safe);
+  const compromiseSeries = safeRounds.map(r => r.compromisedTotal);
+  const wastedSeries = safeRounds.map(r => r.wastedActions);
+  const effectiveSeries = safeRounds.map(r => r.effectiveActions);
+  const threatsActiveSeries = safeRounds.map(r => r.threatsActive);
   const maxComp = STATE.mission.loseThreshold;
   const maxWaste = Math.max(1, ...wastedSeries);
   const maxEff = Math.max(1, ...effectiveSeries);
@@ -4701,8 +4893,9 @@ function renderTrendsTab() {
   const repeats = detectRepeatFailures();
   const totalWasted = m.actions.filter(a => a.outcome === 'wasted').length;
   const totalEff = m.actions.filter(a => a.outcome === 'effective').length;
-  const earlyRounds = m.rounds.slice(0, Math.ceil(m.rounds.length / 2));
-  const lateRounds = m.rounds.slice(Math.ceil(m.rounds.length / 2));
+  const halfIdx = Math.ceil(safeRounds.length / 2);
+  const earlyRounds = safeRounds.slice(0, halfIdx);
+  const lateRounds = safeRounds.slice(halfIdx);
   const earlyWaste = earlyRounds.reduce((s, r) => s + r.wastedActions, 0);
   const lateWaste = lateRounds.reduce((s, r) => s + r.wastedActions, 0);
   const trend = lateWaste < earlyWaste ? 'IMPROVING' : lateWaste === earlyWaste ? 'FLAT' : 'DECLINING';
@@ -6108,7 +6301,103 @@ function bootTick() {
   }
 }
 
+// v0.8: First-launch onboarding card — shown once per device (localStorage).
+// Explains what the game is and lets the player calibrate difficulty + pace
+// up-front rather than discovering the Settings modal later.
+function showOnboardingCard(onDone) {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'onboarding-modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:440px;">
+      <div style="color:var(--muted);font-size:9px;letter-spacing:0.15em;">// FIRST LAUNCH</div>
+      <div class="modal-title" style="color:var(--cyan);">OPERATOR BRIEFING</div>
+      <div style="color:var(--white);font-size:11px;line-height:1.55;margin-top:8px;">
+        You're an incident commander with three agents: <b style="color:#4ee2ff;">VIGIL</b> (detect), <b style="color:#ff4ea8;">WRAITH</b> (disrupt), <b style="color:#ffb84d;">ANCHOR</b> (harden/recover). Each round costs <b>action points</b> — you can't do everything.
+      </div>
+      <div style="color:var(--white);font-size:11px;line-height:1.55;margin-top:8px;">
+        Threat actors are archetypes based on real-world patterns: ransomware (CRYO), nation-state APT (KINGFISHER), insider (GHOSTWIRE), supply-chain (TIDEMARK), pre-positioning operator modeled on Volt Typhoon per CISA AA24-038A (VOLTFORGE), and others.
+      </div>
+      <div style="color:var(--amber);font-size:11px;line-height:1.55;margin-top:8px;">
+        <b>▸ New here?</b> Pick <b>WATCH DEMO</b> on any mission for an instructor walkthrough.<br>
+        <b>▸ Experienced?</b> The <b>FRAMES tab</b> shows live Kill Chain / NIST IR / Diamond / Pyramid of Pain state.
+      </div>
+
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--grid-line);">
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;margin-bottom:4px;">▸ DIFFICULTY (adversary sophistication)</div>
+        <div class="verbosity-toggle" style="width:100%;justify-content:space-evenly;">
+          <button class="verbosity-btn" data-ob-d="novice">NOVICE</button>
+          <button class="verbosity-btn active" data-ob-d="operator">OPERATOR</button>
+          <button class="verbosity-btn" data-ob-d="analyst">ANALYST</button>
+        </div>
+        <div style="color:var(--muted);font-size:9px;margin-top:4px;line-height:1.4;">
+          <b>NOVICE</b> — adversary is static, friendly for learning<br>
+          <b>OPERATOR</b> — adaptive actors will pivot when disrupted <i>(recommended)</i><br>
+          <b>ANALYST</b> — all actors adapt + reduced detection odds
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;margin-bottom:4px;">▸ PACING (how fast events advance)</div>
+        <div class="verbosity-toggle" style="width:100%;justify-content:space-evenly;">
+          <button class="verbosity-btn active" data-ob-s="manual">MANUAL</button>
+          <button class="verbosity-btn" data-ob-s="steady">STEADY</button>
+          <button class="verbosity-btn" data-ob-s="rapid">RAPID</button>
+        </div>
+        <div style="color:var(--muted);font-size:9px;margin-top:4px;line-height:1.4;">
+          <b>MANUAL</b> — tap CONTINUE between events, read everything <i>(recommended for first run)</i><br>
+          <b>STEADY</b> — auto-advance ~900ms<br>
+          <b>RAPID</b> — auto-advance ~400ms
+        </div>
+      </div>
+
+      <div style="color:var(--muted);font-size:9px;margin-top:12px;font-style:italic;">You can change these any time via the gear icon. Settings persist on this device.</div>
+      <button class="action-btn primary" id="ob-start" style="width:100%;margin-top:12px;">▶ BEGIN (Enter)</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  let d = 'operator', s = 'manual';
+  modal.querySelectorAll('[data-ob-d]').forEach(b => {
+    b.addEventListener('click', () => {
+      d = b.dataset.obD;
+      modal.querySelectorAll('[data-ob-d]').forEach(x => x.classList.toggle('active', x.dataset.obD === d));
+    });
+  });
+  modal.querySelectorAll('[data-ob-s]').forEach(b => {
+    b.addEventListener('click', () => {
+      s = b.dataset.obS;
+      modal.querySelectorAll('[data-ob-s]').forEach(x => x.classList.toggle('active', x.dataset.obS === s));
+    });
+  });
+  const start = modal.querySelector('#ob-start');
+  const finish = () => {
+    STATE.difficulty = d;
+    STATE.speed = s;
+    savePrefs();
+    markOnboarded();
+    modal.remove();
+    if (onDone) onDone();
+  };
+  start.addEventListener('click', finish);
+  // Enter to accept
+  const onKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(); document.removeEventListener('keydown', onKey, true); }
+  };
+  document.addEventListener('keydown', onKey, true);
+}
+
 function showMissionSelect() {
+  // v0.8: First-launch onboarding before mission select (once per device)
+  if (!hasOnboarded()) {
+    showOnboardingCard(() => showMissionSelect());
+    const boot = document.getElementById('boot');
+    if (boot) {
+      boot.style.transition = 'opacity 0.6s';
+      boot.style.opacity = '0';
+      setTimeout(() => boot.remove(), 700);
+    }
+    return;
+  }
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.id = 'mission-select-modal';
@@ -6134,9 +6423,21 @@ function showMissionSelect() {
       </div>
     `;
   });
+  // v0.8: Resume banner if a saved run exists
+  const saved = loadSavedRun();
+  const resumeHTML = saved ? `
+    <div style="background:rgba(92,255,138,0.08);border:1px solid var(--green);padding:8px 10px;margin-bottom:8px;">
+      <div style="color:var(--green);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ RESUME IN PROGRESS</div>
+      <div style="color:var(--white);font-size:10px;margin-top:3px;">${saved.mission} · R${saved.round} · ${saved.activeActorId || 'actor pending'} · saved ${new Date(saved.savedAt).toLocaleString()}</div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="action-btn primary" id="ms-resume" style="flex:1;font-size:10px;">▶ RESUME</button>
+        <button class="action-btn" id="ms-discard" style="flex:0 0 auto;font-size:10px;">DISCARD</button>
+      </div>
+    </div>` : '';
   modal.innerHTML = `
     <div class="modal-content" style="max-width:380px;">
       <div class="modal-title">// MISSION SELECT</div>
+      ${resumeHTML}
       <div class="modal-body">
         <p style="color:var(--muted);font-size:10px;">Operator, choose your engagement. Each mission uses a different framework stack.</p>
         <p style="color:var(--cyan-dim);font-size:9px;margin-top:4px;">▸ <b>WATCH DEMO</b> — instructor walkthrough with narration. Recommended for first run.</p>
@@ -6146,6 +6447,17 @@ function showMissionSelect() {
     </div>
   `;
   document.getElementById('app').appendChild(modal);
+  // v0.8: Wire resume/discard
+  if (saved) {
+    const rb = modal.querySelector('#ms-resume');
+    const db = modal.querySelector('#ms-discard');
+    if (rb) rb.addEventListener('click', () => { modal.remove(); resumeSavedRun(saved); });
+    if (db) db.addEventListener('click', () => {
+      clearSavedRun();
+      modal.remove();
+      showMissionSelect();  // re-render without the banner
+    });
+  }
   const boot = document.getElementById('boot');
   if (boot) {
     boot.style.transition = 'opacity 0.6s';
@@ -6172,6 +6484,68 @@ function showMissionSelect() {
   modal.querySelector('#ms-settings').addEventListener('click', () => {
     showSettingsModal();
   });
+}
+
+// v0.8: Resume a saved run. Re-initializes mission scaffolding, overlays saved
+// state, then enters INTEL phase for the saved round. Not perfect — one-round
+// granularity (saves happen on round boundary) — but good enough for session
+// continuity across tab closes.
+function resumeSavedRun(saved) {
+  STATE.mission = MISSIONS[saved.mission];
+  if (!STATE.mission) { log('Save references unknown mission; discarded.', 'log-warn'); clearSavedRun(); showMissionSelect(); return; }
+  STATE.round = saved.round;
+  STATE.difficulty = saved.difficulty || 'operator';
+  STATE.verbosity = saved.verbosity || 'operator';
+  STATE.speed = saved.speed || 'manual';
+  STATE.activeActor = THREAT_ACTORS[saved.activeActorId] || null;
+  STATE.c2Node = saved.c2Node;
+  STATE.c2Revealed = !!saved.c2Revealed;
+  STATE.c2Severed = !!saved.c2Severed;
+  STATE.actorRevealed = !!saved.actorRevealed;
+  STATE.actorAttribution = saved.actorAttribution || 0;
+  STATE.observedTTPs = saved.observedTTPs || {};
+  STATE.iocs = saved.iocs || [];
+  STATE.pivotEvents = saved.pivotEvents || [];
+  STATE.combosTriggered = saved.combosTriggered || [];
+  STATE.dwellRoundsAccumulated = saved.dwellRoundsAccumulated || 0;
+  STATE.reasoningShown = saved.reasoningShown || {};
+  STATE.achGatePassed = !!saved.achGatePassed;
+  STATE.metrics = saved.metrics || {rounds:[],actions:[],threatSpawns:[]};
+  STATE.threats = [];
+  STATE.attackChains = [];
+  STATE.particles = [];
+  STATE.log = [];
+  STATE.resolvedActions = [];
+  STATE.actionPointsUsed = 0;
+  STATE.killBoxActive = false;
+  STATE.attackTrail = {};
+  STATE.viewMode = 'ground_truth';
+
+  resizeCanvas();
+  if (STATE.mission.id === 'BLACKFROST') setupEnergyGrid();
+  else if (STATE.mission.id === 'NIGHTWATCH') setupSatelliteOps();
+  else if (STATE.mission.id === 'TIDEBREAK') setupMaritimePort();
+  setupAgents();
+  // Overlay the saved node states (resilience, state, operatorState)
+  (saved.nodeStates || []).forEach(ns => {
+    const n = getNode(ns.id);
+    if (n) {
+      n.state = ns.state;
+      n.resilience = ns.resilience || 0;
+      if (ns.operatorState) n.operatorState = ns.operatorState;
+    }
+  });
+  // Rehydrate active threats
+  STATE.threats = (saved.threats || []).map(t => Object.assign({}, t));
+  STATE.threats.forEach(t => spawnAttackChain(t.path, 'attack'));
+
+  log(`<b>// JOSHUA PROTOCOL — ${STATE.mission.name}</b>`, 'log-cyan');
+  log(`${STATE.mission.sector}`, 'log-info');
+  log(`<span class="log-cyan">▸ Resumed from save (R${STATE.round}). Welcome back, Operator.</span>`);
+  updateStatusBar();
+  if (document.getElementById('view-mode-btn')) updateViewModeButton();
+  startIntelPhase();
+  requestAnimationFrame(renderLoop);
 }
 
 function beginGame(missionId) {
@@ -6657,6 +7031,24 @@ function buildSilhouetteSVG(shape, color) {
 }
 
 resizeCanvas();
+
+// v0.8: Load persisted preferences before boot so the mission-select cards see them
+const _savedPrefs = loadPrefs();
+if (_savedPrefs) {
+  if (_savedPrefs.verbosity) STATE.verbosity = _savedPrefs.verbosity;
+  if (_savedPrefs.difficulty) STATE.difficulty = _savedPrefs.difficulty;
+  if (_savedPrefs.speed) STATE.speed = _savedPrefs.speed;
+}
+
+// v0.8: Save best-effort on tab close.
+window.addEventListener('beforeunload', () => {
+  try { saveRun(); } catch (e) {}
+});
+// pagehide fires in more cases on mobile (iOS Safari especially)
+window.addEventListener('pagehide', () => {
+  try { saveRun(); } catch (e) {}
+});
+
 setTimeout(bootTick, 300);
 </script>
 </body>
