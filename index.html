@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.3</title>
+<title>JOSHUA PROTOCOL v0.9.4</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1557Z';
-const STAMP_UTC = '2026-10-17T15:57Z';
-const APP_VERSION = 'v0.9.3';
+const BUILD_ID = 'HUNT-20261017-1645Z';
+const STAMP_UTC = '2026-10-17T16:45Z';
+const APP_VERSION = 'v0.9.4';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -1485,6 +1485,17 @@ const TECHNIQUES = {
     novice:'Adversary plants malicious code onboard satellite.',
     tools:['Software attestation (per-boot cryptographic measurement)','Memory checksums','Secure-boot chain verification','Ground-side build artifact signing'],
     counters:['D3-EI: Executable Integrity','Secure boot with hardware root of trust','Signed FSW uploads with per-image counter','Dual-authority FSW upload approval'] },
+  // v0.9.4: railway signaling techniques for OP. RAILGUARD
+  'T0871': { fw:'ics', name:'Execution Through API', tactic:'Execution (ICS)',
+    desc:'Adversary executes functionality on an OT asset via its documented API — HMI, maintenance API, OPC-UA, DNP3, or (in rail) a train-control back-office RESTful or SCADA API. The authentication is often legitimate (stolen credentials, abused service accounts); the detection surface is API audit logs, not network traffic. CISA ICS-CERT advisories 2023-2025 document this pattern against rail dispatch and PTC back-office servers.',
+    novice:'Adversary uses the system\'s own control API with stolen credentials to issue commands.',
+    tools:['PTC/CBTC back-office audit logs','SCADA API gateway logs','UEBA against operator consoles'],
+    counters:['API audit logging + alerting on first-seen API caller','MFA on API consoles','Role-based separation between read API and command API'] },
+  'T0836': { fw:'ics', name:'Modify Parameter', tactic:'Impair Process Control (ICS)',
+    desc:'Adversary modifies parameters within an OT asset — PID gains in a controller, PTC movement authorities in rail, signal-aspect-timer values in an interlocking, chemical setpoints in a plant. Lower bar than full logic modification; often undetected because the asset still looks "operational" to the operator view. Polish ABW investigation of the Aug 2023 radio-stop incidents on freight railways documented command-side parameter manipulation of the kind this technique covers.',
+    novice:'Adversary changes a parameter value so the system behaves differently without changing its program.',
+    tools:['Config-value baseline + drift alerts','Dual-authority parameter changes','Historian correlation'],
+    counters:['Change-management discipline on OT parameters','Parameter signing','Audit-log forwarding to immutable store'] },
   // v0.9.3: healthcare-sector techniques for OP. HEARTLINE
   'T1557': { fw:'attack', name:'Adversary-in-the-Middle', tactic:'Credential Access, Collection',
     desc:'Adversary positions between communicating parties to intercept, modify, or inject data. In healthcare, this is the DICOM/HL7 vector — unencrypted imaging and lab-results traffic between PACS, EHR, laboratory analyzers, and biomedical devices is often cleartext on segment traffic, which lets an adversary modify image metadata, swap patient identifiers, or inject fabricated results. HHS 405(d) Healthcare Industry Cybersecurity Practices calls out HL7 cleartext as a known-exposed interface.',
@@ -2403,6 +2414,45 @@ const MISSIONS = {
     lifeSafetyNodes: ['BIOMED-PUMP','BIOMED-TELEM'],
     lifeSafetyNarration: 'PATIENT-CONNECTED DEVICE COMPROMISED. This is a life-safety event, not a data-integrity event. In the real world: notify Patient Safety per hospital policy; isolate affected device fleet; manual-mode fallback with bedside confirmation of every dose/parameter. The FDA Medical Device Cybersecurity Guidance (2023) and HHS 405(d) HICP both treat biomed compromise as a reportable patient-safety event when care delivery is affected.',
   },
+  // v0.9.4: OP. RAILGUARD — regional railway signaling with passenger-safety stakes
+  'RAILGUARD': {
+    id: 'RAILGUARD',
+    name: 'OP. RAILGUARD',
+    domain: 'TRANSPORTATION / RAILWAY',
+    sector: 'REGIONAL RAIL SIGNALING + FREIGHT DISPATCH',
+    threat: 'Active Campaign',
+    threatArchetype: 'nation_state',
+    summary: 'Defend an 8-node regional railway system — passenger signaling + freight dispatch — against a mixed-tempo campaign. Belarusian Cyber-Partisans Jan 2022 (encrypted BelZhD dispatch during Russian troop movements), Polish Aug 2023 radio-stop command injection on freight lines (ABW investigation documented 20+ unauthorized stop signals using legitimate cleartext VHF signaling), and Taiwan TRA 2022-2024 ransomware+phishing establish ground truth: rail is RF-exposed, signaling has limited authentication by design, and the consequence of a compromise can be a passenger-safety event (not just dollar loss).',
+    frameworks: ['attack','ics','d3fend'],
+    maxRounds: 10,
+    loseThreshold: 3,
+    threatMix: ['T1566.001','T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1059','T1021','T1021.001','T1486','T1070.001','T1087.001','T1498','T1498.001','T1491.001','T0855','T0803','T0871','T0836','T0832','T0826','T1692.001','T1691.001','T1692.002','PER-0001'],
+    impactTechs: ['T0855','T0803','T0871','T0836','T0832','T0826'],
+    // Rail-sector actor pool: ransomware (Taiwan TRA 2022-2024 pattern),
+    // hacktivist with command-injection capability (Belarus/Polish patterns —
+    // availability-focused + RF-protocol opportunism), broker-to-ransomware
+    // pipeline, infostealer-sourced creds against ops consoles, insider
+    // (rail-sector reporting documents insider patterns), and pre-positioning
+    // (Deutsche Bahn 2022 state-nexus concern).
+    validActors: ['CRYO','IRONHAZE','WARDEN','HOLLOWKEY','GHOSTWIRE','VOLTFORGE'],
+    defaultActor: 'IRONHAZE',
+    // Sector cascade when DISPATCH compromises — the Belarusian Cyber-Partisans
+    // Jan 2022 BelZhD pattern. Dispatch is the coordination plane for all
+    // movements; its loss paralyzes operations even if trackside gear is
+    // physically fine.
+    sectorCascade: {
+      triggerNode: 'DISPATCH',
+      effectNodes: ['INTERLOCK-A','INTERLOCK-B','FREIGHT-TMS','PTC-SERVER'],
+      effectState: 'stressed',
+      narration: 'DISPATCH COMPROMISED — OPERATIONAL CASCADE. The Belarusian Cyber-Partisans Jan 2022 BelZhD pattern: dispatch encrypted, movement authorities frozen. Trackside signaling still functional but operators cannot issue clearance. Trains hold at interlockings. Freight schedules collapse. In the Belarus case, this stalled Russian troop movements for days. In a passenger context, the operational consequence is service suspension measured in hours to days, not minutes.',
+      doctrineRef: 'Belarusian Cyber-Partisans / BelZhD Jan 2022',
+    },
+    // Life-safety nodes: trackside signaling and grade crossings. Compromise
+    // of these = passenger-safety or motorist-safety event per FRA 49 CFR
+    // Part 236 (Positive Train Control) + APTA cybersecurity guidance.
+    lifeSafetyNodes: ['INTERLOCK-A','INTERLOCK-B','GRADE-X'],
+    lifeSafetyNarration: 'TRACKSIDE SIGNALING / GRADE-CROSSING CONTROLLER COMPROMISED. This is a passenger-safety or motorist-safety event, not a schedule event. In the real world: emergency manual operation per FRA 49 CFR Part 236 Subpart H fallback procedures; dispatcher-side flagman authority at affected points; notify FRA + TSA Transportation Security Operations Center per Security Directive 1580/82-2022-01A; the Polish Aug 2023 radio-stop pattern (per ABW) showed 20+ unauthorized stop signals causing emergency braking — no fatalities but operational-safety-margin loss was documented.',
+  },
 };
 
 
@@ -2869,6 +2919,31 @@ const PURDUE_MAPPING = {
       'BIOMED-TELEM': 1,
     },
   },
+  // v0.9.4: RAILGUARD railway mapping. Rail IEC 62443 adaptation per CENELEC
+  // 50159 for safety-critical rail communications + FRA 49 CFR 236 Subpart H:
+  // dispatch = L3 ops supervisory, back-office (PTC/CBTC + freight TMS) = L3,
+  // interlockings = L2 local supervisory, VHF-LINK + GRADE-X = L1 trackside
+  // field controller, AD = L4 business IT.
+  RAILGUARD: {
+    byType: {
+      'dispatch':  3,
+      'rail-back-office': 3,
+      'interlock': 2,
+      'trackside': 1,
+      'rf-link':   1,
+      'identity':  4,
+    },
+    byId: {
+      'DISPATCH':    3,
+      'PTC-SERVER':  3,
+      'FREIGHT-TMS': 3,
+      'INTERLOCK-A': 2,
+      'INTERLOCK-B': 2,
+      'GRADE-X':     1,
+      'VHF-LINK':    1,
+      'AD':          4,
+    },
+  },
 };
 
 function assignPurdueLevels() {
@@ -2971,6 +3046,7 @@ function layoutNodes() {
   if (STATE.mission.id === 'BLACKFROST') layoutEnergyGrid();
   else if (STATE.mission.id === 'TIDEBREAK') layoutMaritimePort();
   else if (STATE.mission.id === 'HEARTLINE') layoutHealthcare();
+  else if (STATE.mission.id === 'RAILGUARD') layoutRailway();
 }
 
 function bfsPath(startId, endId) {
@@ -3000,6 +3076,7 @@ function render() {
   else if (STATE.mission.id === 'NIGHTWATCH') renderSatelliteMap();
   else if (STATE.mission.id === 'TIDEBREAK') renderMaritimeMap();
   else if (STATE.mission.id === 'HEARTLINE') renderHealthcareMap();
+  else if (STATE.mission.id === 'RAILGUARD') renderRailwayMap();
 }
 
 
@@ -4118,6 +4195,241 @@ function drawEHRNode(n) {
 
 
 // =============================================================================
+// 8.7 RAILWAY MISSION (RAILGUARD) — v0.9.4
+//
+// 8-node regional railway: dispatch, two interlockings, PTC back-office,
+// freight management, VHF link, grade crossing, and AD. Grounded in:
+//   • Belarusian Cyber-Partisans Jan 2022 (BelZhD dispatch encryption)
+//   • Polish ABW Aug 2023 investigation of radio-stop command injection
+//     on freight railways (20+ unauthorized stop signals via legitimate
+//     cleartext VHF signaling)
+//   • Taiwan TRA 2022-2024 ransomware + phishing incidents
+//   • TSA Security Directive 1580/82-2022-01A (rail cybersecurity reqs)
+//   • FRA 49 CFR Part 236 Subpart H (PTC cybersecurity + fallback ops)
+//   • APTA Cybersecurity Toolkit
+//   • CENELEC 50159 (safety-critical rail communications)
+//
+// Topology: AD authenticates ops consoles; DISPATCH is the control plane
+// for all movements; PTC-SERVER + FREIGHT-TMS are rail back-office; the
+// interlockings are trackside signaling junctions; VHF-LINK is the RF
+// channel for cab signaling; GRADE-X is a grade-crossing controller.
+// =============================================================================
+function setupRailway() {
+  const nodeDefs = [
+    { id: 'AD',          type: 'identity',          label: 'AD',       fullName: 'Active Directory / Operator Identity' },
+    { id: 'DISPATCH',    type: 'dispatch',          label: 'DISPATCH', fullName: 'Dispatch Center' },
+    { id: 'PTC-SERVER',  type: 'rail-back-office',  label: 'PTC-SRV',  fullName: 'Positive Train Control Back-Office' },
+    { id: 'FREIGHT-TMS', type: 'rail-back-office',  label: 'FR-TMS',   fullName: 'Freight Transportation Management System' },
+    { id: 'INTERLOCK-A', type: 'interlock',         label: 'INT-A',    fullName: 'Interlocking A (passenger)' },
+    { id: 'INTERLOCK-B', type: 'interlock',         label: 'INT-B',    fullName: 'Interlocking B (freight)' },
+    { id: 'VHF-LINK',    type: 'rf-link',           label: 'VHF',      fullName: 'VHF Cab-Signaling Link' },
+    { id: 'GRADE-X',     type: 'trackside',         label: 'GRADE-X',  fullName: 'Grade-Crossing Controller' },
+  ];
+  STATE.nodes = nodeDefs.map(d => ({
+    ...d, x: 0, y: 0,
+    state: 'healthy',
+    resilience: 0,
+    pulsePhase: Math.random() * Math.PI * 2,
+  }));
+  // Topology
+  //   AD → DISPATCH, PTC-SERVER, FREIGHT-TMS   (identity authenticates ops)
+  //   DISPATCH ↔ PTC-SERVER, FREIGHT-TMS       (control plane)
+  //   DISPATCH → INTERLOCK-A, INTERLOCK-B      (dispatch issues clearances)
+  //   DISPATCH → VHF-LINK                      (RF cab signaling)
+  //   INTERLOCK-A ↔ INTERLOCK-B                (adjacent-territory handoff)
+  //   INTERLOCK-A → GRADE-X                    (passenger-line grade crossing)
+  //   VHF-LINK → INTERLOCK-A, INTERLOCK-B      (RF reaches trackside)
+  //   PTC-SERVER → INTERLOCK-A, INTERLOCK-B    (movement authorities push down)
+  STATE.links = [
+    ['AD','DISPATCH'], ['AD','PTC-SERVER'], ['AD','FREIGHT-TMS'],
+    ['DISPATCH','PTC-SERVER'], ['DISPATCH','FREIGHT-TMS'],
+    ['DISPATCH','INTERLOCK-A'], ['DISPATCH','INTERLOCK-B'],
+    ['DISPATCH','VHF-LINK'],
+    ['INTERLOCK-A','INTERLOCK-B'],
+    ['INTERLOCK-A','GRADE-X'],
+    ['VHF-LINK','INTERLOCK-A'], ['VHF-LINK','INTERLOCK-B'],
+    ['PTC-SERVER','INTERLOCK-A'], ['PTC-SERVER','INTERLOCK-B'],
+  ];
+  document.getElementById('view-toggle').classList.remove('active');
+  layoutRailway();
+  assignPurdueLevels();
+}
+
+function layoutRailway() {
+  const margin = 32;
+  const w = CW - margin * 2;
+  const h = CH - margin * 2;
+  const byId = {};
+  STATE.nodes.forEach(n => byId[n.id] = n);
+  // Row 1 (top): AD (business IT)
+  if (byId['AD']) { byId['AD'].x = margin + w * 0.5; byId['AD'].y = margin + h * 0.08; }
+  // Row 2: DISPATCH centered, with PTC + FREIGHT-TMS flanking (back-office)
+  if (byId['DISPATCH']) { byId['DISPATCH'].x = margin + w * 0.5; byId['DISPATCH'].y = margin + h * 0.28; }
+  if (byId['PTC-SERVER']) { byId['PTC-SERVER'].x = margin + w * 0.18; byId['PTC-SERVER'].y = margin + h * 0.28; }
+  if (byId['FREIGHT-TMS']) { byId['FREIGHT-TMS'].x = margin + w * 0.82; byId['FREIGHT-TMS'].y = margin + h * 0.28; }
+  // Row 3: VHF-LINK (RF) above the track plane
+  if (byId['VHF-LINK']) { byId['VHF-LINK'].x = margin + w * 0.5; byId['VHF-LINK'].y = margin + h * 0.52; }
+  // Row 4 (track plane): INTERLOCK-A (passenger, left) + INTERLOCK-B (freight, right)
+  if (byId['INTERLOCK-A']) { byId['INTERLOCK-A'].x = margin + w * 0.28; byId['INTERLOCK-A'].y = margin + h * 0.75; }
+  if (byId['INTERLOCK-B']) { byId['INTERLOCK-B'].x = margin + w * 0.72; byId['INTERLOCK-B'].y = margin + h * 0.75; }
+  // Row 5 (public zone): GRADE-X (motorist/pedestrian life-safety)
+  if (byId['GRADE-X']) { byId['GRADE-X'].x = margin + w * 0.28; byId['GRADE-X'].y = margin + h * 0.92; }
+}
+
+function renderRailwayMap() {
+  drawBackgroundGrid();
+  drawPurdueZones();
+  // Faint "track plane" band — horizontal strip where the trackside gear sits
+  const trackTop = CH * 0.68;
+  const trackBot = CH * 0.84;
+  ctx.fillStyle = 'rgba(90,110,140,0.08)';
+  ctx.fillRect(0, trackTop, CW, trackBot - trackTop);
+  // Two horizontal rail lines across the track plane
+  ctx.strokeStyle = 'rgba(140,160,200,0.35)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([10, 6]);
+  ctx.beginPath();
+  ctx.moveTo(0, trackTop + 4); ctx.lineTo(CW, trackTop + 4);
+  ctx.moveTo(0, trackBot - 4); ctx.lineTo(CW, trackBot - 4);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Public zone band at the very bottom (grade crossing area)
+  const publicTop = CH * 0.86;
+  const grad = ctx.createLinearGradient(0, publicTop, 0, CH);
+  grad.addColorStop(0, 'rgba(255,80,120,0.03)');
+  grad.addColorStop(1, 'rgba(255,80,120,0.14)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, publicTop, CW, CH - publicTop);
+  ctx.save();
+  ctx.font = '8px monospace';
+  ctx.fillStyle = 'rgba(255,80,120,0.5)';
+  ctx.textAlign = 'left';
+  ctx.fillText('⚠ PUBLIC ZONE — LIFE SAFETY', 10, CH - 10);
+  ctx.restore();
+
+  STATE.links.forEach(([a, b]) => drawLink(getNode(a), getNode(b)));
+  updateParticles();
+  drawParticles();
+
+  STATE.nodes.forEach(n => {
+    if (n.type === 'interlock') drawInterlockNode(n);
+    else if (n.type === 'rf-link') drawRFLinkNode(n);
+    else if (n.type === 'trackside') drawTracksideNode(n);
+    else drawNode(n);
+  });
+
+  updateAttackChains();
+  drawAttackTrail();
+  drawAttackChains();
+  if (STATE.selectedTarget) {
+    const n = getNode(STATE.selectedTarget);
+    if (n) drawSelectionHalo(n);
+  }
+  STATE.plannedActions.forEach((a, idx) => {
+    const n = getNode(a.target);
+    if (!n) return;
+    const ag = STATE.agents[a.agent];
+    drawQueueMarker(n, ag.color, idx);
+  });
+}
+
+function drawInterlockNode(n) {
+  // Interlocking: signal-aspect motif — three stacked lamps.
+  const c = n.state === 'compromised' ? '#ff5080'
+          : n.state === 'attacked' ? '#ff8f3f'
+          : n.state === 'stressed' ? '#ffb84d'
+          : '#5cff8a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.rect(n.x - 7, n.y - 12, 14, 24);
+  ctx.stroke();
+  // Three lamps vertically
+  ['#ff5080','#ffb84d','#5cff8a'].forEach((cc, i) => {
+    const dim = n.state === 'compromised' ? 'rgba(140,140,140,0.5)' : cc;
+    ctx.fillStyle = dim;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y - 7 + i * 7, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c;
+  ctx.fillText(n.label, n.x, n.y + 24);
+  if (n.resilience > 0) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.fillText(`+${n.resilience}`, n.x, n.y + 34);
+  }
+}
+
+function drawRFLinkNode(n) {
+  // VHF-LINK: antenna-mast motif with wave arcs
+  const c = n.state === 'compromised' ? '#ff5080'
+          : n.state === 'attacked' ? '#ff8f3f'
+          : n.state === 'stressed' ? '#ffb84d'
+          : '#4ee2ff';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  // Antenna mast
+  ctx.beginPath();
+  ctx.moveTo(n.x, n.y - 12);
+  ctx.lineTo(n.x, n.y + 10);
+  ctx.moveTo(n.x - 5, n.y + 10);
+  ctx.lineTo(n.x + 5, n.y + 10);
+  ctx.stroke();
+  // Wave arcs — animated expand based on time
+  const t = (performance.now() * 0.001) % 1;
+  for (let i = 0; i < 3; i++) {
+    const r = 4 + i * 4 + t * 2;
+    ctx.globalAlpha = Math.max(0, 1 - r / 16);
+    ctx.beginPath();
+    ctx.arc(n.x, n.y - 12, r, -Math.PI * 0.75, -Math.PI * 0.25);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c;
+  ctx.fillText(n.label, n.x, n.y + 24);
+  if (n.resilience > 0) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.fillText(`+${n.resilience}`, n.x, n.y + 34);
+  }
+}
+
+function drawTracksideNode(n) {
+  // Grade-crossing / trackside: X-mark motif in a diamond
+  const c = n.state === 'compromised' ? '#ff5080'
+          : n.state === 'attacked' ? '#ff8f3f'
+          : n.state === 'stressed' ? '#ffb84d'
+          : '#5cff8a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  // Diamond body
+  ctx.beginPath();
+  ctx.moveTo(n.x, n.y - 10);
+  ctx.lineTo(n.x + 10, n.y);
+  ctx.lineTo(n.x, n.y + 10);
+  ctx.lineTo(n.x - 10, n.y);
+  ctx.closePath();
+  ctx.stroke();
+  // X inside
+  ctx.beginPath();
+  ctx.moveTo(n.x - 5, n.y - 5); ctx.lineTo(n.x + 5, n.y + 5);
+  ctx.moveTo(n.x + 5, n.y - 5); ctx.lineTo(n.x - 5, n.y + 5);
+  ctx.stroke();
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c;
+  ctx.fillText(n.label, n.x, n.y + 24);
+  if (n.resilience > 0) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.fillText(`+${n.resilience}`, n.x, n.y + 34);
+  }
+}
+
+
+// =============================================================================
 // 9. PARTICLES & ATTACK CHAIN ANIMATIONS
 // =============================================================================
 function spawnParticles() {
@@ -4283,6 +4595,13 @@ function pickC2() {
       // (EHR snooping / HR fallout vector per HHS OCR insider breach reporting).
       const candidates = STATE.nodes.filter(n => n.type === 'clinical-it' || n.type === 'identity');
       STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+    } else if (STATE.mission.id === 'RAILGUARD') {
+      // v0.9.4: Insider in rail — dispatch console or back-office. APTA
+      // insider-threat guidance documents dispatch-console insiders as a
+      // real but low-base-rate pattern; TSA 1580/82 Security Directives
+      // require insider-threat programs.
+      const candidates = STATE.nodes.filter(n => n.type === 'dispatch' || n.type === 'rail-back-office');
+      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
     }
     return;
   }
@@ -4317,6 +4636,25 @@ function pickC2() {
     } else {
       // CRYO ransomware / WARDEN broker / default: edge VPN per sector pattern
       STATE.c2Node = 'EDGE';
+    }
+  } else if (STATE.mission.id === 'RAILGUARD') {
+    // v0.9.4: Rail external C2 varies by actor shape.
+    // - IRONHAZE (hacktivist / Belarus Cyber-Partisans + Polish RF pattern):
+    //   either AD-side (encrypt dispatch) or VHF-LINK (RF command injection)
+    // - HOLLOWKEY (external cred against operator console): AD
+    // - VOLTFORGE (long-dwell pre-position): rail-back-office preferred
+    // - WARDEN (broker): AD typical entry
+    // - CRYO (ransomware against dispatch IT per Taiwan TRA pattern): AD
+    if (actor && actor.archetype === 'hacktivist') {
+      STATE.c2Node = Math.random() < 0.5 ? 'AD' : 'VHF-LINK';
+    } else if (actor && actor.archetype === 'compromised_credentials') {
+      STATE.c2Node = 'AD';
+    } else if (actor && actor.archetype === 'pre_positioning') {
+      const candidates = STATE.nodes.filter(n => n.type === 'rail-back-office' || n.type === 'identity');
+      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+    } else {
+      // CRYO / WARDEN / default — AD entry (Taiwan TRA 2022-2024 archetype)
+      STATE.c2Node = 'AD';
     }
   }
 }
@@ -4399,6 +4737,14 @@ function maybeLaunchThreat(opts) {
       else if (n.id === 'AD') w = 3;
       else if (n.type === 'biomed') w = 2;
       else if (n.type === 'clinical-it') w = 2;
+    } else if (STATE.mission.id === 'RAILGUARD') {
+      // Rail targeting: DISPATCH is coordination plane (Belarus Partisans
+      // pattern); interlockings and grade-crossing are life-safety; PTC
+      // and freight-TMS are back-office control; VHF-LINK is the RF vector.
+      if (n.id === 'DISPATCH') w = 3;
+      else if (n.type === 'interlock') w = 2;
+      else if (n.id === 'GRADE-X') w = 2;
+      else if (n.type === 'rail-back-office') w = 2;
     }
     for (let i = 0; i < w; i++) weighted.push(n);
   });
@@ -4649,6 +4995,8 @@ function generateCFINote(rubric) {
       notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real-world Maersk incident ($300M loss, 76 terminals offline, 10-day recovery), the lesson was: TOS is not an IT system in an OT port, it is the control plane for everything that moves. Bulwark it day one; recover it with isolated rebuild capacity, not by replaying backups into the production domain.`);
     } else if (sc.doctrineRef === 'NHS WannaCry 2017') {
       notes.push(`Clinical cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real NHS WannaCry incident (~19,000 appointments cancelled, surgeries diverted, £92M in direct/indirect loss), the ransomware itself did not kill patients — the loss of the information backbone that coordinates care did, by forcing clinicians onto manual workflows at a tempo they could not sustain safely. Bulwark EHR day one; have a tested paper/manual-mode runbook; practice it before you need it.`);
+    } else if (sc.doctrineRef === 'Belarusian Cyber-Partisans / BelZhD Jan 2022') {
+      notes.push(`Operational cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real BelZhD incident, dispatch servers were encrypted during Russian troop movements into Belarus; movement authorities froze while trackside signaling and locomotives remained physically operational. The operational effect was days of service suspension even though no OT equipment was touched. For a U.S. operator, the equivalent lesson is TSA Security Directive 1580/82 compliance (incident response plan, operational-fallback procedures, access-control review): practice the dispatch-less day before you have one.`);
     } else {
       notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern.`);
     }
@@ -4665,6 +5013,17 @@ function generateCFINote(rubric) {
     }
     if (STATE.phase === 'LOSE') {
       notes.push('Healthcare loss analysis: Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks) is the modern pattern — the ransomware operator understood that healthcare has thin recovery capacity, limited downtime tolerance, and a willingness to pay. The defensive move isn\'t "better backups alone" — it is pre-tested manual-mode clinical workflows and (per HHS 405(d) HICP Practice #4) a tested crisis-management plan that assumes the information backbone will be unavailable for days to weeks.');
+    }
+  }
+  // v0.9.4: RAILGUARD rail-specific debrief notes
+  if (STATE.mission && STATE.mission.id === 'RAILGUARD') {
+    const lse = (STATE.lifeSafetyEvents || []).length;
+    if (lse > 0) {
+      const nodes = STATE.lifeSafetyEvents.map(e => e.node).join(', ');
+      notes.push(`${lse} life-safety event${lse > 1 ? 's' : ''} this run (${nodes}). Compromise of trackside signaling or a grade-crossing controller is a PASSENGER- or MOTORIST-safety event. Per FRA 49 CFR Part 236 Subpart H, operators must have fallback procedures for PTC/signaling degradation; per TSA Security Directive 1580/82-2022-01A, incident response and operational-fallback procedures are a compliance requirement, not optional. The Polish Aug 2023 ABW investigation documented 20+ unauthorized VHF stop signals causing emergency braking — no fatalities, but the safety margin was spent.`);
+    }
+    if (STATE.phase === 'LOSE') {
+      notes.push('Rail loss analysis: three concurrent public patterns inform the defensive posture — Belarus Cyber-Partisans Jan 2022 (dispatch encrypted, days of service lost), Polish Aug 2023 radio-stop (cleartext VHF command injection, no authentication by legacy design), Taiwan TRA 2022-2024 (phishing → ransomware against back-office). The common thread is that rail signaling grew up with safety-engineering authentication (fail-safe design) but limited cybersecurity authentication (no cryptographic command signing on legacy VHF). TSA 1580/82-2022-01A compliance is table stakes; CENELEC 50159 (safety-critical rail communications) and FRA 49 CFR 236 Subpart H together frame the next-generation posture — cryptographic signing on command messages, dual-authority on parameter changes, and dispatch-less fallback procedures practiced routinely.');
     }
   }
   if (rubric.doctrine.score === 100) notes.push('Decisive operational result.');
@@ -5192,6 +5551,10 @@ function advanceThreat(t) {
     target.state = 'compromised';
     log(`&nbsp;&nbsp;└ <b>${target.id} COMPROMISED</b>`, 'log-crit');
     STATE.threats = STATE.threats.filter(x => x !== t);
+    // v0.9.4: timeline-tab capture — per-round list of compromises
+    STATE.metrics = STATE.metrics || {};
+    STATE.metrics.compromisesByRound = STATE.metrics.compromisesByRound || [];
+    STATE.metrics.compromisesByRound.push({ round: STATE.round, target: target.id, techniqueId: t.techniqueId });
     // v0.9: Actor-specific impact flavor
     const A = STATE.activeActor;
     if (A && A.doubleExtortion) {
@@ -5326,10 +5689,13 @@ function advanceRound() {
   // takes over execution. Attribution shift mid-mission is the real IAB signature.
   if (A && A.handoffAfterRounds && A.successorPool && STATE.round === A.handoffAfterRounds + 1 && !STATE.handoffFired) {
     STATE.handoffFired = true;
+    STATE.metrics.handoffRound = STATE.round;  // v0.9.4: timeline capture
     const successorId = A.successorPool[Math.floor(Math.random() * A.successorPool.length)];
     const successor = THREAT_ACTORS[successorId];
     if (successor) {
       const prevName = A.name;
+      STATE.metrics.handoffFrom = A.id;
+      STATE.metrics.handoffTo = successor.id;
       STATE.activeActor = successor;
       STATE.actorRevealed = false;  // player re-earns attribution for the new actor
       STATE.actorAttribution = Math.max(0, STATE.actorAttribution - 30);  // partial carry-over
@@ -5421,6 +5787,7 @@ function showDebrief(win, reason) {
     </div>
     <div class="debrief-tabs">
       <button class="debrief-tab active" data-dtab="rubric">RUBRIC</button>
+      <button class="debrief-tab" data-dtab="timeline">TIMELINE</button>
       <button class="debrief-tab" data-dtab="trends">TRENDS</button>
       <button class="debrief-tab" data-dtab="moves">MOVES</button>
     </div>
@@ -5456,6 +5823,7 @@ function showDebrief(win, reason) {
     try {
       let html = '';
       if (dtab === 'rubric') html = renderRubricTab(rubric, cfiNote, win);
+      else if (dtab === 'timeline') html = renderTimelineTab();
       else if (dtab === 'trends') html = renderTrendsTab();
       else if (dtab === 'moves') html = renderMovesTab();
       if (!html || html.trim().length === 0) {
@@ -5489,6 +5857,16 @@ function showDebrief(win, reason) {
       overlay.querySelectorAll('.debrief-tab').forEach(x => x.classList.toggle('active', x.dataset.dtab === dtab));
       renderDtab();
     });
+  });
+  // v0.9.4: wire timeline round-header clicks to populate the detail panel.
+  // Delegation via overlay since renderDtab replaces inner HTML on tab switch.
+  overlay.addEventListener('click', (ev) => {
+    const head = ev.target.closest('.tl-round-head');
+    if (!head) return;
+    const r = parseInt(head.dataset.round, 10);
+    if (!r) return;
+    const detail = overlay.querySelector('#tl-round-detail');
+    if (detail) detail.innerHTML = renderTimelineRoundDetail(r);
   });
   overlay.querySelector('#db-retry').addEventListener('click', () => location.reload());
   overlay.querySelector('#db-mission-select').addEventListener('click', () => location.reload());
@@ -5724,6 +6102,208 @@ function renderTrendsTab() {
       <div style="margin-top:6px;">${repeatHTML}</div>
     </div>
   `;
+}
+
+// v0.9.4: TIMELINE — scrubbable per-round view of what happened. Reads from
+// STATE.metrics (rounds, actions, threatSpawns, combosTriggered, handoff /
+// sector-cascade / life-safety markers) and renders a round-indexed grid.
+// The grid is wrapped in a horizontally-scrollable container; each round is
+// a vertical column; node rows run horizontally. Markers overlay what fired
+// in that round. Click a round-header to reveal a details block.
+function renderTimelineTab() {
+  const m = STATE.metrics || {};
+  const maxRound = Math.max(1, STATE.round, (m.rounds || []).length);
+  const nodes = (STATE.nodes || []).map(n => n.id);
+  if (nodes.length === 0) return '<div style="color:var(--muted);">No node data recorded.</div>';
+
+  // Per (round, node) collect events: spawns, player actions, compromises, combos
+  const grid = {};
+  for (let r = 1; r <= maxRound; r++) {
+    grid[r] = {};
+    nodes.forEach(nid => { grid[r][nid] = []; });
+  }
+
+  (m.threatSpawns || []).forEach(ts => {
+    const r = ts.round || 1;
+    if (!grid[r] || !grid[r][ts.target]) return;
+    grid[r][ts.target].push({ kind:'spawn', detail: ts.techniqueId });
+  });
+  (m.actions || []).forEach(a => {
+    const r = a.round || 1;
+    if (!grid[r] || !grid[r][a.targetId]) return;
+    grid[r][a.targetId].push({
+      kind: 'action',
+      detail: (a.actionId || '').toUpperCase() + (a.outcome ? '/' + a.outcome : ''),
+      agent: a.agentId,
+      outcome: a.outcome,
+    });
+  });
+  (m.compromisesByRound || []).forEach(ev => {
+    const r = ev.round || 1;
+    if (!grid[r] || !grid[r][ev.target]) return;
+    grid[r][ev.target].push({ kind:'compromise', detail: ev.target });
+  });
+  (STATE.combosTriggered || []).forEach(cb => {
+    const r = cb.round || 1;
+    if (!grid[r]) return;
+    // combosTriggered pushes {round, comboId, comboName, target} — single target
+    const nid = cb.target;
+    if (nid && grid[r][nid]) grid[r][nid].push({ kind:'combo', detail: cb.comboName || cb.comboId });
+  });
+
+  // Round-level markers (not tied to a single node)
+  const roundMarkers = {};
+  if (m.sectorCascade && m.sectorCascade.round) {
+    roundMarkers[m.sectorCascade.round] = roundMarkers[m.sectorCascade.round] || [];
+    roundMarkers[m.sectorCascade.round].push({ kind:'cascade', detail: m.sectorCascade.doctrineRef || 'sector cascade' });
+  }
+  (STATE.lifeSafetyEvents || []).forEach(ev => {
+    roundMarkers[ev.round] = roundMarkers[ev.round] || [];
+    roundMarkers[ev.round].push({ kind:'lifesafety', detail: ev.node });
+  });
+  if (STATE.metrics && STATE.metrics.c2RevealedRound) {
+    const r = STATE.metrics.c2RevealedRound;
+    roundMarkers[r] = roundMarkers[r] || [];
+    roundMarkers[r].push({ kind:'c2reveal', detail: 'C2 revealed' });
+  }
+  if (STATE.metrics && STATE.metrics.c2SeveredRound) {
+    const r = STATE.metrics.c2SeveredRound;
+    roundMarkers[r] = roundMarkers[r] || [];
+    roundMarkers[r].push({ kind:'sever', detail: 'C2 severed' });
+  }
+  if (STATE.handoffFired && STATE.metrics && STATE.metrics.handoffRound) {
+    const r = STATE.metrics.handoffRound;
+    roundMarkers[r] = roundMarkers[r] || [];
+    roundMarkers[r].push({ kind:'handoff', detail: 'IAB → successor' });
+  }
+
+  // Build HTML grid
+  const colW = 44;
+  const rowH = 22;
+  const nameW = 78;
+  let html = `
+    <div style="color:var(--muted);font-size:9px;letter-spacing:0.08em;margin-bottom:6px;">
+      // ROUND-BY-ROUND TIMELINE — scroll horizontally; click a round header for details.
+      ${JOSHUA_SEED ? '<span style="color:var(--cyan-dim);">seed: ' + JOSHUA_SEED.raw + '</span>' : ''}
+    </div>
+    <div style="overflow-x:auto;border:1px solid var(--grid-line);background:rgba(0,0,0,0.3);">
+    <table style="border-collapse:collapse;font-family:monospace;font-size:10px;">
+      <thead>
+        <tr>
+          <th style="position:sticky;left:0;background:#060a10;z-index:2;min-width:${nameW}px;padding:4px 6px;text-align:left;border-right:1px solid var(--grid-line);border-bottom:1px solid var(--grid-line);color:var(--muted);">node</th>`;
+  for (let r = 1; r <= maxRound; r++) {
+    const markers = roundMarkers[r] || [];
+    const roundHasMarker = markers.length > 0;
+    html += `<th data-round="${r}" class="tl-round-head" style="min-width:${colW}px;padding:4px 2px;text-align:center;border-right:1px solid var(--grid-line);border-bottom:1px solid var(--grid-line);color:${roundHasMarker ? 'var(--amber)' : 'var(--cyan-dim)'};cursor:pointer;" title="Click for round details">r${r}${roundHasMarker ? ' *' : ''}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+
+  // Row per node
+  STATE.nodes.forEach(n => {
+    const nodeColor = n.state === 'compromised' ? 'var(--red)' : (n.state === 'stressed' ? 'var(--amber)' : 'var(--white)');
+    html += `<tr>
+      <td style="position:sticky;left:0;background:#060a10;padding:3px 6px;border-right:1px solid var(--grid-line);border-bottom:1px solid rgba(140,160,200,0.08);color:${nodeColor};white-space:nowrap;">${n.id}</td>`;
+    for (let r = 1; r <= maxRound; r++) {
+      const events = grid[r][n.id] || [];
+      let cellHtml = '';
+      if (events.length === 0) {
+        cellHtml = '<span style="color:rgba(140,160,200,0.15);">·</span>';
+      } else {
+        // Compact event glyphs
+        const glyphs = events.map(ev => {
+          if (ev.kind === 'compromise') return `<span style="color:var(--red);" title="compromised">■</span>`;
+          if (ev.kind === 'combo') return `<span style="color:#ffd84d;" title="combo: ${ev.detail}">◆</span>`;
+          if (ev.kind === 'spawn') return `<span style="color:var(--red);opacity:0.6;" title="threat spawn: ${ev.detail}">▲</span>`;
+          if (ev.kind === 'action') {
+            const color = ev.outcome === 'effective' ? 'var(--green)' : (ev.outcome === 'wasted' ? 'var(--red)' : 'var(--amber)');
+            const sym = ev.outcome === 'effective' ? '✓' : (ev.outcome === 'wasted' ? '✗' : '~');
+            return `<span style="color:${color};" title="${ev.detail}">${sym}</span>`;
+          }
+          return `<span>?</span>`;
+        }).join('');
+        cellHtml = glyphs;
+      }
+      html += `<td style="text-align:center;padding:2px 2px;border-right:1px solid var(--grid-line);border-bottom:1px solid rgba(140,160,200,0.08);min-width:${colW}px;">${cellHtml}</td>`;
+    }
+    html += `</tr>`;
+  });
+
+  // Round-level marker row at the bottom (sector cascade, life safety, C2 events, handoff)
+  html += `<tr>
+    <td style="position:sticky;left:0;background:#060a10;padding:3px 6px;color:var(--amber);border-right:1px solid var(--grid-line);border-top:1px solid var(--grid-line);">events</td>`;
+  for (let r = 1; r <= maxRound; r++) {
+    const markers = roundMarkers[r] || [];
+    let cell = '';
+    markers.forEach(mk => {
+      if (mk.kind === 'cascade') cell += `<span style="color:var(--red);" title="sector cascade: ${mk.detail}">⚠⚠</span>`;
+      else if (mk.kind === 'lifesafety') cell += `<span style="color:var(--red);" title="life-safety: ${mk.detail}">+</span>`;
+      else if (mk.kind === 'c2reveal') cell += `<span style="color:var(--cyan);" title="C2 revealed">◉</span>`;
+      else if (mk.kind === 'sever') cell += `<span style="color:var(--green);" title="C2 severed">⚡</span>`;
+      else if (mk.kind === 'handoff') cell += `<span style="color:var(--magenta);" title="IAB handoff">⇄</span>`;
+    });
+    if (!cell) cell = '<span style="color:rgba(140,160,200,0.15);">·</span>';
+    html += `<td style="text-align:center;padding:2px;border-right:1px solid var(--grid-line);border-top:1px solid var(--grid-line);">${cell}</td>`;
+  }
+  html += `</tr></tbody></table></div>`;
+
+  // Legend
+  html += `
+    <div style="margin-top:10px;color:var(--muted);font-size:9px;line-height:1.7;">
+      <b style="color:var(--cyan);">LEGEND:</b>
+      <span style="color:var(--red);">▲</span> threat spawn ·
+      <span style="color:var(--red);">■</span> node compromised ·
+      <span style="color:var(--green);">✓</span> action effective ·
+      <span style="color:var(--amber);">~</span> action partial ·
+      <span style="color:var(--red);">✗</span> action wasted ·
+      <span style="color:#ffd84d;">◆</span> combo ·
+      <span style="color:var(--cyan);">◉</span> C2 revealed ·
+      <span style="color:var(--green);">⚡</span> SEVER ·
+      <span style="color:var(--magenta);">⇄</span> IAB handoff ·
+      <span style="color:var(--red);">⚠⚠</span> sector cascade ·
+      <span style="color:var(--red);">+</span> life-safety event
+    </div>
+    <div id="tl-round-detail" style="margin-top:10px;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--grid-line);color:var(--muted);font-size:10px;min-height:24px;">
+      Click a round header for a per-round detail breakdown.
+    </div>`;
+
+  return html;
+}
+
+// Build a per-round detail payload for the detail panel
+function renderTimelineRoundDetail(round) {
+  const m = STATE.metrics || {};
+  let out = `<div style="color:var(--cyan);font-weight:bold;letter-spacing:0.08em;">▸ ROUND ${round}</div>`;
+  const spawns = (m.threatSpawns || []).filter(s => s.round === round);
+  const actions = (m.actions || []).filter(a => a.round === round);
+  const combos = (STATE.combosTriggered || []).filter(c => c.round === round);
+  const lse = (STATE.lifeSafetyEvents || []).filter(e => e.round === round);
+  const sc = (m.sectorCascade && m.sectorCascade.round === round) ? m.sectorCascade : null;
+  if (spawns.length > 0) {
+    out += `<div style="margin-top:6px;color:var(--red);">THREAT SPAWNS:</div>`;
+    spawns.forEach(s => { out += `<div style="padding-left:10px;">▲ ${s.target} · ${s.techniqueId}</div>`; });
+  }
+  if (actions.length > 0) {
+    out += `<div style="margin-top:6px;color:var(--cyan-dim);">PLAYER ACTIONS:</div>`;
+    actions.forEach(a => {
+      const col = a.outcome === 'effective' ? 'var(--green)' : (a.outcome === 'wasted' ? 'var(--red)' : 'var(--amber)');
+      const sym = a.outcome === 'effective' ? '✓' : (a.outcome === 'wasted' ? '✗' : '~');
+      out += `<div style="padding-left:10px;color:${col};">${sym} ${(a.agentId||'').toUpperCase()} ▸ ${(a.actionId||'').toUpperCase()}${a.targetId ? ' → ' + a.targetId : ''}${a.wasteReason ? ' <span style="color:var(--muted);">(' + a.wasteReason + ')</span>' : ''}</div>`;
+    });
+  }
+  if (combos.length > 0) {
+    out += `<div style="margin-top:6px;color:#ffd84d;">COMBOS TRIGGERED:</div>`;
+    combos.forEach(c => { out += `<div style="padding-left:10px;">◆ ${c.comboName || c.comboId}${c.target ? ' @ ' + c.target : ''}</div>`; });
+  }
+  if (sc) {
+    out += `<div style="margin-top:6px;color:var(--red);">⚠⚠ SECTOR CASCADE: ${sc.triggerNode} compromised (${sc.doctrineRef})</div>`;
+  }
+  if (lse.length > 0) {
+    out += `<div style="margin-top:6px;color:var(--red);">LIFE-SAFETY EVENTS: ${lse.map(e => e.node).join(', ')}</div>`;
+  }
+  if (spawns.length === 0 && actions.length === 0 && combos.length === 0 && !sc && lse.length === 0) {
+    out += `<div style="margin-top:6px;color:var(--muted);">no recorded events</div>`;
+  }
+  return out;
 }
 
 function renderMovesTab() {
@@ -6255,6 +6835,34 @@ function renderCodexTab(el) {
     </div>
     <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: MFA on every remote-access gateway without exception (the Change Healthcare gateway had none); vendor interdependency mapping with contractual recovery SLAs; sector-wide intel-sharing via H-ISAC and HHS 405(d); pre-tested manual-mode clinical and billing workflows for 2-6 weeks of a key vendor being unavailable.</div>
     <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: UnitedHealth Group public earnings disclosures Q1-Q4 2024; HHS OCR breach notification; U.S. Senate Finance Committee hearing testimony by UnitedHealth CEO (May 2024); H-ISAC post-incident briefings; CISA #StopRansomware ALPHV/BlackCat profile. In-game: CRYO archetype's slow_dwell_fast_impact tempo + doubleExtortion flag model this pattern.</div>
+  </div>`;
+
+  // v0.9.4: Belarusian Cyber-Partisans + BelZhD Jan 2022 pattern
+  html += `<div class="codex-entry" style="border-left:2px solid #ffb84d;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#ffb84d;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ BELARUSIAN CYBER-PARTISANS / BELZHD JAN 2022 PATTERN</span></div>
+    <div class="codex-desc" style="margin-top:3px;">In late January 2022, during Russian force buildup and transit into Belarus prior to the Feb 24 invasion of Ukraine, the Belarusian Cyber-Partisans (@cpartisans) publicly claimed a ransomware-style encryption attack against Belarusian Railways (БелЖД / BelZhD). Partisans stated they encrypted dispatch servers to disrupt Russian troop and materiel movements by rail. Public reporting (Reuters, AP) corroborated significant BelZhD service disruption during the attack window. The incident is a hacktivist archetype that demonstrated two things: (1) a motivated non-state actor can meaningfully disrupt rail operations by targeting dispatch IT rather than trackside OT, and (2) the operational cascade — trains stop even though signals and locomotives are physically fine — is the point of this attack, not the data.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Entry vector</b>: not publicly disclosed by Partisans; typical for hacktivist operations with insider assistance in rail-industry Belarus-specific context.<br>
+      <b>Payload</b>: encryption of dispatch servers (public statements). Partisans later released stolen BelZhD data over a period of weeks.<br>
+      <b>Operational effect</b>: movement authorities frozen, trains held at interlockings, freight schedules collapsed. Russian military rail movements disrupted.<br>
+      <b>Doctrine lesson</b>: dispatch is the control plane for every movement. Its loss paralyzes rail without ever touching trackside gear. Operators who assume trackside hardening is enough miss the point.
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: TSA Security Directive 1580/82-2022-01A incident response + operational fallback requirements; CENELEC 50159 safety-critical communications posture; dispatch-less fallback procedures (manual authority issuance by voice, with recorded authority codes) practiced regularly, not just on paper.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Belarusian Cyber-Partisans public channel statements Jan 2022; Reuters and AP reporting Jan 2022; TSA Security Directive 1580/82-2022-01A; CENELEC 50159 safety-critical rail communications standard. In-game: triggered by RAILGUARD sectorCascade when DISPATCH compromises.</div>
+  </div>`;
+
+  // v0.9.4: Polish Aug 2023 VHF radio-stop pattern
+  html += `<div class="codex-entry" style="border-left:2px solid #ffb84d;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#ffb84d;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ POLISH FREIGHT RAILWAY VHF RADIO-STOP INCIDENTS (Polish ABW, Aug 2023)</span></div>
+    <div class="codex-desc" style="margin-top:3px;">Over several days in August 2023, more than 20 unauthorized emergency-stop signals were transmitted to freight trains in Poland over the legitimate Polish rail VHF cab-signaling system. The Polish Internal Security Agency (ABW) investigated and publicly characterized the activity as sabotage; the trigger-signal protocol in use was cleartext tones with no cryptographic authentication by design (a decades-old safety protocol that pre-dated cybersecurity concerns). No fatalities resulted — PTC fail-safe behavior stopped trains as designed — but the pattern demonstrated how an RF-protocol compromise can cause operational-safety-margin loss without ever touching any computer.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Vector</b>: VHF transmitter in RF range of track; cleartext signaling protocol; no mutual authentication between transmitter and receiver on legacy cab-signaling.<br>
+      <b>Payload</b>: emergency-stop tone sequences, which cause rolling stock to brake. The brake is a safety-design response (fail-safe); the attack weaponizes the safety behavior itself.<br>
+      <b>Operational effect</b>: ~20 unauthorized stops in the investigation window; service suspensions; forensic investigation across the Polish network to confirm safety margins.<br>
+      <b>Doctrine lesson</b>: legacy safety-engineering authentication (fail-safe design) is NOT cybersecurity authentication. The command protocol needs cryptographic signing. CENELEC 50159 (safety-related communications in transmission systems) is the European-standard successor pattern for signed, authenticated rail communications.
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: cryptographic signing on command messages per CENELEC 50159 Category 3 (where upgrade is feasible); monitoring of RF spectrum around rail corridors for anomalous command-tone transmissions; dispatcher cross-check procedures when emergency stops are received without a known cause.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Polish Agencja Bezpieczeństwa Wewnętrznego (ABW) public statements Aug-Sep 2023; Polish Press Agency (PAP) reporting; CENELEC 50159 standard. In-game: IRONHAZE actor on RAILGUARD can land on VHF-LINK to model this pattern.</div>
   </div>`;
 
   // v0.9.2: Aerospace APT codex entry
@@ -7396,6 +8004,7 @@ function resumeSavedRun(saved) {
   else if (STATE.mission.id === 'NIGHTWATCH') setupSatelliteOps();
   else if (STATE.mission.id === 'TIDEBREAK') setupMaritimePort();
   else if (STATE.mission.id === 'HEARTLINE') setupHealthcare();
+  else if (STATE.mission.id === 'RAILGUARD') setupRailway();
   setupAgents();
   // Overlay the saved node states (resilience, state, operatorState)
   (saved.nodeStates || []).forEach(ns => {
@@ -7467,6 +8076,7 @@ function beginGame(missionId) {
   else if (STATE.mission.id === 'NIGHTWATCH') setupSatelliteOps();
   else if (STATE.mission.id === 'TIDEBREAK') setupMaritimePort();
   else if (STATE.mission.id === 'HEARTLINE') setupHealthcare();
+  else if (STATE.mission.id === 'RAILGUARD') setupRailway();
   setupAgents();
 
   // v0.5: demo overrides C2 from script

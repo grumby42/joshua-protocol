@@ -26,14 +26,15 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.3)
+## What's in the box (v0.9.4)
 
-### Four missions, each grounded in real incident patterns
+### Five missions, each grounded in real incident patterns
 
 - **OP. BLACKFROST** — 8-node Northeast power grid. Ransomware / APT / insider / hacktivist / supply-chain / pre-positioning adversary pool.
 - **OP. NIGHTWATCH** — 5-asset satellite constellation (GEO + 2 LEO sun-synchronous + ground station + mission control). Uses real orbital propagation (SGP4-style Kepler solver, J2 perturbation, ECI→geodetic, GMST, link budget) lifted from the author's AeroSec-Lab platform. Grounded in SPARTA technique catalog.
 - **OP. TIDEBREAK** — 8-asset Gulf Coast container terminal. Grounded in Port of Houston 2021 (Volt Typhoon-attributed via ManageEngine CVE-2021-40539), Maersk NotPetya 2017 ($300M loss, 76 port terminals offline), and ZPMC crane supply-chain concerns.
-- **OP. HEARTLINE** 🆕 — 8-node regional hospital system (EDGE / AD / EHR / PACS / LAB / PHARM / BIOMED-PUMP / BIOMED-TELEM). Grounded in NHS WannaCry 2017 (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks). First mission with a **life-safety consequence model**: compromise of a patient-connected biomed device registers as a care-delivery event (per FDA Medical Device Cybersecurity Guidance 2023 + HHS 405(d) Healthcare Industry Cybersecurity Practices), not a dollar-value event.
+- **OP. HEARTLINE** — 8-node regional hospital system (EDGE / AD / EHR / PACS / LAB / PHARM / BIOMED-PUMP / BIOMED-TELEM). Grounded in NHS WannaCry 2017 (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks). First mission with a **life-safety consequence model**: compromise of a patient-connected biomed device registers as a care-delivery event (per FDA Medical Device Cybersecurity Guidance 2023 + HHS 405(d) Healthcare Industry Cybersecurity Practices), not a dollar-value event.
+- **OP. RAILGUARD** 🆕 — 8-node regional railway (AD / DISPATCH / PTC-SERVER / FREIGHT-TMS / INTERLOCK-A / INTERLOCK-B / VHF-LINK / GRADE-X). Grounded in Belarusian Cyber-Partisans Jan 2022 (BelZhD dispatch encryption during Russian troop movements), Polish ABW Aug 2023 investigation of radio-stop command injection on freight lines (20+ unauthorized stop signals via legitimate cleartext VHF signaling), and Taiwan TRA 2022-2024 ransomware+phishing. Life-safety consequence model: trackside signaling or grade-crossing compromise = passenger- or motorist-safety event per FRA 49 CFR 236 Subpart H + TSA Security Directive 1580/82-2022-01A.
 
 ### Eight threat actor archetypes (v0.9: reality-grounded rework)
 
@@ -148,6 +149,29 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - **Custom node rendering**: BIOMED nodes draw as EKG-pulse diamonds (visual cue that this is patient-connected), EHR draws as a clinical-cross circle (visual cue that this is the control plane). "Patient zone" band at the bottom of the map with a `⚠ PATIENT ZONE — LIFE SAFETY` legend.
 - **CFI debrief**: HEARTLINE-specific doctrine notes on life-safety events and (on loss) the Change Healthcare 2024 doctrinal lesson — vendor interdependency mapping and manual-mode workflow readiness, not "better backups alone."
 
+### v0.9.4: OP. RAILGUARD rail mission + TIMELINE debrief tab
+
+**OP. RAILGUARD — 5th playable mission**
+
+- 8 nodes: AD → DISPATCH → PTC-SERVER / FREIGHT-TMS (back-office) → INTERLOCK-A / INTERLOCK-B (trackside signaling) + VHF-LINK (RF cab-signaling) + GRADE-X (grade crossing). 14-link topology; DISPATCH is the hub. Purdue mapping: rail-back-office=L3, interlock=L2, trackside/rf-link=L1, identity=L4.
+- Grounded in **Belarusian Cyber-Partisans Jan 2022** (BelZhD dispatch encryption during Russian troop movements), **Polish ABW Aug 2023** investigation (20+ unauthorized VHF radio-stop signals on freight lines using legitimate cleartext signaling — no cryptographic authentication by legacy design), **Taiwan TRA 2022-2024** (ransomware + phishing against back-office), **TSA Security Directive 1580/82-2022-01A** (rail cybersecurity requirements), **FRA 49 CFR Part 236 Subpart H** (PTC cybersecurity + fallback operations), and **CENELEC 50159** (safety-critical rail communications).
+- Life-safety consequence model: compromise of INTERLOCK-A, INTERLOCK-B, or GRADE-X = passenger- or motorist-safety event (not dollar loss). CFI debrief cites FRA Part 236 + TSA 1580/82 and the Polish Aug 2023 pattern.
+- Belarusian sector cascade: when DISPATCH compromises, interlockings + PTC + FREIGHT-TMS go stressed with narrator beat citing the real BelZhD incident doctrine ("Dispatch is the control plane for every movement").
+- Valid actor pool: CRYO (Taiwan TRA archetype), **IRONHAZE** (hacktivist with command-injection — maps Belarus Partisans + Polish VHF patterns), WARDEN → CRYO/HOLLOWKEY handoff, HOLLOWKEY, GHOSTWIRE insider, VOLTFORGE pre-positioning. 6 actors.
+- 2 new ATT&CK for ICS techniques: **T0871 Execution Through API** (rail SCADA / PTC back-office API abuse per CISA ICS-CERT advisories), **T0836 Modify Parameter** (parameter manipulation of signaling/PTC gains — Polish Aug 2023 investigation documented command-side parameter abuse).
+- 2 new codex entries: **Belarusian Cyber-Partisans / BelZhD Jan 2022** (Reuters + AP reporting, TSA 1580/82, CENELEC 50159), **Polish Freight Railway VHF Radio-Stop Incidents** (Polish ABW statements Aug-Sep 2023, PAP reporting, CENELEC 50159 doctrine).
+- Custom node rendering: INTERLOCK draws as a 3-lamp signal aspect; VHF-LINK draws as an antenna mast with animated RF wave arcs; GRADE-X draws as a diamond with X-mark motif. Track-plane band + public-zone (life-safety) band at the bottom of the map.
+
+**TIMELINE debrief tab**
+
+- New TIMELINE tab in the debrief (fourth tab alongside RUBRIC / TRENDS / MOVES)
+- Scrubbable round-by-round grid: horizontal rounds × vertical nodes, event glyphs in each cell (threat spawn, compromise, player action with outcome symbol, combo)
+- Round-level event row at the bottom: C2 revealed, C2 severed, IAB handoff, sector cascade, life-safety events
+- Click a round header → details panel below shows that round's full breakdown (spawns, actions with outcomes + waste reasons, combos, cascade, life-safety)
+- Reuses `STATE.metrics` + `STATE.combosTriggered` + `STATE.lifeSafetyEvents` (now with new `metrics.compromisesByRound`, `metrics.handoffRound`, `metrics.handoffFrom/To` tracking)
+- Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
+- Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
+
 ---
 
 ## Framework references and provenance
@@ -228,4 +252,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.3** (October 2026) · BUILD `HUNT-20261017-1557Z`
+Current version: **v0.9.4** (October 2026) · BUILD `HUNT-20261017-1645Z`
