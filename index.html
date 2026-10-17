@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.2</title>
+<title>JOSHUA PROTOCOL v0.9.3</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1555Z';
-const STAMP_UTC = '2026-10-17T15:55Z';
-const APP_VERSION = 'v0.9.2';
+const BUILD_ID = 'HUNT-20261017-1557Z';
+const STAMP_UTC = '2026-10-17T15:57Z';
+const APP_VERSION = 'v0.9.3';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -1485,6 +1485,17 @@ const TECHNIQUES = {
     novice:'Adversary plants malicious code onboard satellite.',
     tools:['Software attestation (per-boot cryptographic measurement)','Memory checksums','Secure-boot chain verification','Ground-side build artifact signing'],
     counters:['D3-EI: Executable Integrity','Secure boot with hardware root of trust','Signed FSW uploads with per-image counter','Dual-authority FSW upload approval'] },
+  // v0.9.3: healthcare-sector techniques for OP. HEARTLINE
+  'T1557': { fw:'attack', name:'Adversary-in-the-Middle', tactic:'Credential Access, Collection',
+    desc:'Adversary positions between communicating parties to intercept, modify, or inject data. In healthcare, this is the DICOM/HL7 vector — unencrypted imaging and lab-results traffic between PACS, EHR, laboratory analyzers, and biomedical devices is often cleartext on segment traffic, which lets an adversary modify image metadata, swap patient identifiers, or inject fabricated results. HHS 405(d) Healthcare Industry Cybersecurity Practices calls out HL7 cleartext as a known-exposed interface.',
+    novice:'Adversary sits between two hospital systems to read or change the data flowing between them.',
+    tools:['Zeek with dicom / hl7 parsers','PACS/EHR interface-engine audit logs','Mutual-TLS inventory per interface'],
+    counters:['TLS everywhere on HL7 / DICOM interfaces','Mutual authentication at interface engines','HL7-aware segmentation','D3-NTA: Network Traffic Analysis','HHS 405(d) HICP Practice #8 (Network Management)'] },
+  'T1200': { fw:'attack', name:'Hardware Additions', tactic:'Initial Access',
+    desc:'Adversary introduces unauthorized hardware into the environment — rogue USB, implanted keylogger, or (in healthcare) a biomedical device with embedded malware shipped from a compromised supplier. FDA Medical Device Cybersecurity guidance (2023) and CISA / FBI advisories on legacy biomedical device fleets both document the hardware-supply-chain exposure: devices often run unpatched OSes with vendor-mandated no-patch policies that leave known CVEs exploitable for the device\'s operational life.',
+    novice:'Adversary brings their own compromised hardware into the environment.',
+    tools:['Biomedical device asset inventory with model, firmware, patch status','Physical device inspection program','Network device-fingerprinting (NAC)'],
+    counters:['Biomed asset management program','Network segmentation of biomed VLAN','NAC enforcement at ports','FDA 524B / Patch Act requirements on vendor patch posture'] },
   // v0.9.2: additional SPARTA entries needed for KINGFISHER depth chain
   'REC-0005': { fw:'sparta', name:'Eavesdropping', tactic:'Reconnaissance',
     desc:'Passive capture of mission data downlink or telemetry downlink — imagery, SIGINT, bus-state telemetry, operator voice loops over SATCOM. Non-intrusive; detectable only by signal-strength or quality-of-service inference. Industry baseline assumption on sensitive orbits: assume adversary SIGINT coverage of all unencrypted downlinks.',
@@ -2350,6 +2361,48 @@ const MISSIONS = {
       doctrineRef: 'Maersk NotPetya 2017',
     },
   },
+  // v0.9.3: OP. HEARTLINE — regional healthcare system with life-safety consequence
+  'HEARTLINE': {
+    id: 'HEARTLINE',
+    name: 'OP. HEARTLINE',
+    domain: 'HEALTHCARE / HOSPITAL',
+    sector: 'REGIONAL HEALTH SYSTEM',
+    threat: 'Active Campaign',
+    threatArchetype: 'ransomware',
+    summary: 'Defend an 8-node regional hospital against ransomware-dominant campaign with patient-safety stakes. The NHS WannaCry 2017 pattern (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 pattern (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks) establish ground truth: in healthcare, availability loss on the EHR becomes operational paralysis within hours, and compromise of patient-connected biomed devices is a life-safety event, not a dollar-value event.',
+    frameworks: ['attack','ics','d3fend'],
+    // Tight window + low threshold — hospitals lose operational tempo in hours.
+    maxRounds: 10,
+    loseThreshold: 3,
+    // Healthcare threatMix: ransomware core + credential theft + healthcare-protocol MITM + biomed supply-chain
+    threatMix: ['T1566.001','T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1003.001','T1059','T1059.001','T1021','T1021.001','T1486','T1490','T1657','T1070.001','T1087.001','T1557','T1200'],
+    impactTechs: ['T1486','T1490','T1657'],
+    // Valid actors per CISA #StopRansomware Hospital advisories (CRYO dominant),
+    // the 2026 infostealer-to-health pipeline (HOLLOWKEY), broker handoff into
+    // ransomware (WARDEN -> CRYO/HOLLOWKEY), EHR snooping / insider dumps
+    // (GHOSTWIRE per HHS OCR breach reporting), and the strategic concern of
+    // pre-positioning in hospital networks (VOLTFORGE).
+    validActors: ['CRYO','HOLLOWKEY','WARDEN','GHOSTWIRE','VOLTFORGE'],
+    defaultActor: 'CRYO',
+    // Life-safety sector cascade: when EHR compromises, clinical operations
+    // paralyze. Models NHS WannaCry 2017 (appointment system down =
+    // appointments cancelled, surgeries diverted; care continues but at
+    // dangerous tempo on paper). Biomed stressed because clinical orders
+    // can't route cleanly.
+    sectorCascade: {
+      triggerNode: 'EHR',
+      effectNodes: ['PACS','LAB','PHARM','BIOMED-PUMP','BIOMED-TELEM'],
+      effectState: 'stressed',
+      narration: 'EHR COMPROMISED — CLINICAL CASCADE. The NHS WannaCry 2017 pattern: appointment and order routing lost. Imaging requests queue. Lab result delivery degraded. Pharmacy order verification manual. Biomed devices still functional but orders flow by paper and voice. Error rate climbs. This is where the ~19,000 cancelled appointments came from — not from the ransomware itself, but from the loss of the information backbone that coordinates care.',
+      doctrineRef: 'NHS WannaCry 2017',
+    },
+    // v0.9.3: patient-safety event trigger — when any BIOMED-* node compromises,
+    // raise the patientSafetyEvent flag for debrief and narrator-beat purposes.
+    // Not a hard mission-end (recoverable), but a doctrine marker: compromise
+    // of a patient-connected device is a care-delivery event, not a data event.
+    lifeSafetyNodes: ['BIOMED-PUMP','BIOMED-TELEM'],
+    lifeSafetyNarration: 'PATIENT-CONNECTED DEVICE COMPROMISED. This is a life-safety event, not a data-integrity event. In the real world: notify Patient Safety per hospital policy; isolate affected device fleet; manual-mode fallback with bedside confirmation of every dose/parameter. The FDA Medical Device Cybersecurity Guidance (2023) and HHS 405(d) HICP both treat biomed compromise as a reportable patient-safety event when care delivery is affected.',
+  },
 };
 
 
@@ -2792,6 +2845,30 @@ const PURDUE_MAPPING = {
       'DALI': 0,
     },
   },
+  // v0.9.3: HEARTLINE healthcare mapping. Healthcare doesn't map cleanly to
+  // Purdue (built for industrial control), but the IEC 62443 adaptation for
+  // medical devices + FDA guidance treats biomedical devices as L0-L1 (field),
+  // interface engines as L2 (local supervisory), EHR/PACS/LAB as L3 (ops),
+  // enterprise AD/business as L4-L5, and edge VPN as DMZ.
+  HEARTLINE: {
+    byType: {
+      'edge':    'DMZ',  // VPN / edge appliance
+      'identity': 4,     // AD / IAM
+      'ehr':      3,     // EHR = clinical ops supervisory
+      'clinical-it': 3,  // PACS, LAB, PHARM = clinical IT
+      'biomed':   1,     // patient-connected = L1 field / local-controller
+    },
+    byId: {
+      'EDGE':         'DMZ',
+      'AD':           4,
+      'EHR':          3,
+      'PACS':         3,
+      'LAB':          3,
+      'PHARM':        3,
+      'BIOMED-PUMP':  1,
+      'BIOMED-TELEM': 1,
+    },
+  },
 };
 
 function assignPurdueLevels() {
@@ -2893,6 +2970,7 @@ function layoutNodes() {
   if (!STATE.mission) return;
   if (STATE.mission.id === 'BLACKFROST') layoutEnergyGrid();
   else if (STATE.mission.id === 'TIDEBREAK') layoutMaritimePort();
+  else if (STATE.mission.id === 'HEARTLINE') layoutHealthcare();
 }
 
 function bfsPath(startId, endId) {
@@ -2921,6 +2999,7 @@ function render() {
   if (STATE.mission.id === 'BLACKFROST') renderEnergyMap();
   else if (STATE.mission.id === 'NIGHTWATCH') renderSatelliteMap();
   else if (STATE.mission.id === 'TIDEBREAK') renderMaritimeMap();
+  else if (STATE.mission.id === 'HEARTLINE') renderHealthcareMap();
 }
 
 
@@ -3855,6 +3934,190 @@ function drawVesselNode(n) {
 
 
 // =============================================================================
+// 8.6 HEALTHCARE MISSION (HEARTLINE) — v0.9.3
+//
+// 8-node regional hospital. Real-world grounded: NHS WannaCry 2017 (£92M loss,
+// ~19,000 cancelled appointments, surgeries diverted — the archetype healthcare
+// ransomware consequence pattern), Change Healthcare Feb 2024 (ALPHV/BlackCat,
+// $872M direct loss, pharmacy claims nationwide offline for weeks — the modern
+// sector-cascading ransomware pattern), and HHS 405(d) Healthcare Industry
+// Cybersecurity Practices + FDA Medical Device Cybersecurity Guidance (2023)
+// for the biomed exposure model.
+//
+// Topology principle: EDGE is the perimeter, AD authenticates everything,
+// EHR is the control plane for clinical operations, PACS/LAB/PHARM are
+// clinical IT, BIOMED-* are patient-connected and life-safety-sensitive.
+// =============================================================================
+function setupHealthcare() {
+  const nodeDefs = [
+    { id: 'EDGE',         type: 'edge',        label: 'EDGE',     fullName: 'VPN / Edge Appliance' },
+    { id: 'AD',           type: 'identity',    label: 'AD',       fullName: 'Active Directory' },
+    { id: 'EHR',          type: 'ehr',         label: 'EHR',      fullName: 'Electronic Health Record' },
+    { id: 'PACS',         type: 'clinical-it', label: 'PACS',     fullName: 'Picture Archiving & Communication System' },
+    { id: 'LAB',          type: 'clinical-it', label: 'LAB',      fullName: 'Laboratory Information System' },
+    { id: 'PHARM',        type: 'clinical-it', label: 'PHARM',    fullName: 'Pharmacy Automation' },
+    { id: 'BIOMED-PUMP',  type: 'biomed',      label: 'PUMP',     fullName: 'Infusion Pump Fleet' },
+    { id: 'BIOMED-TELEM', type: 'biomed',      label: 'TELEM',    fullName: 'Patient Telemetry' },
+  ];
+  STATE.nodes = nodeDefs.map(d => ({
+    ...d, x: 0, y: 0,
+    state: 'healthy',
+    resilience: 0,
+    pulsePhase: Math.random() * Math.PI * 2,
+  }));
+  // Topology — EDGE is perimeter, AD authenticates, EHR is clinical control
+  // plane, PACS/LAB/PHARM are clinical IT, BIOMED-* are patient-connected
+  STATE.links = [
+    ['EDGE','AD'],
+    ['AD','EHR'], ['AD','PACS'], ['AD','LAB'], ['AD','PHARM'],
+    ['EHR','PACS'], ['EHR','LAB'], ['EHR','PHARM'],              // clinical dependencies
+    ['EHR','BIOMED-PUMP'], ['EHR','BIOMED-TELEM'],                // clinical order routing
+    ['PACS','LAB'],                                                // imaging-lab result cross-flow
+    ['PHARM','BIOMED-PUMP'],                                       // pharmacy orders -> pump fleet
+    ['BIOMED-PUMP','BIOMED-TELEM'],                                // shared patient context
+  ];
+  document.getElementById('view-toggle').classList.remove('active');
+  layoutHealthcare();
+  assignPurdueLevels();
+}
+
+function layoutHealthcare() {
+  const margin = 32;
+  const w = CW - margin * 2;
+  const h = CH - margin * 2;
+  const byId = {};
+  STATE.nodes.forEach(n => byId[n.id] = n);
+  // Row 1: EDGE at top (perimeter)
+  if (byId['EDGE']) { byId['EDGE'].x = margin + w * 0.5; byId['EDGE'].y = margin + h * 0.08; }
+  // Row 2: AD below EDGE (identity backbone)
+  if (byId['AD']) { byId['AD'].x = margin + w * 0.5; byId['AD'].y = margin + h * 0.26; }
+  // Row 3: EHR centered (clinical control plane), with PACS/LAB/PHARM
+  if (byId['EHR']) { byId['EHR'].x = margin + w * 0.5; byId['EHR'].y = margin + h * 0.48; }
+  if (byId['PACS']) { byId['PACS'].x = margin + w * 0.15; byId['PACS'].y = margin + h * 0.48; }
+  if (byId['LAB']) { byId['LAB'].x = margin + w * 0.85; byId['LAB'].y = margin + h * 0.48; }
+  if (byId['PHARM']) { byId['PHARM'].x = margin + w * 0.5; byId['PHARM'].y = margin + h * 0.68; }
+  // Row 4: patient-connected biomed (bottom — closest to patient, visually)
+  if (byId['BIOMED-PUMP']) { byId['BIOMED-PUMP'].x = margin + w * 0.30; byId['BIOMED-PUMP'].y = margin + h * 0.88; }
+  if (byId['BIOMED-TELEM']) { byId['BIOMED-TELEM'].x = margin + w * 0.70; byId['BIOMED-TELEM'].y = margin + h * 0.88; }
+}
+
+function renderHealthcareMap() {
+  drawBackgroundGrid();
+  drawPurdueZones();
+  // Faint "patient zone" band at the bottom to signal life-safety area
+  const patientTop = CH * 0.78;
+  const grad = ctx.createLinearGradient(0, patientTop, 0, CH);
+  grad.addColorStop(0, 'rgba(255,80,120,0.03)');
+  grad.addColorStop(1, 'rgba(255,80,120,0.12)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, patientTop, CW, CH - patientTop);
+  // Patient-zone label on left margin
+  ctx.save();
+  ctx.font = '8px monospace';
+  ctx.fillStyle = 'rgba(255,80,120,0.5)';
+  ctx.textAlign = 'left';
+  ctx.fillText('⚠ PATIENT ZONE — LIFE SAFETY', 10, CH - 10);
+  ctx.restore();
+
+  STATE.links.forEach(([a, b]) => drawLink(getNode(a), getNode(b)));
+  updateParticles();
+  drawParticles();
+
+  STATE.nodes.forEach(n => {
+    if (n.type === 'biomed') drawBiomedNode(n);
+    else if (n.type === 'ehr') drawEHRNode(n);
+    else drawNode(n);
+  });
+
+  updateAttackChains();
+  drawAttackTrail();
+  drawAttackChains();
+  if (STATE.selectedTarget) {
+    const n = getNode(STATE.selectedTarget);
+    if (n) drawSelectionHalo(n);
+  }
+  STATE.plannedActions.forEach((a, idx) => {
+    const n = getNode(a.target);
+    if (!n) return;
+    const ag = STATE.agents[a.agent];
+    drawQueueMarker(n, ag.color, idx);
+  });
+}
+
+function drawBiomedNode(n) {
+  // Biomed node: heart-pulse motif around the node body — reinforces
+  // "this is patient-connected, this is life-safety."
+  const c = n.state === 'compromised' ? '#ff5080'
+          : n.state === 'attacked' ? '#ff8f3f'
+          : n.state === 'stressed' ? '#ffb84d'
+          : '#5cff8a';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  // Diamond body
+  ctx.beginPath();
+  ctx.moveTo(n.x, n.y - 10);
+  ctx.lineTo(n.x + 10, n.y);
+  ctx.lineTo(n.x, n.y + 10);
+  ctx.lineTo(n.x - 10, n.y);
+  ctx.closePath();
+  ctx.stroke();
+  // EKG pulse — small zigzag inside the diamond
+  ctx.beginPath();
+  const px = n.x - 7;
+  const t = (performance.now() * 0.002 + (n.pulsePhase || 0)) % 1;
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 1.5;
+  ctx.moveTo(px, n.y);
+  ctx.lineTo(px + 3, n.y);
+  ctx.lineTo(px + 5, n.y - (t < 0.5 ? 5 : 0));
+  ctx.lineTo(px + 7, n.y + (t < 0.5 ? 4 : 0));
+  ctx.lineTo(px + 9, n.y);
+  ctx.lineTo(px + 14, n.y);
+  ctx.stroke();
+  // Label
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c;
+  ctx.fillText(n.label, n.x, n.y + 24);
+  if (n.resilience > 0) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.fillText(`+${n.resilience}`, n.x, n.y + 34);
+  }
+}
+
+function drawEHRNode(n) {
+  // EHR node: slightly larger with a cross motif inside — signals the
+  // clinical control plane. Larger than peers so the player visually
+  // knows this is the high-value asset.
+  const c = n.state === 'compromised' ? '#ff5080'
+          : n.state === 'attacked' ? '#ff8f3f'
+          : n.state === 'stressed' ? '#ffb84d'
+          : '#4ee2ff';
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(n.x, n.y, 14, 0, Math.PI * 2);
+  ctx.stroke();
+  // Clinical cross inside
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(n.x, n.y - 8);
+  ctx.lineTo(n.x, n.y + 8);
+  ctx.moveTo(n.x - 8, n.y);
+  ctx.lineTo(n.x + 8, n.y);
+  ctx.stroke();
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c;
+  ctx.fillText(n.label, n.x, n.y + 28);
+  if (n.resilience > 0) {
+    ctx.fillStyle = '#ffb84d';
+    ctx.fillText(`+${n.resilience}`, n.x, n.y + 38);
+  }
+}
+
+
+// =============================================================================
 // 9. PARTICLES & ATTACK CHAIN ANIMATIONS
 // =============================================================================
 function spawnParticles() {
@@ -4015,6 +4278,11 @@ function pickC2() {
       // Insider sits on TOS, PCS, or VTS — IT/coordination layer
       const candidates = STATE.nodes.filter(n => n.type === 'it' || n.type === 'control');
       STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+    } else if (STATE.mission.id === 'HEARTLINE') {
+      // v0.9.3: Insider in healthcare sits on a clinical workstation / AD
+      // (EHR snooping / HR fallout vector per HHS OCR insider breach reporting).
+      const candidates = STATE.nodes.filter(n => n.type === 'clinical-it' || n.type === 'identity');
+      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
     }
     return;
   }
@@ -4034,6 +4302,21 @@ function pickC2() {
       // Other actors: prefer IT nodes (Houston-style)
       const candidates = STATE.nodes.filter(n => n.type === 'it' || n.type === 'comms');
       STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+    }
+  } else if (STATE.mission.id === 'HEARTLINE') {
+    // v0.9.3: Healthcare external C2 — the Change Healthcare 2024 pattern says
+    // edge VPN gateway without MFA is the archetypal entry; CISA #StopRansomware
+    // Hospital guides corroborate. Default foothold is EDGE. HOLLOWKEY (external
+    // creds) can also land on AD. VOLTFORGE prefers clinical-it (long-dwell
+    // credential theft against operator consoles).
+    if (actor && actor.archetype === 'compromised_credentials') {
+      STATE.c2Node = Math.random() < 0.6 ? 'EDGE' : 'AD';
+    } else if (actor && actor.archetype === 'pre_positioning') {
+      const candidates = STATE.nodes.filter(n => n.type === 'clinical-it' || n.type === 'identity' || n.type === 'edge');
+      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+    } else {
+      // CRYO ransomware / WARDEN broker / default: edge VPN per sector pattern
+      STATE.c2Node = 'EDGE';
     }
   }
 }
@@ -4108,6 +4391,14 @@ function maybeLaunchThreat(opts) {
       else if (n.id === 'CTRL') w = 3;
       else if (n.type === 'crane') w = 2;
       else if (n.id === 'DALI') w = 2;
+    } else if (STATE.mission.id === 'HEARTLINE') {
+      // Healthcare targeting: EHR is clinical control plane (highest), AD is
+      // identity backbone (ransomware pivots through it), biomed devices are
+      // life-safety targets. PACS/LAB/PHARM are clinical IT (moderate).
+      if (n.id === 'EHR') w = 3;
+      else if (n.id === 'AD') w = 3;
+      else if (n.type === 'biomed') w = 2;
+      else if (n.type === 'clinical-it') w = 2;
     }
     for (let i = 0; i < w; i++) weighted.push(n);
   });
@@ -4354,10 +4645,27 @@ function generateCFINote(rubric) {
   // v0.9.1: TIDEBREAK sector-cascade doctrine note (Maersk NotPetya 2017)
   if (STATE.metrics && STATE.metrics.sectorCascade) {
     const sc = STATE.metrics.sectorCascade;
-    notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real-world Maersk incident ($300M loss, 76 terminals offline, 10-day recovery), the lesson was: TOS is not an IT system in an OT port, it is the control plane for everything that moves. Bulwark it day one; recover it with isolated rebuild capacity, not by replaying backups into the production domain.`);
+    if (sc.doctrineRef === 'Maersk NotPetya 2017') {
+      notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real-world Maersk incident ($300M loss, 76 terminals offline, 10-day recovery), the lesson was: TOS is not an IT system in an OT port, it is the control plane for everything that moves. Bulwark it day one; recover it with isolated rebuild capacity, not by replaying backups into the production domain.`);
+    } else if (sc.doctrineRef === 'NHS WannaCry 2017') {
+      notes.push(`Clinical cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real NHS WannaCry incident (~19,000 appointments cancelled, surgeries diverted, £92M in direct/indirect loss), the ransomware itself did not kill patients — the loss of the information backbone that coordinates care did, by forcing clinicians onto manual workflows at a tempo they could not sustain safely. Bulwark EHR day one; have a tested paper/manual-mode runbook; practice it before you need it.`);
+    } else {
+      notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern.`);
+    }
   }
   if (STATE.mission && STATE.mission.id === 'TIDEBREAK' && STATE.phase === 'LOSE') {
     notes.push('Maritime loss analysis: Port of Houston 2021 (CVE-2021-40539, Volt Typhoon pattern via ManageEngine) and Maersk NotPetya 2017 both prove the same point — the perimeter CVE is the headline, but the OT consequence is the body. Patch the known-exploited edge appliance list (CISA KEV catalog) continuously; TOS is the crown jewel.');
+  }
+  // v0.9.3: HEARTLINE healthcare-specific debrief notes
+  if (STATE.mission && STATE.mission.id === 'HEARTLINE') {
+    const lse = (STATE.lifeSafetyEvents || []).length;
+    if (lse > 0) {
+      const nodes = STATE.lifeSafetyEvents.map(e => e.node).join(', ');
+      notes.push(`${lse} life-safety event${lse > 1 ? 's' : ''} this run (${nodes}). Compromise of a patient-connected device is a CARE-DELIVERY event, not a data-integrity event — hospital policy requires Patient Safety notification, manual-mode fallback with bedside confirmation of every dose/parameter, and ultimately a device-fleet isolation. FDA Medical Device Cybersecurity Guidance (2023) and HHS 405(d) HICP both treat this as reportable. Dollar-loss metrics will understate what actually happened here.`);
+    }
+    if (STATE.phase === 'LOSE') {
+      notes.push('Healthcare loss analysis: Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks) is the modern pattern — the ransomware operator understood that healthcare has thin recovery capacity, limited downtime tolerance, and a willingness to pay. The defensive move isn\'t "better backups alone" — it is pre-tested manual-mode clinical workflows and (per HHS 405(d) HICP Practice #4) a tested crisis-management plan that assumes the information backbone will be unavailable for days to weeks.');
+    }
   }
   if (rubric.doctrine.score === 100) notes.push('Decisive operational result.');
   if (diff === 'analyst' && rubric.doctrine.score >= 70) notes.push('Result achieved on ANALYST difficulty — significant operational acumen demonstrated.');
@@ -4899,6 +5207,18 @@ function advanceThreat(t) {
         log(`&nbsp;&nbsp;└ Cascade stress on ${adj.id}`, 'log-warn');
       }
     });
+    // v0.9.3: Life-safety event — fires when a mission-designated
+    // patient-connected node compromises. One-shot per node id, so a second
+    // biomed compromise doesn't re-trigger. Narrator beat + metrics capture.
+    const LS = STATE.mission && STATE.mission.lifeSafetyNodes;
+    if (LS && LS.includes(target.id)) {
+      STATE.lifeSafetyEvents = STATE.lifeSafetyEvents || [];
+      if (!STATE.lifeSafetyEvents.find(e => e.node === target.id)) {
+        STATE.lifeSafetyEvents.push({ round: STATE.round, node: target.id });
+        log(`&nbsp;&nbsp;└ <b style="color:var(--red);">⚠⚠ LIFE-SAFETY EVENT</b>`, 'log-crit');
+        log(`&nbsp;&nbsp;&nbsp;&nbsp;${STATE.mission.lifeSafetyNarration || 'Patient-connected device compromised.'}`, 'log-crit');
+      }
+    }
     // v0.9.1: Mission-level sector cascade (e.g., TIDEBREAK Maersk pattern)
     // When the mission designates a trigger node AND it's just compromised,
     // apply the mission's sector cascade. One-shot — fires once per run.
@@ -5238,6 +5558,8 @@ function exportCaseLog(rubric, cfiNote, win, reason) {
     },
     // v0.9.2: seed capture — present when the run was launched via ?seed=…
     seed: JOSHUA_SEED ? { raw: JOSHUA_SEED.raw, int: JOSHUA_SEED.int } : null,
+    // v0.9.3: life-safety events (healthcare + any mission with lifeSafetyNodes)
+    life_safety_events: STATE.lifeSafetyEvents || [],
     final_round: STATE.round,
     c2: {
       node: STATE.c2Node,
@@ -5905,6 +6227,34 @@ function renderCodexTab(el) {
     </div>
     <div class="codex-counters" style="margin-top:4px;">▸ Hunt artifacts: physical cellular-radio inventory of OT equipment; carrier-provided SIM-activity reports for all enterprise-contracted SIMs; RF survey around crane housings; vendor-contract audit for undocumented radios. Enterprise NetFlow will not see this traffic — carrier-level visibility is the only path.</div>
     <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: U.S. House Select Committee on the CCP + House Homeland Security Committee joint investigation report on ZPMC STS cranes (Feb 2024); USCG MARSEC Directive 105-6; Executive Order 14116. In-game: TIDEMARK models this behavior via cellularBeaconMode.</div>
+  </div>`;
+
+  // v0.9.3: NHS WannaCry 2017 pattern codex entry
+  html += `<div class="codex-entry" style="border-left:2px solid #ff5080;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#ff5080;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ NHS WANNACRY 2017 PATTERN (NAO + DHSC post-incident reports)</span></div>
+    <div class="codex-desc" style="margin-top:3px;">On 12-13 May 2017, the WannaCry ransomware worm (ETERNALBLUE / MS17-010 propagation) hit at least 80 of 236 NHS Trusts and 603 primary-care organizations in England, locking Windows systems and spreading laterally over SMB. ~19,000 appointments were cancelled; A&amp;E diversions and surgery cancellations followed. UK Department of Health and Social Care estimated £92M in direct/indirect cost. Patient harm from the IT outage was not fatal in confirmed reporting, but the care-tempo compression was documented and the sector learned how brittle appointment and order routing are to availability loss.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Entry vector</b>: unpatched Windows SMBv1 (MS17-010), exposed inside the network via unsegmented clinical VLANs.<br>
+      <b>Spread</b>: ETERNALBLUE automated worm propagation — no human-in-the-loop needed to pivot across hospitals once a single Trust was infected.<br>
+      <b>Impact pattern</b>: appointment systems down → appointments cancelled; order routing down → clinicians forced onto paper fallback; imaging/lab result flow degraded → care tempo compression and diversion.<br>
+      <b>Doctrine lesson</b>: the ransomware itself did not kill patients. The loss of the information backbone that coordinates care did (NAO: care tempo compressed to a level clinicians could not safely sustain for long).
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: patch management discipline for operational-tech-adjacent Windows (biomed interface workstations are the hardest); clinical-VLAN segmentation; a TESTED paper/manual-mode runbook for 48-72 hours of EHR-unavailable operation. HHS 405(d) Healthcare Industry Cybersecurity Practices (HICP) is the sector-specific guidance in the U.S.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: UK National Audit Office "Investigation: WannaCry cyber attack and the NHS" (Oct 2017); UK Department of Health and Social Care lessons-learned report; UK NHS England post-incident review. In-game: triggered by HEARTLINE sectorCascade when EHR compromises.</div>
+  </div>`;
+
+  // v0.9.3: Change Healthcare Feb 2024 pattern codex entry
+  html += `<div class="codex-entry" style="border-left:2px solid #ff5080;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#ff5080;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ CHANGE HEALTHCARE FEB 2024 PATTERN (ALPHV/BlackCat + HHS OCR + UnitedHealth public reporting)</span></div>
+    <div class="codex-desc" style="margin-top:3px;">On 21 Feb 2024, Change Healthcare (a UnitedHealth Group subsidiary that processes a large majority of U.S. pharmacy claims and clinician billing) detected an ALPHV/BlackCat ransomware intrusion. UnitedHealth took ~$872M in Q1 2024 direct response costs; the final 2024 total materially exceeded that in subsequent earnings disclosures. The downstream effect on the health system was systemic: pharmacy claims nationwide were offline for weeks, pharmacists manually processed scripts without insurance verification, clinicians went unpaid in some practices while billing clearinghouses were down, and the HHS Secretary issued an unprecedented public call for insurers to accelerate payments to providers.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Entry vector</b>: compromised credentials for a Change Healthcare Citrix remote-access gateway with no MFA (per subsequent testimony).<br>
+      <b>Tradecraft</b>: ALPHV/BlackCat RaaS affiliate — slow dwell (~9 days before detonation), double extortion (data exfil before encryption), backup destruction prior to encrypt event. See CRYO in-game archetype which models this tempo (<i>slow_dwell_fast_impact</i>).<br>
+      <b>Scope</b>: 100M+ individuals' PHI implicated in subsequent HHS OCR breach notification — one of the largest healthcare breaches on record.<br>
+      <b>Doctrine lesson</b>: the intra-sector interdependency is the exposure. Change Healthcare was a single-point-of-failure for pharmacy claims nationally. The question for any health system now is not "are we patched?" but "what single vendor could take us offline for weeks?"
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: MFA on every remote-access gateway without exception (the Change Healthcare gateway had none); vendor interdependency mapping with contractual recovery SLAs; sector-wide intel-sharing via H-ISAC and HHS 405(d); pre-tested manual-mode clinical and billing workflows for 2-6 weeks of a key vendor being unavailable.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: UnitedHealth Group public earnings disclosures Q1-Q4 2024; HHS OCR breach notification; U.S. Senate Finance Committee hearing testimony by UnitedHealth CEO (May 2024); H-ISAC post-incident briefings; CISA #StopRansomware ALPHV/BlackCat profile. In-game: CRYO archetype's slow_dwell_fast_impact tempo + doubleExtortion flag model this pattern.</div>
   </div>`;
 
   // v0.9.2: Aerospace APT codex entry
@@ -7045,6 +7395,7 @@ function resumeSavedRun(saved) {
   if (STATE.mission.id === 'BLACKFROST') setupEnergyGrid();
   else if (STATE.mission.id === 'NIGHTWATCH') setupSatelliteOps();
   else if (STATE.mission.id === 'TIDEBREAK') setupMaritimePort();
+  else if (STATE.mission.id === 'HEARTLINE') setupHealthcare();
   setupAgents();
   // Overlay the saved node states (resilience, state, operatorState)
   (saved.nodeStates || []).forEach(ns => {
@@ -7093,6 +7444,7 @@ function beginGame(missionId) {
   STATE.achGatePassed = false;           // v0.7: reset ACH gate
   STATE.handoffFired = false;            // v0.9: reset IAB handoff flag
   STATE.sectorCascadeFired = false;      // v0.9.1: reset mission-level sector cascade flag
+  STATE.lifeSafetyEvents = [];           // v0.9.3: reset life-safety event log
   if (document.getElementById('view-mode-btn')) updateViewModeButton();
   STATE.killBoxActive = false;
   STATE.metrics = {
@@ -7114,6 +7466,7 @@ function beginGame(missionId) {
   if (STATE.mission.id === 'BLACKFROST') setupEnergyGrid();
   else if (STATE.mission.id === 'NIGHTWATCH') setupSatelliteOps();
   else if (STATE.mission.id === 'TIDEBREAK') setupMaritimePort();
+  else if (STATE.mission.id === 'HEARTLINE') setupHealthcare();
   setupAgents();
 
   // v0.5: demo overrides C2 from script

@@ -739,4 +739,4 @@ where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vida
 
 ---
 
-*Appendix generated for Joshua Protocol v0.9.2 — BUILD HUNT-20261017-1555Z · STAMP 2026-10-17T15:55Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.9.3 — BUILD HUNT-20261017-1557Z · STAMP 2026-10-17T15:57Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

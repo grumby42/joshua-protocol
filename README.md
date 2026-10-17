@@ -26,13 +26,14 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.2)
+## What's in the box (v0.9.3)
 
-### Three missions, each grounded in real incident patterns
+### Four missions, each grounded in real incident patterns
 
 - **OP. BLACKFROST** — 8-node Northeast power grid. Ransomware / APT / insider / hacktivist / supply-chain / pre-positioning adversary pool.
 - **OP. NIGHTWATCH** — 5-asset satellite constellation (GEO + 2 LEO sun-synchronous + ground station + mission control). Uses real orbital propagation (SGP4-style Kepler solver, J2 perturbation, ECI→geodetic, GMST, link budget) lifted from the author's AeroSec-Lab platform. Grounded in SPARTA technique catalog.
 - **OP. TIDEBREAK** — 8-asset Gulf Coast container terminal. Grounded in Port of Houston 2021 (Volt Typhoon-attributed via ManageEngine CVE-2021-40539), Maersk NotPetya 2017 ($300M loss, 76 port terminals offline), and ZPMC crane supply-chain concerns.
+- **OP. HEARTLINE** 🆕 — 8-node regional hospital system (EDGE / AD / EHR / PACS / LAB / PHARM / BIOMED-PUMP / BIOMED-TELEM). Grounded in NHS WannaCry 2017 (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 (ALPHV/BlackCat, $872M direct loss, pharmacy claims nationwide offline for weeks). First mission with a **life-safety consequence model**: compromise of a patient-connected biomed device registers as a care-delivery event (per FDA Medical Device Cybersecurity Guidance 2023 + HHS 405(d) Healthcare Industry Cybersecurity Practices), not a dollar-value event.
 
 ### Eight threat actor archetypes (v0.9: reality-grounded rework)
 
@@ -136,6 +137,17 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - **KINGFISHER aerospace APT depth** — the actor now has a 7-stage `aerospaceChain` (RF+OSINT Recon → Ground-IT Initial Access → MCC Lateral → Operator-Identity Theft → Uplink Staging → On-Orbit Payload Delivery → Mission Impact), each stage tagged with its SPARTA/ATT&CK TTPs and a documented real-world incident anchor. 5 new SPARTA techniques added (REC-0005 Eavesdropping, EX-0010 Malicious Code, EX-0012 Modify On-Board Values, IMP-0005 Denial, LM-0001 Lateral Movement) with full descriptions grounded in CSIS Space Threat Assessment, Secure World Foundation, USSF Space Delta 15, Mandiant M-Trends aerospace, CISA ViaSat KA-SAT 2022 analysis, Russia-Ukraine theater jamming reporting, and Black Sea GPS-spoofing campaigns. NIGHTWATCH threatMix extended, intro card renders the chain, dedicated codex entry carries the stage-by-stage tool + incident mapping, CFI debrief has an aerospace-APT-aware doctrine note.
 - **Deterministic seeded replay URLs** — append `?seed=…` to the game URL and every random draw becomes deterministic. Seeds accept decimal, hex (`0x…`), or human-friendly strings (FNV-1a normalized). The debrief header shows the active seed; a new **SHARE** button on the debrief copies a shareable `?seed=…` URL to the clipboard. Case-log JSON export now carries the seed. mulberry32 PRNG — small, uniform, deterministic. Share your runs; peers can replay the exact scenario, actor, and attack sequence you faced.
 
+### v0.9.3: OP. HEARTLINE healthcare mission + life-safety consequence model
+
+- **New mission OP. HEARTLINE** — 8-node regional hospital: EDGE (VPN) → AD (identity) → EHR (clinical control plane) → PACS / LAB / PHARM (clinical IT) → BIOMED-PUMP / BIOMED-TELEM (patient-connected). 13-link topology; EHR is the hub. Purdue mapping treats biomedical devices as L1 field, clinical IT as L3, AD as L4, EDGE as DMZ.
+- **Life-safety consequence model** — new `lifeSafetyNodes` mission field + `lifeSafetyEvents` state capture. When a patient-connected device (BIOMED-PUMP or BIOMED-TELEM) compromises, the game logs a `⚠⚠ LIFE-SAFETY EVENT` and records it to the metrics; CFI debrief treats this as a care-delivery event (not dollar loss), referencing FDA Medical Device Cybersecurity Guidance 2023 and HHS 405(d) HICP. Case-log JSON export carries `life_safety_events`.
+- **NHS WannaCry sector cascade** — when EHR compromises, PACS + LAB + PHARM + both biomed nodes transition to `stressed` with narrator beat citing the NHS 2017 pattern. Models the real-world finding (per UK NAO report): the ransomware itself didn't kill patients, but the loss of the information backbone that coordinates care did, by forcing clinicians onto manual workflows at an unsustainable tempo.
+- **Valid actor pool** per CISA #StopRansomware Hospital guidance: CRYO (ransomware dominant), HOLLOWKEY (infostealer-sourced creds — Change Healthcare 2024 pattern), WARDEN → CRYO/HOLLOWKEY handoff (IAB-to-ransomware pipeline), GHOSTWIRE (malicious insider — EHR snooping per HHS OCR breach reporting), VOLTFORGE (strategic pre-positioning concern per CISA/USSF briefings on healthcare).
+- **2 new ATT&CK techniques**: T1557 Adversary-in-the-Middle (HL7/DICOM MITM — called out by HHS 405(d) HICP Practice #8 as a known-exposed interface), T1200 Hardware Additions (biomedical device supply-chain per FDA 524B and Patch Act).
+- **2 new codex entries**: NHS WannaCry 2017 pattern (NAO + DHSC post-incident reports), Change Healthcare Feb 2024 pattern (UnitedHealth earnings disclosures + HHS OCR + Senate Finance Committee testimony).
+- **Custom node rendering**: BIOMED nodes draw as EKG-pulse diamonds (visual cue that this is patient-connected), EHR draws as a clinical-cross circle (visual cue that this is the control plane). "Patient zone" band at the bottom of the map with a `⚠ PATIENT ZONE — LIFE SAFETY` legend.
+- **CFI debrief**: HEARTLINE-specific doctrine notes on life-safety events and (on loss) the Change Healthcare 2024 doctrinal lesson — vendor interdependency mapping and manual-mode workflow readiness, not "better backups alone."
+
 ---
 
 ## Framework references and provenance
@@ -216,4 +228,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.2** (October 2026) · BUILD `HUNT-20261017-1555Z`
+Current version: **v0.9.3** (October 2026) · BUILD `HUNT-20261017-1557Z`
