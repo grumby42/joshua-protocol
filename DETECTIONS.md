@@ -25,69 +25,91 @@
 > - **Watch the trend** — spike / drop-off / first-seen / beacon.
 > - **Pivot to** — the adjacent data/patterns you check next.
 
-> **Fact-check rigor bar.** Every technique ID below is verified against live MITRE ATT&CK (Enterprise or ICS). Every Volt Typhoon artifact is verified against the joint CISA/NSA/FBI advisory [AA24-038A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a). ICS v19 revoked IDs (T0855 → T1692.001, T0803 → T1691.001, T0856 → T1692.002) are presented with both forms for operator familiarity. Where a canonical public rule exists, it is cited; where one doesn't (hunt built from your own baseline), that is said plainly.
+> **Fact-check rigor bar.** Every technique ID below is verified against live MITRE ATT&CK (Enterprise or ICS v20). Volt Typhoon artifacts are verified against the joint CISA/NSA/FBI advisory [AA24-038A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a). CyberAv3ngers / Unitronics patterns are from [AA23-335A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-335a). Ransomware dwell-time and double-extortion figures are from Mandiant M-Trends 2026 and the CISA Change Healthcare advisory. Insider-threat statistics are from the Ponemon Institute / DTEX Systems *2025 Cost of Insider Threats Global Report* (81-day avg detection; 25% malicious / 55% negligent / 20% stolen-credential split). Initial-Access-Broker model is from Mandiant M-Trends 2026 (handoff timing) and Huntress/Rapid7 2025 reporting. ICS v19 revoked IDs (T0855 → T1692.001, T0803 → T1691.001, T0856 → T1692.002) are presented with both forms for operator familiarity. Where a canonical public rule exists, it is cited; where one doesn't (hunt built from your own baseline), that is said plainly.
 
 > **Format convention.** Pseudocode uses `source:` and `where:` / `project:` keywords in the spirit of KQL/SPL/EQL without binding to one. Replace with your schema's equivalents.
 
 ---
 
-## Play 1 · CRYO — Ransomware broad-landing phishing + rapid encryption
+## Play 1 · CRYO — Ransomware (slow-dwell reconnaissance → fast-impact double extortion)
 
 ### Objective
-Catch ransomware operations in the gap between successful spearphishing attachment execution (ATT&CK T1566.001) and T1486 Data Encrypted for Impact — the window where the kill chain is interruptible.
+Catch modern RaaS operations during their **reconnaissance and staging dwell window** — before T1657 Financial Theft (exfil) and T1486 Data Encrypted for Impact / T1490 Inhibit System Recovery fire. Mandiant M-Trends 2026 reports a **14-day median global dwell time**; the Change Healthcare 2024 incident operated with ~9 days of dwell, backup destruction before encryption, and double-extortion (exfil before encrypt). Rapid-encryption detections are the last-chance net — the real catch window is 7-14 days earlier, during the quiet recon/staging phase.
 
 ### Hypothesis
-A non-admin user process (parent = Outlook, Teams, browser) spawns a scripting interpreter (`powershell.exe`, `wscript.exe`, `mshta.exe`) that initiates outbound HTTPS to a never-before-seen domain within 60 seconds.
+A non-admin user credential (via T1566.001, T1190, or T1133) is followed over the next 1-14 days by: (a) credential-material access on the host (T1003.001 LSASS access) OR (b) outbound beacon pattern to never-before-seen infrastructure OR (c) first-seen SMB admin-share lateral movement from a workstation to a server, before any destructive activity. Each individual signal has noise; the sequence inside a 14-day window on a credential that didn't previously generate it is the catch.
 
 ### Data source
-EDR process-tree telemetry (Sysmon event ID 1 with parent process; equivalent fields in CrowdStrike / Defender for Endpoint / Elastic). Proxy or DNS logs for the outbound call.
+EDR process-tree telemetry (Sysmon event ID 1 with parent, hash, user; equivalent fields in CrowdStrike / Defender for Endpoint / Elastic). LSASS-access EDR events (Sysmon event 10). SMB-session audit on file servers (Windows event 5140, 5145). DNS/proxy logs. Volume Shadow Copy service logs (Windows event 8193-8225) and backup-system audit logs (Veeam, Rubrik, Commvault admin events) for the pre-encryption backup-destruction phase.
 
-### Starter logic
+### Starter logic (sequence hunt, 14-day sliding window)
 ```
+// Phase A — foothold candidates (any one of)
 source: edr_process_create
 where: parent_image in ("outlook.exe", "winword.exe", "excel.exe", "teams.exe", "chrome.exe", "msedge.exe", "firefox.exe")
   and image_name in ("powershell.exe", "wscript.exe", "cscript.exe", "mshta.exe", "rundll32.exe", "regsvr32.exe")
   and user_sid not in (known_admin_sids)
-join: dns_query on hostname = query_source_process_pid within 60s
-where: dns_query.domain first_seen within 7d
-project: user, host, parent_image, image_name, command_line, dns_query.domain
+let: footholds = (user, host, time) tuples
+
+// Phase B — within 14d of a foothold, same host/user shows ANY of:
+source: edr_lsass_access | edr_process_create | smb_session_audit | proxy_dns
+where (ANY):
+  // credential dumping
+  (edr_lsass_access and target_process = "lsass.exe" and access_mask includes PROCESS_VM_READ and image not in (allowed_edr_av))
+  // first-seen SMB admin-share from a workstation
+  or (smb_session.share in ("ADMIN$", "C$", "IPC$") and smb_session.client_host in workstations
+      and (smb_session.client_host, smb_session.target_host) not in historical_pairs(90d))
+  // beacon pattern to young infrastructure
+  or (proxy_dns.domain first_seen within 7d and proxy_dns.pattern = beacon(interval_ms, jitter))
+
+// Phase C — pre-impact tells (fire LOUD when seen on a host with Phase A+B)
+source: windows_event
+where: (event_id = 1102 and provider = "Microsoft-Windows-Eventlog")  // security log cleared (T1070.001)
+    or (process = "vssadmin.exe" and command_line regex "delete\\s+shadows")  // T1490
+    or (backup_system.action = "repository_deleted" and principal not in approved_backup_admins)  // backup destruction
+project: user, host, time, phase, signal
 ```
 
 ### Known false positives
 - IT engineering teams scripting against user mailboxes (Outlook → PowerShell for shared-mailbox automation)
-- Teams PWA installer legitimately spawning `rundll32`
-- Internal patching tools proxied through user-mode launchers
-- Developers using VBS for one-off scripts
+- Legitimate EDR/AV accessing LSASS (allowlist by signer + path)
+- Backup software legitimately deleting old restore points (should be a service account from a scheduled job)
+- First-seen SMB admin pairs during legitimate server-provisioning / IT project work (should correlate with change tickets)
+- IT red teams running scheduled sweeps (scope out)
 
 ### Response / triage
-1. **Immediate**: isolate the host via EDR network containment (do not power off — preserve volatile memory).
-2. **Within 15 min**: confirm the user clicked a phishing lure (check their Outlook sent/received for the lure; interview if possible). Grab a memory capture.
-3. **Within 1 hr**: pivot to the mail security gateway — did the same lure land in other inboxes?
-4. **Hand-off**: if confirmed malicious, kick to IR tier-2 with the EDR process graph, DNS pivot, and lure email.
+1. **If Phase A alone**: isolate the user host, confirm the lure, hunt forward 14 days on the user's account. **This is the real catch window.**
+2. **If Phase A + Phase B**: assume active intrusion in staging. Rotate credentials for the user and any accounts seen on the lateral-movement path. Pull EDR for the full process tree on every host that saw lateral SMB. Expect data exfiltration to be in progress (double-extortion) — check egress volume on recently-touched file servers and watch for cloud-storage uploads (rclone, MEGA, dropbox-cli).
+3. **If Phase C fires**: encryption is imminent. Trigger major-incident playbook now. Backup-destruction before encryption is the ransomware signature — if your backup repository just lost admin credentials, you have 1-4 hours. Isolate the environment at the network boundary. Preserve forensic images.
+4. **Hand-off**: IR tier-2 with the full 14-day timeline, every credential touched, every destination host, and the data-exfil footprint for breach-counsel / notification scoping.
 
 ### Maintenance & trend
-- **Baseline**: run this detection in observe-only mode for 7-14 days against a known-clean dev environment to seed the false-positive list.
-- **Tune**: add `path exclude` for internal IT automation hosts; add `command_line` regex exclusions for known management strings; raise the DNS first-seen window to 30d after the initial burn-in.
+- **Baseline**: 90 days of normal SMB admin-share pairs per workstation, LSASS-access per host, and backup-admin actions per account. The 14-day sequence window is the TTL; expire footholds past that.
+- **Tune**: add `path exclude` for internal IT automation; allowlist EDR/AV LSASS access by signer; allowlist your backup system's service account by host + schedule.
 - **Trends to watch**:
-  - **Spike** → active phishing campaign landing in your org.
-  - **Drop-off** → either defenders rolled a mail-gateway rule that worked, or attackers moved to a different initial-access vector (which means the rule is stale, not successful).
-  - **First-seen** of a new parent process → user installed something new. Pivot into deployment telemetry.
-  - **Beacon** pattern in the follow-up DNS → the lure landed and the implant is calling home. Treat as high.
+  - **Phase A spike** → active phishing or edge-exploit campaign landing in your org.
+  - **Phase A → B hit rate climbing** → the dwell window is shrinking faster than your detection cadence. Add more Phase B signals.
+  - **Phase C fires without Phase A/B history** → either operator missed earlier phases (go hunt backwards) or you have a new initial-access vector you don't yet detect.
+  - **Backup-system admin-event spike without a change ticket** → treat as very high. This is the pre-encryption signature.
 
 ### Real anchors
-- Sigma `proc_creation_win_office_outlook_macro_load.yml` and similar in SigmaHQ `windows/process_creation/` tree
-- Elastic Detection Rules `endpoint/execution_from_unusual_directory_office_apps.toml`
-- CISA #StopRansomware guides (Lockbit, Royal, Play) — each reiterates this pattern
+- **Mandiant M-Trends 2026** — 14-day global median dwell time, 7-day median for ransomware
+- **CISA Alert on Change Healthcare / ALPHV-BlackCat (2024)** — ~9-day dwell, backup destruction, double extortion
+- CISA #StopRansomware guides (LockBit, Royal, Play, ALPHV, Qilin, Akira)
+- MITRE ATT&CK T1486 Data Encrypted for Impact, T1490 Inhibit System Recovery, T1657 Financial Theft, T1070.001 Clear Windows Event Logs
+- Sigma: SigmaHQ `windows/process_creation/proc_creation_win_vssadmin_shadowcopy_delete.yml`, `proc_creation_win_wevtutil_log_clear.yml`
+- Elastic Detection Rules `endpoint/credential_access_lsass_memdump_file_created.toml`
 
 ### Evolve it (Pyramid of Pain)
-- *Easy*: block known PowerShell encoded-command flags. Attackers rename `powershell.exe` to `pwsh_alt.exe` and bypass.
-- *Harder*: hash-match `powershell.exe` binaries. Attackers use LOLBAS alternates (`certutil`, `rundll32`).
-- *Toughest*: behavioral — "office-parented script interpreter with outbound HTTPS to young domain". This is a TTP-level detection; the attacker has to rebuild their delivery stack to evade it. That's the goal.
+- *Easy*: block known encoded-PS flags, block known ransomware binaries by hash. Operators rotate hashes per victim and use LOLBAS.
+- *Harder*: hash-match the loader, allowlist LSASS-accessors by signer. Operators sign malware with stolen certs; LotL evades hash matching entirely.
+- *Toughest*: the three-phase behavioral chain above — foothold → credential-material + lateral + beacon → log-clear / shadow-delete / backup-destruction. Operators have to redesign *the business model* (not just tools) to evade a sequence detection on this timescale.
 
 ### Pivot to
-- The lure email's `Message-ID`, sender infrastructure, attachment hash (fully-malicious-only; the actual document); send to TI team for enrichment.
-- EDR process-tree child discovery: did the implant drop additional binaries? Scheduled tasks?
-- NTDS.dit pulls from any domain controller in the next 24 hours (precursor to T1486).
+- The lure email's `Message-ID` + sender infrastructure (Phase A)
+- NTDS.dit pulls from any DC in the next 24 hours — a DC compromise with credential-dumping precedes most whole-domain encryption events (Phase B escalation)
+- Egress volume from file servers touched during Phase B — this is the double-extortion exfil signature. Watch for rclone/MEGA/Dropbox-cli/pscp on the involved hosts.
+- Any `vssadmin delete shadows`, `wmic shadowcopy delete`, `wevtutil cl` across the fleet in a 2-hour window — these are the "impact imminent" markers.
 
 ---
 
@@ -152,186 +174,235 @@ having: pivot_host not in historical_access_pattern(user, 90d)
 
 ---
 
-## Play 3 · IRONHAZE — Hacktivist / opportunistic exploit of public-facing apps
+## Play 3 · IRONHAZE — Hacktivist (availability-focused DDoS + opportunistic exploit)
 
 ### Objective
-Catch the loud, fast opportunistic exploitation of exposed services (ATT&CK T1190) and T0883 (ICS Internet Accessible Device) — the pattern seen in defacement, limited-dwell disruption, and most Iran-nexus CyberAv3ngers-style activity against exposed PLCs.
+Catch availability-impact hacktivism — the two 2024-2026 patterns: (1) **DDoS campaigns** per NoName057(16) / DDOSIA (T1498 Network Denial of Service, T1498.001 Direct Flood, T1498.002 Reflection Amplification, T1499 Endpoint DoS) and (2) **direct exploitation of exposed OT devices** per CISA Advisory AA23-335A (CyberAv3ngers Unitronics PLC campaign — default-credential-abused HMI/PLC used for defacement and water-system disruption). Both patterns are LOUD and FAST; the catch is at the edge, not deep in the network.
 
-### Hypothesis
-A publicly-exposed service receives a sudden burst of exploit-pattern requests (CVE-matching URIs, Unicode-encoded path traversal, known webshell paths) from a single or small set of source IPs within a tight time window.
+### Hypothesis (two parallel sub-hypotheses)
+**(A) DDoS pattern.** Edge services receive volumetric or application-layer request floods from distributed/crowdsourced source infrastructure, often correlated with geopolitical events the actor has stated as a target rationale.
+**(B) OT-direct pattern.** An internet-exposed OT device (Unitronics VisiLogic HMI, Modbus-TCP PLC, Siemens S7, BACnet) authenticates successfully with default or weak credentials (T1078.001 Default Accounts, T1110 Brute Force), is written to (T1565.001 Stored Data Manipulation), has its account access removed (T1531), or its screen defaced (T1491.001 Internal Defacement / IMP-0002 Device Restart/Shutdown).
 
 ### Data source
-WAF / reverse-proxy access logs (Nginx, Apache, F5, Cloudflare). IDS/IPS alerts (Suricata / Snort). For PLC exposure: shodan-equivalent internal scanner + Zeek Modbus/DNP3 logs.
+**For DDoS**: Edge load-balancer / CDN telemetry (Cloudflare, Akamai, Imperva), WAF access logs with per-second request rate aggregation, NetFlow/IPFIX from the perimeter, DNS-authority query rate (for reflection-DDoS targeting your DNS). **For OT-direct**: internet-exposure scanner results (internal Shodan-equivalent), OT device audit logs where available (Unitronics VisiLogic has event logs; most Modbus PLCs don't), Zeek with the `modbus`, `s7comm`, and `bacnet` parsers, firewall logs for inbound traffic to Purdue Levels 2-3.
 
-### Starter logic
+### Starter logic — Sub-hypothesis A (DDoS)
 ```
-source: waf_access_log
-where: status_code in (200, 500)
-  and (uri contains "/wp-admin/" or uri contains "/boaform/" or uri contains "/.env"
-       or uri contains "../.." or uri regex "/cgi-bin/.*\\.cgi")
-summarize: count_distinct(uri) as unique_paths, count() as attempts
-  by: source_ip, 10min_window
-having: attempts > 50 or unique_paths > 10
-project: source_ip, 10min_window, attempts, unique_paths
+source: edge_access_log | netflow
+where: dest_asset in (public_facing_services)
+summarize: req_rate = count() / 10s, src_distinct = count_distinct(source_ip)
+  by: dest_asset, 10s_window
+having: req_rate > p99(baseline(dest_asset, 30d)) * 10
+     or src_distinct > p99(baseline(dest_asset, 30d)) * 10
+join_optional: threat_intel on source_ip
+where: ti.tag in ("ddosia", "noname057", "booter", "stresser")
+project: dest_asset, 10s_window, req_rate, src_distinct, top_source_asns
+```
+
+### Starter logic — Sub-hypothesis B (OT-direct)
+```
+source: zeek_modbus | zeek_s7comm | ot_device_audit | firewall_inbound
+where: dest_asset in (ot_devices)
+  and (source_ip in external_networks or source_ip not in authorized_engineering_hosts)
+  and (modbus.function_code in (05, 06, 15, 16)  // write-coil, write-register, write-multiple
+       or s7comm.function in ("write_var", "download_block", "stop_plc", "run_plc")
+       or ot_device_audit.action in ("default_credential_login", "config_write", "screen_defacement"))
+project: time, dest_asset, source_ip, protocol, function_or_action
 ```
 
 ### Known false positives
-- Internal pentesters (unless scoped out of this detection)
-- Legitimate security researcher scanning (Shodan verified, Censys, GreyNoise community)
-- Vulnerability scanner nodes you forgot to allowlist
-- CDN health probes hitting unusual paths
+- **DDoS**: CDN health probes, legitimate campaign launches (marketing, holiday rush), vulnerability-scanner nodes, backup/sync traffic hitting an API faster than usual, legitimate large-scale integrations
+- **OT-direct**: engineering-workstation maintenance from an authorized source, vendor remote-support sessions (should match Play 6's allow-list), scheduled poll from HMI itself to its PLC
+- Internal red team or scheduled DAST (allowlist by scope + schedule)
 
 ### Response / triage
-1. **Immediate**: enrich source IP against GreyNoise and your TI feeds; if it's a known crawler, close.
-2. **If targeted**: block the source IP at the edge; confirm no successful 200s against known-exploitable paths.
-3. **If 200 on exploit path**: assume compromise. Pull the response body — webshell markers? Isolate.
-4. **For exposed PLCs** (Modbus/DNP3/S7Comm visible from outside): emergency network segmentation. This is the CyberAv3ngers playbook — direct PLC command execution, no middleware exploit needed.
+1. **DDoS confirmed**: activate upstream scrubbing (CDN / provider DDoS-mitigation), apply rate-limits at the edge, geoblock the top source ASNs if business-tolerable. Expect bursts to repeat on symbolic dates — brief leadership on sector-wide campaign context (NoName057(16) regularly re-targets victims across weeks per Europol Operation Eastwood, July 2025).
+2. **OT-direct confirmed (write / stop / defacement)**: isolate the OT device from the business network immediately. Verify physical process state out-of-band (talk to the operator, read the gauge, don't trust the HMI). Report to your sector ISAC and CISA — the CyberAv3ngers / Unitronics pattern is a declared national-security concern per AA23-335A.
+3. **OT-direct confirmed (default-credential login, no writes yet)**: rotate credentials on the device and every like-model device in the estate NOW. Pull the device from internet exposure. Hunt for persistence (schedule, logic-block modifications).
+4. **Both patterns in sequence**: possible cover-and-strike — the DDoS is distraction, the real goal is OT. Escalate per major-incident playbook.
 
 ### Maintenance & trend
-- **Baseline**: 30 days of normal external request volume per endpoint.
-- **Tune**: the exploit-pattern URI list drifts quarterly; refresh from SigmaHQ `web/` tree.
-- **Trends**:
-  - **Spike** → active exploitation campaign in the wild. Check CISA KEV catalog.
-  - **First-seen URI pattern** → new CVE being weaponized. Patch window just closed.
-  - **Drop-off** → either you patched or they moved on. Verify.
+- **Baseline**: 30d p99 of request rate per public endpoint; monthly internal exposure scan of OT ranges; weekly cross-check against Shodan / Censys for your own address space.
+- **Tune (DDoS)**: distinguish seasonal legitimate spikes (sales events, product launches) from campaign spikes — the hacktivist pattern is also usually politically-motivated and announced in the actor's own channels before the attack.
+- **Trends to watch**:
+  - **DDoS spike correlated with a geopolitical event your org is tied to** → expect sustained campaign; mitigation posture is weeks, not hours.
+  - **First-seen OT device internet-exposed** → your attack surface just grew. Patch the hole before scanning adversaries find it (hours to days).
+  - **Default-credential login attempt on an OT device** → every like-model device in your estate is probably being tried. Rotate across the fleet.
 
 ### Real anchors
-- SigmaHQ `web/web_apt_webshell_access.yml` and family
-- CISA #StopRansomware guides on CVE-2021-40539 (Zoho ManageEngine — the Port of Houston 2021 entry vector)
-- Dragos "CyberAv3ngers Targets US Water Infrastructure" (2023) — PLC-direct exploitation pattern
-- GreyNoise `malicious` tag taxonomy
+- **CISA AA23-335A**: "IRGC-Affiliated Cyber Actors Exploit PLCs in Multiple Sectors" (CyberAv3ngers / Unitronics Vision series, Nov 2023)
+- **Europol / Eurojust Operation Eastwood, July 2025** — NoName057(16) DDoS infrastructure takedown; the DDOSIA crowdsourced-DDoS model
+- CISA Fact Sheets on DDoS mitigation; US-CERT TA14-017A (reflection/amplification)
+- MITRE ATT&CK T1498, T1498.001, T1498.002, T1499 (Enterprise); T0883 Internet Accessible Device, IMP-0002 Device Restart/Shutdown (ICS)
+- Dragos "CyberAv3ngers" research briefings
+- NIST SP 800-82r3 OT security guide
 
 ### Evolve it
-- *Easy*: block source IPs. They rotate on cheap VPSes.
-- *Harder*: block on JA3/JA4 TLS fingerprints of exploit tools.
-- *Toughest*: behavioral — "request burst against our edge with CVE-matching patterns from a source showing no normal browsing behavior." Attackers have to redesign their delivery to evade.
+- *Easy*: block source IPs. DDOSIA rotates volunteer hosts hourly; CyberAv3ngers rotates VPS infrastructure daily.
+- *Harder*: block on JA3/JA4 TLS fingerprints or Modbus function-code patterns from unfamiliar sources.
+- *Toughest*: behavioral — "request-rate deviation from p99 baseline from distributed low-reputation sources" (DDoS), or "any Modbus/S7 write from a source not in the engineering host inventory, ever" (OT). TTP-level — attacker has to redesign their attack to evade.
 
 ### Pivot to
-- Any successful (2xx) response following a 4xx storm from the same IP
-- Immediate downstream: webshell artifacts on the exposed server (file writes to `/var/www/`, `wwwroot/`, etc.)
-- Internal lateral movement from the compromised DMZ host inward (pivot to Play 2's logic)
+- **DDoS**: upstream carrier DDoS reports; the actor's own public channels (claims of responsibility are typical for hacktivists) for next-target intel
+- **OT-direct**: physical process verification; vendor advisory feeds for the specific device model; CISA ICS-CERT bulletin for the model-wide pattern
+- Any downstream webshell or defacement artifact on compromised OT HMIs (file writes to `/vl_webserver/`, defaced splash screens with hacktivist branding)
 
 ---
 
-## Play 4 · GHOSTWIRE — Insider threat / compromised credentials
+## Play 4 · GHOSTWIRE — Malicious insider (long-dwell, authorized-but-abnormal)
 
 ### Objective
-Detect authorized credentials behaving abnormally. The signature isn't "unauthorized login" — the credentials are valid. The signature is deviation from the user's historical access pattern, combined with high-value asset interaction.
+Detect **a trusted insider acting against the organization** — the ~25% of insider cases Ponemon 2025 attributes to deliberately malicious actors (as distinct from negligence at ~55% or stolen-credential cases at ~20%; those get separate plays — negligence is a training/control gap, stolen credentials get Play 8 HOLLOWKEY). Average detection takes **81 days** at an average per-case cost of **$17.4M** (Ponemon 2025 *Cost of Insider Threats*). The dwell is the point: the insider knows what will alert, what won't, and when their access is normal — so the signal is subtle divergence in behavior over weeks, not a single loud event.
 
 ### Hypothesis
-An authenticated user accesses a sensitive dataset, system, or asset *at a time, from a location, or in a volume* that falls outside their 90-day baseline — with no corresponding ticket, change-request, or on-call rotation.
+An authorized user with privileged access to sensitive data or systems shows a **slow drift** across weeks — the user starts touching assets slightly outside their historical pattern, accesses them during slightly different hours, or at slightly higher volumes than their 90-day baseline — AND those touches concentrate on assets with high data-exfil or sabotage value, AND those touches occur in the vicinity (temporal, not causal) of HR adverse events (notice given, PIP, grievance, access review, denied promotion, team reorganization).
 
 ### Data source
-UEBA platform (Splunk UBA, Microsoft Sentinel UEBA, Exabeam, Securonix) if deployed. If not: write it with raw logs — Windows 4624/4634, Azure AD sign-in logs, file access audit logs, PAM session logs, and your HR/change-management system.
+UEBA platform (Splunk UBA, Microsoft Sentinel UEBA, Exabeam, Securonix) if deployed. If not: compose it — Windows 4624/4634, Azure AD sign-in logs, file-access audit logs on your crown-jewel data stores, PAM session recordings, DLP agent events, removable-media / cloud-upload events (Microsoft Purview, CASB), SCM (git) activity for source-code exfil scenarios, and the HR events table (termination notices, PIPs, access reviews, policy violations).
 
 ### Starter logic
 ```
-source: identity_signin_logs
-where: user in watchlist(privileged_users) or asset in watchlist(crown_jewels)
-join: baseline_access_patterns on user
-project: time, user, source_ip, source_country, asset, volume
-having: (time outside baseline_hours(user) by > 2h)
-     or (source_country not in baseline_countries(user, 90d))
-     or (volume > p99(baseline_volume(user, 90d)))
-     or (asset not in baseline_assets(user, 90d) and asset in crown_jewels)
-join_optional: change_management on user, 24h window
-where: no_matching_ticket
+// Phase A — slow drift over weeks (per-user, not single-event)
+source: identity_signin_logs | file_access_audit | pam_session
+summarize: per_week_metrics = { assets_touched, hours_distribution, volume_bytes, geo_distribution }
+  by: user, week
+where: user in watchlist(privileged_users) or user in watchlist(crown_jewel_access_holders)
+  and (
+    jaccard_distance(this_week.assets_touched, baseline_90d.assets_touched) > 0.3
+    or kl_divergence(this_week.hours, baseline_90d.hours) > threshold
+    or this_week.volume_bytes > p95(baseline_90d.volume_bytes)
+  )
+
+// Phase B — HR-event correlation (adverse events near the drift)
+join_optional: hr_events on user, +/- 90d
+where: hr_events.type in ("termination_notice", "pip_opened", "grievance_filed",
+                          "access_review_denial", "policy_violation", "role_change_denied")
+
+// Phase C — exfil-primitive signal (the drift started leaving the perimeter)
+join_optional: dlp_events | cloud_upload_events | removable_media | git_bulk_clone
+where: event occurs within +/- 30d of drift start on same user
+project: user, drift_start_week, drift_signals, hr_signal, exfil_signal
 ```
 
 ### Known false positives
-- On-call engineer called in at 2am (should match pager rotation)
-- Business trip without updated travel notification
-- Legitimate project pivot (new team, new access needs)
-- IT engineer who got a new asset-provisioning request
+- Legitimate project pivot (new team, new access needs — HR has a role-change event; drift is bounded, not progressive)
+- Audit / compliance year-end work (DBA pulling broad data to answer legitimate RFPs; HR has nothing adverse)
+- A long overdue data-cleanup / archive sweep (should have a change ticket)
+- Someone preparing a legitimate departure (giving two weeks' notice; grabbing their own files) — context matters
 
 ### Response / triage
-1. **First**: don't lock the account yet. Insiders can be innocent; the account might also be stolen credentials belonging to a legitimate user. The investigation window matters.
-2. **Within 30 min**: check UEBA for additional anomaly signals from the same user; check HR for recent events (termination notice, PIP, grievance); check ticketing for a legitimate change.
-3. **If no legitimate explanation**: contact the user's manager OR trigger managed-insider-threat process depending on your org's playbook. Preserve forensic evidence (don't tip the user).
-4. **If stolen credentials suspected**: trigger credential-rotation playbook; isolate; alert incident response.
+1. **DO NOT alert the user.** Insider investigations are ruined by premature confrontation. Preserve forensic evidence silently. This is why the account is not locked at detection time.
+2. **Within 1 business day**: engage insider-threat program (if your org has one), legal, HR, and the user's management chain — not the user. Confirm the HR event timeline matches the technical drift.
+3. **Scope the exfil footprint** before any action: how much, which assets, which destinations (cloud, removable, personal webmail, print). This drives notification and civil-recovery decisions, which drive the HR and legal strategy.
+4. **If exfil is confirmed and in-flight**: coordinated action — HR arranges a meeting that removes the user from a terminal while IT revokes credentials and recovers endpoint. Preserve device as evidence.
+5. **If no exfil but drift + HR event + crown-jewel access**: tighten access, add to active watchlist, do not confront. Insider cases often take weeks of monitoring before resolution.
 
 ### Maintenance & trend
-- **Baseline**: 90-day rolling per user for hours, countries, assets, volume. Longer for roles with low-frequency access patterns.
-- **Tune**: weight by role (DBAs get wider volume tolerance; junior analysts get tighter); seasonal adjustment for fiscal-year-end patterns.
+- **Baseline**: 90-day rolling per user for hours, countries, assets, volume. Longer baselines (6-12 months) for roles with legitimately low-frequency bursty access patterns (financial-close DBAs, auditors).
+- **Tune**: weight by role (DBAs get wider volume tolerance; junior analysts get tighter); seasonal adjustment for fiscal-year-end patterns. Insider-threat lead reviews false-positive rate monthly.
 - **Trends**:
-  - **Spike** → external credential breach exposing many users at once. Check HIBP, breach-notification feeds.
-  - **First-seen** pattern for a user → either role change (update HR integration) or compromise.
-  - **Beacon** pattern — same anomaly repeating weekly → either shadow IT (talk to user) or persistent compromise (incident).
+  - **Drift of 2+ weeks concentrated on crown jewels** → treat as high even without an HR correlation; some insiders have no HR signal.
+  - **HR adverse-event + any drift signal on a privileged user** → treat as medium; monitoring is appropriate response, not a lockdown.
+  - **Multiple users drifting at once on the same crown-jewel set** → often not insider — more likely a shared compromise (pivot to Play 8 HOLLOWKEY or Play 2 KINGFISHER). Investigate before concluding insider.
 
 ### Real anchors
-- Microsoft Sentinel UEBA playbooks
+- **Ponemon Institute / DTEX Systems, *2025 Cost of Insider Threats Global Report*** — 81-day average detection, $17.4M average annual cost, 25% malicious / 55% negligent / 20% stolen-credentials split
+- CERT National Insider Threat Center (SEI/CMU) — the Insider Threat Database and Common Sense Guide
+- NIST SP 800-53 PM-12 Insider Threat Program
 - CISA Insider Threat Mitigation Guide
-- MITRE ATT&CK T1078 Valid Accounts + sub-techniques
-- NIST SP 800-53 PM-12 Insider Threat Program controls
+- MITRE ATT&CK T1078 Valid Accounts + sub-techniques (behavior is "legitimate account used illegitimately")
 
 ### Evolve it
-- *Easy*: alert on off-hours access. Insider shifts to work hours.
-- *Harder*: baseline per-user-per-role access patterns. Insider stays within pattern until the actual exfil event.
-- *Toughest*: behavioral chain — "normal user access followed by first-time staging-area upload followed by removable-media event." That's a kill-chain-complete detection.
+- *Easy*: alert on off-hours access. The insider knows the window; they stay inside normal hours.
+- *Harder*: baseline per-user-per-role access patterns. The insider stays inside the baseline until the actual exfil event — which is why the HR-event correlation matters.
+- *Toughest*: behavioral chain — "slow drift over weeks on crown-jewel-adjacent assets + HR adverse event + exfil primitive". That's a kill-chain-complete detection the insider has to change their *motivation* to evade.
 
 ### Pivot to
-- The user's recent HR events (manager interview, access review)
-- The crown-jewel asset's audit log — what was accessed?
+- The user's recent HR events (manager interview, access review, PIP)
+- The crown-jewel asset's audit log — what was accessed, in what order?
 - Removable media / cloud storage upload events in the same session
 - DNS queries from the user's workstation to personal webmail / file-sharing services
+- SCM clone / download logs if source code is in scope
 
 ---
 
-## Play 5 · WARDEN — Access broker / cybercriminal; burst-pattern
+## Play 5 · WARDEN — Initial Access Broker (recon, foothold, sell, hand off)
 
 ### Objective
-Detect short-dwell credential-abuse operations characteristic of initial-access brokers who sell access to multiple downstream buyers. The signature is a *burst* of credential-based access from a single foothold, followed by quiet, followed by another burst from the *same credential* but with different behavioral signatures (different buyer's tradecraft).
+Detect the **initial access broker (IAB)** operating model as it actually runs in 2025-2026. Per Huntress and Rapid7 2025 reporting, IABs **don't deploy ransomware or run impact themselves** — they obtain footholds, enumerate the environment, package the access ("domain admin on X-sized network, $Y price"), post it on criminal forums, and hand off to a buyer. Mandiant M-Trends 2026 documents handoff timing measured in seconds in some cases (22-second broker-to-successor pivots observed). The signature is **recon without impact, followed by a tradecraft discontinuity** when the buyer takes over.
 
 ### Hypothesis
-A single service account or valid user credential shows two or more distinct access *clusters* within a 30-day window, where each cluster has internally-consistent behavioral patterns (times, source IPs, command patterns) but the clusters differ substantially from each other.
+A single foothold (credential, host, service account) is followed by **enumeration-heavy, impact-light activity** — AD enumeration, port scanning, host inventory — over hours or days. The foothold then goes **quiet** for minutes to days. Activity resumes from the same foothold but with a **different behavioral signature**: different parent processes, different tool fingerprints, different working hours, often a different source geography. The second signature often matches a known successor archetype (ransomware operator, nation-state).
 
 ### Data source
-Identity provider sign-in logs with source IP, user agent, authentication method. EDR process execution for the sessions originating from each sign-in.
+Identity provider sign-in logs with source IP, user agent, authentication method. EDR process execution for sessions originating from each sign-in. AD-enumeration tool signatures (BloodHound/SharpHound, AdFind, net.exe reconnaissance patterns). PowerShell script-block logging for Invoke-ShareFinder, Invoke-UserHunter patterns.
 
 ### Starter logic
 ```
-source: identity_signin_logs
-where: user in watchlist(service_accounts) or user in watchlist(privileged_users)
-summarize: cluster_signin_patterns(source_ip, user_agent, time_of_day, auth_method) as patterns
-  by: user, 7d_window
-where: distinct_cluster_count(patterns, 30d) >= 2
-  and cluster_similarity(patterns) < 0.3
-project: user, 30d_window, distinct_clusters, similarity_score
+// Phase A — IAB recon fingerprint (enumeration without impact)
+source: edr_process_create | ad_object_access | powershell_scriptblock
+where: image_name in ("sharphound.exe", "adfind.exe", "nltest.exe") 
+    or command_line regex "net\\s+(user|group|localgroup|accounts)\\s+/domain"
+    or command_line regex "Get-Domain|Get-NetUser|Get-NetGroup|Invoke-ShareFinder"
+    or ad_object_access.pattern = "bulk_group_enumeration"
+let: iab_candidates = (host, user, time)
+having: no_destructive_action(host, user, +72h)  // no T1486, T1490, T1657, T1565, T1491
+
+// Phase B — handoff signature (same foothold, discontinuous tradecraft)
+source: edr_process_create | identity_signin
+where: (host, user) in iab_candidates
+summarize: tradecraft_cluster = (parent_image_set, hourly_distribution, source_geo, tool_fingerprint)
+  by: (host, user), rolling_6h
+where: cluster_similarity(this_cluster, prior_cluster) < 0.3
+    and time_gap(this_cluster, prior_cluster) between 1min and 7d
+    and distinct_cluster_count >= 2
+project: host, user, handoff_time, prior_cluster_signature, new_cluster_signature
+
+// Phase C — successor-archetype classification (optional, for TI product)
+join_optional: ti_catalog on new_cluster_signature
+where: ti_catalog.actor_tag in ("ransomware_affiliate", "data_broker", "nation_state_handoff")
 ```
 
 ### Known false positives
-- Shared service accounts legitimately used by multiple teams (bad practice but exists)
-- Account used from both corporate laptop and personal mobile
+- Legitimate pentest / red team (allowlist by scope + schedule)
 - IT handoff between shifts using the same break-glass account
-- VPN change rolled out mid-period, legitimately shifting source IP ranges
+- Shared service accounts legitimately used by multiple teams (bad practice but exists)
+- IR team coming in from a jump host after an incident (should match response-action timeline)
+- Legitimate access enumeration during access reviews (should be ticketed)
 
 ### Response / triage
-1. **Immediate**: enumerate all sessions in the two-plus clusters. Timeline them.
-2. **Within 1 hr**: for each cluster, pull EDR process trees. Different clusters = different buyers = different tradecraft. The behavioral differences are evidence.
-3. **Lock the credential** on confirmation. Rotate. Audit for persistence artifacts (scheduled tasks, service installations).
-4. **Hand to TI**: broker IOCs (initial-foothold source IPs, exploited CVE if applicable, broker's advertisement if findable on criminal forums) feed strategic reporting.
+1. **If Phase A alone (recon fingerprint, no handoff yet)**: you have caught the IAB in the sell window. Lock the credential, isolate the host, rotate adjacent credentials — before the handoff fires. This is the highest-value catch.
+2. **If Phase A + Phase B (handoff fired)**: assume **two attackers have been in your environment**. The access is sold. Treat the follow-on actor by their behavioral signature:
+   - High-tempo credential dumping + lateral movement → likely ransomware affiliate; pivot to Play 1 response.
+   - Patient LotL + ESENT activity on DCs → likely nation-state successor; pivot to Play 2 / Play 7.
+   - Bulk data staging + egress → likely data-extortion-only buyer; focus on Play 1 Phase B exfil response.
+3. **Scope the broker's foothold** regardless of successor: what else did the broker touch? What else did the broker have time to sell? Dark-web monitoring for the org domain in access-sale listings informs scoping.
+4. **TI handoff**: the broker's advertisement text (if findable) + initial-access vector feed sector-ISAC and CISA sharing.
 
 ### Maintenance & trend
-- **Baseline**: cluster-similarity scoring needs ~60 days of history to be reliable per account.
-- **Tune**: increase threshold for shared service accounts; decrease for human-user accounts.
+- **Baseline**: 60-90 days per account/host for the enumeration pattern; 60 days for the tradecraft-cluster feature set.
+- **Tune**: broker tradecraft shifts; refresh enumeration-tool fingerprints quarterly from SigmaHQ.
 - **Trends**:
-  - **Spike** in multi-cluster detections across many accounts → active broker campaign against your org or your industry.
-  - **First-seen** cluster divergence on a long-stable account → start of a sell event or stolen-credential handoff.
+  - **Spike** in Phase A detections across many accounts → active IAB campaign against your sector.
+  - **Shortening gap between Phase A and Phase B** → brokers are selling faster (M-Trends 2026 trend: 22-second handoffs now observed). Your detection window is shrinking; invest in the Phase A catch.
+  - **Successor archetype shifting** (same broker signature, different buyer type) → broker is diversifying their customer base; sector-wide intel-sharing is now higher-value.
 
 ### Real anchors
-- Microsoft Threat Intelligence reports on access brokers (DEV-0537, DEV-0193, etc.)
-- Mandiant M-Trends annual on initial-access broker market
-- Flashpoint / Intel 471 broker-market reports (if you have access)
+- **Mandiant M-Trends 2026** — IAB marketplace analytics, 22-second handoff cases, broker-to-ransomware pipeline
+- **Huntress 2025 Cyber Threat Report**, **Rapid7 2025 Mid-Year Report** — IAB-as-separate-actor model, broker tradecraft catalog
+- Microsoft Threat Intelligence profiles on access-broker clusters (historical DEV-0537, DEV-0193; current labels change)
+- Flashpoint / Intel 471 broker-market intelligence
+- MITRE ATT&CK T1078, T1555.003 (Browser Credential Theft — infostealer-sourced), T1046, T1082, T1087.001
 
 ### Evolve it
-- *Easy*: alert on password spray and 4625 failures. Brokers use stuffed credentials; successes don't trigger failure-based detections.
-- *Harder*: fingerprint the buyer by their post-foothold tool use.
-- *Toughest*: track the broker's advertising cadence against your detection cadence. If you're seeing cluster-count spikes, the broker is actively selling.
+- *Easy*: alert on password-spray and 4625 failures. Brokers use infostealer-sourced valid credentials; no failures.
+- *Harder*: fingerprint the buyer by post-foothold tool use. Buyers rotate tools.
+- *Toughest*: behavioral — "enumeration-heavy no-impact session followed by same-foothold tradecraft discontinuity." Attackers have to change the two-stage business model to evade.
 
 ### Pivot to
-- Each cluster's downstream tool deployment pattern (that identifies the buyer)
+- The initial-access vector that let the broker in (often Play 3 Sub-A edge exploit or infostealer-sourced credentials from Play 8)
 - Dark-web monitoring for your org's domain in access-sale listings
-- The initial-access vector that let the broker in (likely in Play 3's exploit-of-public-facing-app detection)
+- The successor's play — most Play-5 detections pivot into another play within hours of the handoff
 
 ---
 
@@ -504,6 +575,88 @@ project: time, host, target_object, value_data
 
 ---
 
+## Play 8 · HOLLOWKEY — Compromised credentials (infostealer-sourced valid-account abuse)
+
+### Objective
+Detect the **20% of insider-category cases Ponemon 2025 attributes to stolen credentials** — the account is legitimate, the human behind it isn't the owner. The 2024-2026 shape: an infostealer (RedLine, Raccoon, LummaC2, Vidar) grabs credentials from a user's personal device or an under-protected workstation, those credentials appear on criminal markets or in a combo-list within hours, and the buyer logs in. Unlike GHOSTWIRE's slow deliberate drift, HOLLOWKEY arrives from an unfamiliar geography immediately and acts fast — the buyer paid for working access and intends to monetize it quickly.
+
+### Hypothesis
+A valid, non-privileged user credential (or increasingly, an OAuth/session-token cookie) successfully authenticates from a **first-seen source IP, ASN, device fingerprint, and often country** — with impossible-travel characteristics relative to the user's last legitimate session, no corresponding MFA notification acknowledgment pattern (push-fatigue bypass), and immediate reconnaissance activity (access to shared drives, inbox search, OAuth grant creation) in the first session.
+
+### Data source
+Identity provider sign-in logs with device fingerprint, source IP enriched with geolocation + ASN + risk-reputation (Azure AD, Okta, Ping Identity). MFA event logs (push accepted/denied/expired). OAuth consent and token-grant logs. EDR for the user's historical workstation (to detect infostealer artifacts at root cause). Email inbox search / rule-creation events (M365 UAL, Google Workspace Audit). Threat-intel feeds for leaked-credential markets (Flare, SpyCloud, DarkOwl, Hudson Rock).
+
+### Starter logic
+```
+// Phase A — first-seen auth pattern + impossible travel
+source: identity_signin_logs
+where: event = "success"
+  and (source_ip, source_asn) not in historical_set(user, 180d)
+  and source_country not in historical_countries(user, 180d)
+  and (
+    time_since_last_legit_signin(user) * avg_travel_speed < distance(prior_country, this_country)
+    or device_fingerprint not in trusted_device_set(user)
+  )
+
+// Phase B — in-session recon or OAuth-grant creation
+join: m365_audit | gsuite_audit | ews_access on session_id
+where: event in ("inbox_rule_created", "mailbox_search_bulk", "oauth_consent_granted",
+                 "shared_drive_bulk_access", "sharepoint_download_bulk",
+                 "forwarding_rule_created_to_external")
+  and time within signin.time + 15min
+
+// Phase C — root-cause: was credential infostealer-sourced?
+join_optional: threat_intel_leaked_creds on user_upn
+where: ti.breach_date < signin.time
+    or ti.market_listing_date < signin.time
+join_optional: edr_historical_artifacts on user_workstation, 90d_lookback
+where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vidar
+```
+
+### Known false positives
+- Legitimate traveling user (should have travel notification, prior device, MFA acknowledgment pattern consistent)
+- VPN rollout changing source IP geography (should correlate with IT change ticket)
+- Legitimate OAuth app enrollment (should match an org-approved app catalog)
+- Legitimate inbox rule creation for personal workflow (shouldn't be bulk, shouldn't forward externally)
+- IT engineer logging in from a datacenter range for maintenance (allowlist by scope + schedule)
+
+### Response / triage
+1. **Immediate (within minutes)**: terminate all active sessions for the user across every connected app, force password reset, revoke OAuth refresh tokens, require re-enrollment of MFA. Session-cookie theft bypasses MFA — assume cookies are also stolen.
+2. **Within 1 hour**: enumerate what the session touched — email forwarded (classic BEC precursor), files downloaded, inbox rules created ("mark as read and move to RSS Feeds" is the BEC classic to hide reply-chain visibility), OAuth consents granted. Revoke each.
+3. **Within 4 hours**: scope the root cause. Was the credential sourced from the user's own workstation (hunt for infostealer artifacts) or from a third-party breach that reused their corporate password (train, enforce unique passwords)? Was it a session-cookie theft (hunt for the stealer; audit browser-cookie-access events; CyberArk / BeyondTrust for session hygiene)?
+4. **If sector-wide**: coordinate — infostealer-sourced credentials for one sector often appear in bulk marketplace listings. Sector-ISAC sharing informs others' detection timing.
+
+### Maintenance & trend
+- **Baseline**: 180-day per-user set of (ASN, country, device fingerprint). Rolling MFA-acknowledgment latency distribution.
+- **Tune**: travel-notification integration dramatically cuts false positives; without it, remote-first workforces will generate volume.
+- **Trends**:
+  - **Spike** in first-seen auth across many accounts in 24h → bulk-credential drop against your org (combo-list or sector-specific infostealer-log market).
+  - **Shortening gap** between credential drop and attempted use → the market is more efficient; invest in faster session termination.
+  - **MFA-push-accepted-after-prolonged-prompt pattern** → push-fatigue abuse; invest in number-matching MFA or FIDO2 passkeys.
+  - **OAuth-consent-granted spike** → session-token theft campaign; audit app catalog.
+
+### Real anchors
+- **Ponemon 2025 Cost of Insider Threats** — 20% of insider-category cases are stolen-credential
+- CISA Advisory on **Scattered Spider / UNC3944** patterns — infostealer + MFA fatigue + session cookie theft
+- Microsoft Threat Intelligence on **Storm-0501**, **Storm-0540** — IAB → ransomware chain fed by infostealer-sourced creds
+- **Flare / SpyCloud / Hudson Rock** market intelligence on infostealer log volumes
+- MITRE ATT&CK T1078 Valid Accounts, T1555.003 Credentials from Web Browsers, T1539 Steal Web Session Cookie, T1621 Multi-Factor Authentication Request Generation
+- CISA #StopRansomware guides — most recent entries reference infostealer-sourced access as the primary initial-access path for RaaS affiliates in 2025
+
+### Evolve it
+- *Easy*: alert on impossible travel. Attackers residential-proxy from the user's own country.
+- *Harder*: baseline device fingerprint + ASN. Attackers match the ASN pool after reconnaissance.
+- *Toughest*: behavioral — "first-seen (device, ASN, country) tuple followed by in-session bulk recon or OAuth-grant creation within 15 minutes." That's a kill-chain-complete detection — the attacker has to match the user's entire environmental fingerprint to evade.
+
+### Pivot to
+- The user's own workstation EDR history (90d back) for infostealer artifacts
+- Third-party breach feeds (HIBP, SpyCloud) for the user's email on leaked lists
+- Any OAuth consents granted in-session — those are persistence that survives password rotation
+- Any new mailbox forwarding rules — BEC fraud is the common monetization path for HOLLOWKEY
+- Session-cookie-theft indicators on the user's workstation (browser extension abuse, suspicious cookie-store access)
+
+---
+
 ## Detection authoring notes
 
 - **Build these for authoring, not copying.** Every environment is different. The seven-field schema is the discipline; the specific logic is yours.
@@ -512,4 +665,4 @@ project: time, host, target_object, value_data
 
 ---
 
-*Appendix generated for Joshua Protocol v0.7 — BUILD HUNT-20261017-1121Z · STAMP 2026-10-17T11:21Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.9 — BUILD HUNT-20261017-1438Z · STAMP 2026-10-17T14:38Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

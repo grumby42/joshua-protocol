@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.8)
+## What's in the box (v0.9)
 
 ### Three missions, each grounded in real incident patterns
 
@@ -34,16 +34,17 @@ They are complementary tools. A serious OT learner would use several of them.
 - **OP. NIGHTWATCH** — 5-asset satellite constellation (GEO + 2 LEO sun-synchronous + ground station + mission control). Uses real orbital propagation (SGP4-style Kepler solver, J2 perturbation, ECI→geodetic, GMST, link budget) lifted from the author's AeroSec-Lab platform. Grounded in SPARTA technique catalog.
 - **OP. TIDEBREAK** — 8-asset Gulf Coast container terminal. Grounded in Port of Houston 2021 (Volt Typhoon-attributed via ManageEngine CVE-2021-40539), Maersk NotPetya 2017 ($300M loss, 76 port terminals offline), and ZPMC crane supply-chain concerns.
 
-### Seven threat actor archetypes
+### Eight threat actor archetypes (v0.9: reality-grounded rework)
 
-Each is a mechanical fingerprint with distinct behavioral parameters, not an attribution:
+Each is a mechanical fingerprint with distinct behavioral parameters, not an attribution. v0.9 reworked these to match 2026 ground truth per primary sources (Mandiant M-Trends 2026, CISA advisories, Ponemon 2025 Insider Threats, Huntress/Rapid7 2025 IAB reporting, Europol Operation Eastwood July 2025):
 
-- **CRYO COLLECTIVE** — ransomware crew, noisy, high-cascade
-- **KINGFISHER** — aerospace APT, patient, adaptive-pivoting
-- **IRONHAZE** — hacktivist, loud, easy-to-detect
-- **GHOSTWIRE** — insider threat, inverts the win condition (identify foothold rather than sever external C2)
-- **WARDEN** — access broker, alternating burst tempo
-- **TIDEMARK** — supply-chain operator (ZPMC-pattern), vendor-remote-access vector
+- **CRYO COLLECTIVE** — RaaS, **slow-dwell reconnaissance + fast-impact double extortion**. 14-day median dwell per M-Trends 2026; exfil before encrypt; backup destruction before encryption; sources CISA Change Healthcare 2024 pattern.
+- **KINGFISHER** — aerospace APT, patient, adaptive-pivoting on response.
+- **IRONHAZE** — hacktivist, **availability-focused (T1498 DDoS family + T1499 Endpoint DoS)** with opportunistic exposed-OT exploitation. Models NoName057(16) / DDOSIA crowdsourced-DDoS pattern (Europol Operation Eastwood, July 2025) and CyberAv3ngers / Unitronics direct-PLC-abuse pattern (CISA AA23-335A, Nov 2023).
+- **GHOSTWIRE** — **malicious insider** (~25% of insider cases per Ponemon 2025), long-dwell, authorized-but-abnormal. Separated from compromised-credentials in v0.9.
+- **HOLLOWKEY** 🆕 — **compromised credentials** (~20% of insider-category cases per Ponemon 2025). Infostealer-sourced valid-account abuse; external geography; MFA fatigue / session-cookie theft; immediate reconnaissance after sign-in. Keyhole silhouette.
+- **WARDEN** — **true Initial Access Broker** per 2025-2026 reality. Enumeration-heavy, impact-light. **Hands off to a successor actor** (CRYO or HOLLOWKEY) after round 3 — the broker-to-ransomware handoff; sources Mandiant M-Trends 2026 (22-second handoff cases observed) and Huntress/Rapid7 2025.
+- **TIDEMARK** — supply-chain operator (ZPMC-pattern), vendor-remote-access vector.
 - **VOLTFORGE** — pre-positioning operator built on CISA/NSA/FBI advisory [AA24-038A](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a) on Volt Typhoon. Lives off the land (cmd, certutil, ntdsutil, wmic, PowerShell, netsh, wevtutil, vssadmin, …). Wins by accumulating undetected dwell rounds, not by Impact. Changes the strategic game.
 
 ### Combo synergy system
@@ -107,6 +108,20 @@ New in v0.7, inspired by [grumby42/dfir-trainers](https://github.com/grumby42/df
 - **Preferences persistence** — difficulty, verbosity, and pacing stick between sessions.
 - **Case-log JSON export** — EXPORT button on the debrief downloads a `joshua-protocol.case-log.v1` JSON file compatible with [grumby42/dfir-trainers](https://github.com/grumby42/dfir-trainers) case-log schema. Share your runs; compare notes with peers.
 - **Trends-tab NaN safety** — defensive normalization on round-metric fields so a missing field can't poison the sparkline rendering with literal "NaN" strings.
+
+### v0.9: SME-accuracy rework (Priority 1)
+
+Found by audit: several archetypes were playing to pre-2020 Hollywood tropes rather than 2026 ground truth. v0.9 fixes:
+
+- **CRYO is no longer a 2018 ransomware.** Reworked to Mandiant M-Trends 2026 slow-dwell (14-day median) + fast-impact tempo with double extortion (exfil before encrypt) and backup destruction. New `tempo: 'slow_dwell_fast_impact'` flag. Mirrors CISA's Change Healthcare 2024 advisory pattern.
+- **IRONHAZE has DDoS now.** Added T1498 (Network DoS), T1498.001 (Direct Flood), T1498.002 (Reflection Amplification), T1499 (Endpoint DoS), T1491.001 (Internal Defacement) to the technique catalog. Primary bias toward availability impact (DDoS), with secondary OT-direct exploitation per CISA AA23-335A (CyberAv3ngers / Unitronics).
+- **GHOSTWIRE is now specifically the malicious insider.** Narrowed to the ~25% of real insider cases per Ponemon 2025. Compromised credentials (the ~20% stolen-cred cases) got its own actor:
+- **HOLLOWKEY (new)** — infostealer-sourced compromised-credential actor. External geography, MFA fatigue / session-cookie theft tradecraft, immediate recon after sign-in. New `archetype: 'compromised_credentials'`, keyhole silhouette, added to all three missions' valid-actor pools.
+- **WARDEN is now a true Initial Access Broker.** No longer deploys ransomware itself. New `handoffAfterRounds: 3` mechanic — WARDEN enumerates for 3 rounds, then hands off STATE.activeActor to a successor from `successorPool: ['CRYO', 'HOLLOWKEY']` on round 4, with a 30-point attribution penalty (you have to re-identify the new actor). Models the broker-to-ransomware pipeline per Mandiant M-Trends 2026 and Huntress/Rapid7 2025.
+- **CFI debrief notes** got four new actor-specific branches (slow-dwell ransomware, IAB handoff, compromised-creds, availability-focused hacktivist).
+- **DETECTIONS.md** rewritten for all four reworked actors + new Play 8 for HOLLOWKEY. Every claim sourced to primary advisory / report.
+- **11 new ATT&CK techniques** added to the catalog: T1498, T1498.001, T1498.002, T1499, T1491.001, T1078.001, T1110, T1565.001, T1531, T1555.003, T1087.001.
+- **Zero fabrication.** Every TTP sourced to primary advisory / report. Every statistic cited to source (M-Trends 2026, Ponemon 2025, CISA advisories, Europol Operation Eastwood).
 
 ---
 
@@ -188,4 +203,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.8** (October 2026) · BUILD `HUNT-20261017-1221Z`
+Current version: **v0.9** (October 2026) · BUILD `HUNT-20261017-1438Z`

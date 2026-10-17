@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.7</title>
+<title>JOSHUA PROTOCOL v0.9</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1221Z';
-const STAMP_UTC = '2026-10-17T12:21Z';
-const APP_VERSION = 'v0.8';
+const BUILD_ID = 'HUNT-20261017-1438Z';
+const STAMP_UTC = '2026-10-17T14:38Z';
+const APP_VERSION = 'v0.9';
 
 // v0.8: Local save/load namespace keys.
 const LS_SAVE_KEY = 'joshua_protocol.save.v1';
@@ -1506,6 +1506,65 @@ const TECHNIQUES = {
     novice:'Adversary gathers details about the compromised machine.',
     tools:['Sysmon event 1 (process create)','UEBA baseline deviation'],
     counters:['Behavioral analytics','Deception artifacts'] },
+
+  // v0.9: DDoS and endpoint-DoS tradecraft — dominant hacktivist signatures 2024-2026.
+  'T1498': { fw:'attack', name:'Network Denial of Service', tactic:'Impact',
+    desc:'Adversary floods a target with network traffic to degrade or deny availability. The dominant hacktivist signature in 2024-2026: NoName057(16) DDOSIA tool, KillNet, pro-Russian collectives.',
+    novice:'Adversary floods a website or service with so much traffic that it stops working.',
+    tools:['NetFlow baseline','DDoS mitigation (Cloudflare, Akamai, AWS Shield)','ISP scrubbing'],
+    counters:['D3-NTF: Network Traffic Filtering','Anycast absorption','Rate limiting'],
+  },
+  'T1498.001': { fw:'attack', name:'Network DoS: Direct Network Flood', tactic:'Impact',
+    desc:'Volumetric flood directed at victim bandwidth (SYN flood, UDP flood, HTTP flood). Botnet-driven at scale.',
+    novice:'Flood of garbage traffic sent directly at the target.',
+    tools:['NetFlow','ISP scrubbing partnership','Cloud DDoS protection'],
+    counters:['Anycast','Rate limiting','ACL on edge routers'] },
+  'T1498.002': { fw:'attack', name:'Network DoS: Reflection Amplification', tactic:'Impact',
+    desc:'Attacker spoofs victim IP in requests to open DNS/NTP/memcached servers; responses flood victim at 10-50,000x amplification.',
+    novice:'Attacker tricks other servers into sending big responses to the target.',
+    tools:['NetFlow','RPZ (Response Policy Zones)','BCP 38 ingress filtering'],
+    counters:['BCP 38 at ISP','Rate limit UDP responders','DDoS scrubbing'] },
+  'T1499': { fw:'attack', name:'Endpoint Denial of Service', tactic:'Impact',
+    desc:'Adversary disables a specific endpoint via resource exhaustion or service-manipulation. CyberAv3ngers 2023-2024 pattern against Unitronics PLCs: locked out management, disabled upload/download, changed default port 20256→20257. Per CISA AA23-335A.',
+    novice:'Adversary breaks or disables a specific device so it can\'t be used.',
+    tools:['Device telemetry','Baseline health check','Modbus/DNP3 anomaly'],
+    counters:['D3-NI: Network Isolation','Device hardening','Default-cred elimination'] },
+  'T1491.001': { fw:'attack', name:'Defacement: Internal Defacement', tactic:'Impact',
+    desc:'Adversary alters content on an owned asset (web page, HMI screen) for visibility/impact. Hacktivist signature; CyberAv3ngers overwrote HMI screens on Unitronics PLCs with ideological message per CISA AA23-335A.',
+    novice:'Adversary posts a message on the victim\'s own screen or website.',
+    tools:['File integrity monitoring','Web app audit'],
+    counters:['Content integrity checks','Signed content delivery'] },
+  'T1078.001': { fw:'attack', name:'Valid Accounts: Default Accounts', tactic:'Initial Access, Persistence, Privilege Escalation, Defense Evasion',
+    desc:'Adversary uses factory-default or blank credentials on exposed systems. CyberAv3ngers 2023 water-utility campaign used default/blank passwords on internet-exposed Unitronics PLCs on TCP/20256.',
+    novice:'Adversary logs in with the device\'s factory default password.',
+    tools:['Device inventory','Shodan audit','Credential policy audit'],
+    counters:['Default-cred elimination at onboarding','Network segmentation of OT','Attack-surface management'] },
+  'T1110': { fw:'attack', name:'Brute Force', tactic:'Credential Access',
+    desc:'Adversary iterates credential guesses against an authentication endpoint. Includes password spraying, credential stuffing, and classic brute-force.',
+    novice:'Adversary tries many passwords until one works.',
+    tools:['Auth log monitoring (4625 Windows, auth.log Linux)','Rate-limit alerting','MFA failure spike'],
+    counters:['Account lockout policy','MFA','Impossible-travel detection','D3-MFA'] },
+  'T1565.001': { fw:'attack', name:'Stored Data Manipulation', tactic:'Impact',
+    desc:'Adversary alters data at rest to influence outcomes. CyberAv3ngers overwrote PLC ladder logic with no-op code so devices lost control functions per CISA AA23-335A.',
+    novice:'Adversary changes stored data to cause problems or hide activity.',
+    tools:['File integrity monitoring','Configuration baseline','Historian anomaly'],
+    counters:['D3-FBA File Backup','Signed configurations','Change management'] },
+  'T1531': { fw:'attack', name:'Account Access Removal', tactic:'Impact',
+    desc:'Adversary locks legitimate users out of accounts or devices. CyberAv3ngers renamed PLCs and enabled upload passwords, blocking operator access per CISA AA23-335A.',
+    novice:'Adversary locks owners out of their own systems.',
+    tools:['Password-change audit','Account lockout events','Device-rename alerting'],
+    counters:['Role-separation','Change management','Out-of-band admin path'] },
+  // v0.9: Credential-theft / infostealer pattern — dominant initial-access path in 2026.
+  'T1087.001': { fw:'attack', name:'Account Discovery: Local Account', tactic:'Discovery',
+    desc:'Adversary enumerates local accounts on a host (net user, net localgroup administrators) to understand privilege landscape before lateral movement. IAB verification step.',
+    novice:'Adversary looks up what accounts exist on the machine.',
+    tools:['Sysmon event 1','Windows Event 4798'],
+    counters:['UEBA behavioral baseline','Credential-tiering enforcement'] },
+  'T1555.003': { fw:'attack', name:'Credentials from Password Stores: Credentials from Web Browsers', tactic:'Credential Access',
+    desc:'Adversary (often via infostealer malware — Lumma, RedLine, Vidar) extracts saved passwords, session cookies, and tokens from browser credential stores. Session cookie theft enables MFA bypass. The 2025-2026 infostealer economy produced billions of credential records traded on criminal markets.',
+    novice:'Malware steals passwords and session cookies saved in the browser.',
+    tools:['EDR process monitoring (chrome.exe child reads)','Browser integrity','Sysmon event 11 (FileCreate)'],
+    counters:['Hardened browser profile','Short session TTL','Device-bound tokens','D3-CH Credential Hardening'] },
 };
 
 
@@ -1552,25 +1611,36 @@ const TECHNIQUES = {
 // Names are evocative codes; behavior parameters drive the threat AI.
 // =============================================================================
 const THREAT_ACTORS = {
+  // v0.9: CRYO reworked to match 2026 ransomware tempo per Mandiant M-Trends 2026
+  // (global median dwell = 14 days, up from 11) and the Change Healthcare 2024
+  // pattern (~9-day dwell, double extortion, backup destruction before encryption,
+  // ~$22M ransom, patient-care impact for weeks). Modern ransomware is a
+  // slow-dwell + fast-impact operation, not a fast-everything one.
   'CRYO': {
     id: 'CRYO',
     archetype: 'ransomware',
     name: 'CRYO COLLECTIVE',
-    tagline: 'Ransomware Crew',
-    silhouette: 'skull',           // svg shape used for intro card
+    tagline: 'Ransomware-as-a-Service',
+    silhouette: 'skull',
     color: '#ff4ea8',
-    summary: 'Financially-motivated ransomware operation. Fast, noisy, multi-stage. Heavy on phishing initial access and Impact-tactic encryption.',
-    pattern: 'Pattern matches ransomware-as-a-service tradecraft — broad initial access, rapid lateral movement, T1486 detonation.',
-    // Mechanical knobs
-    adaptive: false,               // does NOT pivot when disrupted (NOVICE-level by default)
-    spawnRateMod: 1.2,             // launches more threats per round
-    detectionWindow: 1.0,          // baseline visibility (recon hidden 1 round)
-    cascadeChance: 0.5,            // higher cascade on compromise
-    techniqueAffinity: ['T1566.001','T1190','T1059','T1021','T1486','T1490','T0883'],
-    impactBias: 'T1486',           // tends toward this Impact technique
-    biasInitialAccess: ['T1566.001'],
-    biasExecution: ['T1059'],
-    biasImpact: ['T1486','T1490'],
+    summary: 'Financially-motivated RaaS operation. Slow-dwell reconnaissance and credential theft (median 14 days per Mandiant M-Trends 2026), then a fast ~70-minute detonation window: backup destruction → data exfil → encryption. Double extortion is standard.',
+    pattern: 'Behavior matches 2026 RaaS tradecraft — initial access via infostealer-sourced credentials or exploited VPN, Mimikatz/LaZagne credential dumping, Cobalt Strike or similar C2, backup infrastructure targeted BEFORE encryption, exfil-then-encrypt double extortion. Reference incidents: Change Healthcare (BlackCat/ALPHV Feb 2024, ~9-day dwell).',
+    adaptive: false,
+    // v0.9: Patient recon then explosive impact. Spawn rate is low early (dwell),
+    // high late (detonation). See spawnRateByPhase handling in aiPlanThreats.
+    spawnRateMod: 0.6,             // moderate during dwell
+    detectionWindow: 1.8,          // v0.9: harder to detect in dwell phase (was 1.0, implausibly fast)
+    cascadeChance: 0.75,           // v0.9: when it goes, it cascades hard (file-share encryption spread)
+    techniqueAffinity: ['T1566.001','T1190','T1133','T1078','T1003.001','T1059','T1059.001','T1021','T1021.001','T1486','T1490','T1657','T0883'],
+    impactBias: 'T1486',
+    biasInitialAccess: ['T1566.001','T1190','T1133'],   // phish OR exploit OR VPN valid-cred
+    biasExecution: ['T1059.001','T1003.001'],           // PowerShell + LSASS dump
+    biasImpact: ['T1490','T1486'],                      // backups FIRST, then encrypt
+    // v0.9: Explicit tempo model — this actor dwells before detonating
+    tempo: 'slow_dwell_fast_impact',
+    dwellRoundsBeforeImpact: 2,    // first 2 rounds are quiet (recon/lateral)
+    doubleExtortion: true,
+    sources: ['Mandiant M-Trends 2026', 'TechCrunch: Change Healthcare attack timeline (Jan 2025)', 'CISA #StopRansomware (Akira, Lockbit, Play guides)'],
   },
   'KINGFISHER': {
     id: 'KINGFISHER',
@@ -1591,66 +1661,131 @@ const THREAT_ACTORS = {
     biasExecution: ['EX-0014','EX-0016.01','PER-0001'],
     biasImpact: ['IMP-0002','PER-0001'],
   },
+  // v0.9: IRONHAZE reworked around 2024-2026 hacktivist reality — DDoS-primary
+  // tradecraft with botnet-driven volumetric floods (NoName057(16) DDOSIA pattern,
+  // KillNet), supplemented by opportunistic exploitation of exposed devices
+  // (CyberAv3ngers / IRGC-affiliated pattern against exposed water-utility PLCs per
+  // CISA AA23-335A). Dominant impact: availability denial, not persistence.
   'IRONHAZE': {
     id: 'IRONHAZE',
     archetype: 'hacktivist',
     name: 'IRONHAZE',
-    tagline: 'Hacktivist Faction',
+    tagline: 'Hacktivist / Opportunistic Actor',
     silhouette: 'flag',
     color: '#ffb84d',
-    summary: 'Ideologically-motivated, opportunistic, public-facing. Goes after exposed systems for visibility and disruption rather than persistence.',
-    pattern: 'Behavior matches hacktivist crews — spray-and-pray exploitation of public-facing apps, defacement-style impact, low operational security.',
+    summary: 'Ideologically-motivated collective. Dominant signature: DDoS campaigns via distributed botnets (NoName057(16) DDOSIA pattern) and crowdsourced participation. Secondary: opportunistic exploitation of exposed devices (CyberAv3ngers pattern against water-utility PLCs with default credentials). Loud, fast, availability-focused.',
+    pattern: 'Behavior matches 2024-2026 hacktivist tradecraft — volumetric DDoS as primary (T1498), direct-target endpoint DoS against exposed PLCs/HMIs (T1499), default-credential abuse (T1078.001), internal defacement for visibility (T1491.001). Campaigns cluster around geopolitical triggers. Reference: NoName057(16) 200+ attacks on Lithuanian infrastructure in a month per Europol Operation Eastwood (July 2025).',
     adaptive: false,
     spawnRateMod: 1.5,             // very noisy
     detectionWindow: 0.5,          // easy to spot
-    cascadeChance: 0.1,            // rarely cascades
-    techniqueAffinity: ['T1190','T0883','T1059','IMP-0002'],
-    impactBias: 'IMP-0002',
-    biasInitialAccess: ['T1190','T0883'],
-    biasExecution: ['T1059'],
-    biasImpact: ['IMP-0002'],
+    cascadeChance: 0.1,            // rarely cascades (surface-level impact)
+    // v0.9: DDoS-first affinity. T1498 Network DoS + T1499 Endpoint DoS replace
+    // the generic T1190+IMP-0002 blob from v0.8.
+    techniqueAffinity: ['T1498','T1498.001','T1498.002','T1499','T1491.001','T1190','T0883','T1078.001','T1110','T1565.001','T1531','IMP-0002'],
+    impactBias: 'T1498',
+    biasInitialAccess: ['T1190','T0883','T1078.001','T1110'],
+    biasExecution: ['T1498.001','T1499'],
+    biasImpact: ['T1498','T1499','T1491.001','IMP-0002'],
+    // Hacktivists are DDoS-dominant: they prefer availability denial to persistence
+    availabilityFocused: true,
+    sources: ['NoName057(16) Wikipedia / Europol Operation Eastwood July 2025', 'CISA AA23-335A: CyberAv3ngers Unitronics PLC campaign'],
   },
+  // v0.9: GHOSTWIRE reworked — malicious insider. Per Ponemon 2025, malicious
+  // insiders are ~25% of insider incidents; the other ~75% are non-malicious
+  // (negligence 55%, external-exploit-of-stolen-creds 20%). GHOSTWIRE now
+  // represents the malicious ~25% specifically. New HOLLOWKEY (below) represents
+  // the compromised-credentials pattern that dominates real-world insider cases.
+  // Insider detection median: 81 days per Ponemon 2025 (compressed to game rounds).
   'GHOSTWIRE': {
     id: 'GHOSTWIRE',
     archetype: 'insider',
     name: 'GHOSTWIRE',
-    tagline: 'Insider Threat',
+    tagline: 'Malicious Insider',
     silhouette: 'mask',
     color: '#a060ff',
-    summary: 'Compromised credentials or malicious insider. Already in the network. C2 is internal — there is no external command node to sever. Win by IDENTIFYING the foothold and RESTORING it.',
-    pattern: 'Anomalies indicate authorized credentials behaving abnormally. No external beaconing. Foothold is one of your own assets.',
+    summary: 'Authorized user acting against the organization — grievance-driven exfiltration, sabotage, or sell-outs. Already inside. No external beaconing. Represents the ~25% of insider incidents that are malicious (per Ponemon 2025). Win by IDENTIFYING the actor and CONTAINING.',
+    pattern: 'Legitimate credentials behaving abnormally — off-hours access to crown-jewel assets, data staging to removable media or personal cloud, scheduled-task persistence for after-termination access. No external C2.',
     adaptive: true,
-    spawnRateMod: 0.7,
-    detectionWindow: 2.5,          // hardest to spot
+    spawnRateMod: 0.5,
+    detectionWindow: 2.5,          // hardest to spot — insider has legitimate access
     cascadeChance: 0.0,            // no external cascades
-    techniqueAffinity: ['T1078','T1059','T1021','T1053','T0855','T0832'],
+    techniqueAffinity: ['T1078','T1059','T1021','T1053','T1074','T0855','T0832'],
     impactBias: 'T0832',
-    biasInitialAccess: ['T1078'],   // already has access
+    biasInitialAccess: ['T1078'],
     biasExecution: ['T1059','T1053'],
     biasImpact: ['T0832','T0826'],
-    // Insider-specific mechanics
-    insiderMode: true,              // changes win condition: identify+restore C2 instead of sever
+    insiderMode: true,
+    // v0.9: Insider's real win condition is DATA EXFIL over time, not
+    // kill-chain escalation. Give it a dwell-mode win like VOLTFORGE so a
+    // passive defender actually loses (fixing the v0.8 passivity exploit).
+    dwellMode: true,
+    dwellRoundsToWin: 6,  // insider patience is longer than APT dwell
+    sources: ['Ponemon 2025 Cost of Insider Threats', 'Verizon DBIR 2025 (72% misdelivery for non-malicious)'],
   },
+  // v0.9: HOLLOWKEY — compromised-credentials actor. Represents the dominant
+  // real-world insider pattern that GHOSTWIRE misses: an external attacker
+  // using stolen credentials from infostealer logs (Lumma, RedLine) or breach
+  // dumps. Legitimate user is unaware. Session cookies may provide MFA bypass.
+  // Per Ponemon 2025 / Verizon DBIR 2025: 20% of "insider incidents" are this.
+  'HOLLOWKEY': {
+    id: 'HOLLOWKEY',
+    archetype: 'compromised_credentials',
+    name: 'HOLLOWKEY',
+    tagline: 'Compromised Credentials',
+    silhouette: 'keyhole',
+    color: '#c04080',
+    summary: 'External attacker using credentials stolen from infostealer malware (Lumma, RedLine, Vidar) or data-breach dumps. Session cookies may bypass MFA. The legitimate user is unaware. Looks like insider activity to detection stacks — isn\'t one.',
+    pattern: 'TTP signature matches the 2026 infostealer-to-breach pipeline: credentials sourced from criminal marketplaces, used to log in via VPN or SaaS from unusual geographies, pivot to crown-jewel assets. Behavior resembles insider but with external IP, odd user-agent fingerprint, impossible-travel markers.',
+    adaptive: true,
+    spawnRateMod: 0.8,
+    detectionWindow: 1.8,          // harder than external APT, easier than true insider
+    cascadeChance: 0.3,
+    techniqueAffinity: ['T1555.003','T1078','T1133','T1021.001','T1059.001','T1486','T1657'],
+    impactBias: 'T1486',
+    biasInitialAccess: ['T1555.003','T1078','T1133'],
+    biasExecution: ['T1059.001'],
+    biasImpact: ['T1486'],
+    // Not insiderMode — because it ISN'T a real insider. The player must
+    // detect the behavioral anomaly (impossible travel, unusual asset access)
+    // and respond via credential rotation rather than insider-threat process.
+    externalCredSource: true,
+    sources: ['Recorded Future 2025 Identity Threat Landscape', 'Ponemon 2025 (20% external-exploit of insider accounts)'],
+  },
+  // v0.9: WARDEN reworked to match actual initial-access-broker tradecraft per
+  // Huntress / Rapid7 2025 reporting: IABs breach → verify → sell → MOVE ON.
+  // They do NOT typically deploy ransomware or do their own exfil; those are
+  // the BUYER's job. The game now models this with a two-phase scenario:
+  // WARDEN establishes a foothold (3 rounds of recon + credential cultivation),
+  // then "hands off" to a successor actor (CRYO ransomware or HOLLOWKEY) who
+  // takes over execution. Modeled via handoffAfterRounds + successorActor.
+  // Per Rapid7 2025: 71% of IAB listings are privileged access.
   'WARDEN': {
     id: 'WARDEN',
-    archetype: 'cybercriminal',
+    archetype: 'initial_access_broker',
     name: 'WARDEN',
-    tagline: 'Access Broker',
+    tagline: 'Initial Access Broker',
     silhouette: 'key',
     color: '#5cff8a',
-    summary: 'Initial-access broker selling footholds to multiple clients. Multi-burst tempo: short campaigns, possible attribution shift mid-mission as the buyer hands off.',
-    pattern: 'TTP overlap with broker-style operations — credential abuse, opportunistic targeting, periodic refresh of techniques.',
+    summary: 'Breaches networks, catalogs the access, sells it on criminal marketplaces, moves on. Does not deploy ransomware or exfil — those are the buyer\'s job. Modern IABs sell 71% of listings as privileged access (Rapid7 2025). Handoff tempo is seconds-to-hours (Mandiant M-Trends 2026: median 22 seconds from access to buyer).',
+    pattern: 'TTP signature matches 2025-2026 IAB tradecraft — initial access via infostealer-sourced credentials, exposed VPN/RDP/web app, or exploited edge appliance. Catalogs access, enumerates assets, verifies privilege level. Posts listing with victim industry/country/revenue. Hands off within hours; attribution shifts to the buyer.',
     adaptive: false,
-    spawnRateMod: 1.0,
+    spawnRateMod: 0.9,
     detectionWindow: 1.5,
-    cascadeChance: 0.2,
-    techniqueAffinity: ['T1078','T1190','T1021','T1486','T0855'],
-    impactBias: 'T1486',
-    biasInitialAccess: ['T1078','T1190'],
-    biasExecution: ['T1059','T1021'],
-    biasImpact: ['T1486'],
-    // Burst pattern: spawn-quiet-spawn-quiet
+    cascadeChance: 0.1,            // IAB does not cascade — they verify and sell
+    // v0.9: IABs do NOT touch Impact techniques themselves. Removed T1486.
+    // They do credential theft, discovery, and privilege verification only.
+    techniqueAffinity: ['T1555.003','T1078','T1190','T1133','T1110','T1046','T1082','T1087.001','T1021.001','T1070.001'],
+    impactBias: null,              // IABs don't do Impact
+    biasInitialAccess: ['T1555.003','T1078','T1133','T1190','T1110'],
+    biasExecution: ['T1046','T1082','T1087.001','T1021.001'],  // discovery + privilege-check
+    biasImpact: [],
     burstPattern: true,
+    // v0.9: The handoff — after N rounds of WARDEN activity, control passes
+    // to a successor actor who takes over the kill chain. Models the real-world
+    // "broker sells, buyer executes" sequence.
+    handoffAfterRounds: 3,
+    successorPool: ['CRYO', 'HOLLOWKEY'],
+    sources: ['Huntress: What Are Initial Access Brokers', 'Rapid7 2025 Access Brokers Report', 'Mandiant M-Trends 2026'],
   },
   'TIDEMARK': {
     id: 'TIDEMARK',
@@ -1964,10 +2099,11 @@ const MISSIONS = {
     frameworks: ['attack','ics','d3fend'],
     maxRounds: 10,
     loseThreshold: 5,
-    threatMix: ['T1566.001','T1190','T1078','T1059','T1021','T1486','T1490','T0883','T0855'],
-    impactTechs: ['T1486'],
+    // v0.9: expanded for IRONHAZE DDoS, HOLLOWKEY cred theft, WARDEN broker recon
+    threatMix: ['T1566.001','T1190','T1133','T1078','T1078.001','T1110','T1059','T1021','T1021.001','T1486','T1490','T1498','T1498.001','T1498.002','T1499','T1491.001','T1531','T1555.003','T1565.001','T1087.001','T0883','T0855'],
+    impactTechs: ['T1486','T1498','T1491.001','T1531'],
     // v0.3: Valid threat actors for this domain. First is default; randomized per run.
-    validActors: ['CRYO','IRONHAZE','WARDEN','GHOSTWIRE','VOLTFORGE'],
+    validActors: ['CRYO','IRONHAZE','WARDEN','GHOSTWIRE','HOLLOWKEY','VOLTFORGE'],
     defaultActor: 'CRYO',
   },
   'NIGHTWATCH': {
@@ -1981,9 +2117,10 @@ const MISSIONS = {
     frameworks: ['attack','sparta','atlas','d3fend'],
     maxRounds: 12,
     loseThreshold: 3,
-    threatMix: ['REC-0001','REC-0003','EX-0014','EX-0016.01','IA-0005','PER-0001','IMP-0002','T1190','T1078','AML.T0043','AML.T0040'],
+    // v0.9: added HOLLOWKEY cred-theft + WARDEN broker-recon TTPs
+    threatMix: ['REC-0001','REC-0003','EX-0014','EX-0016.01','IA-0005','PER-0001','IMP-0002','T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1021.001','T1087.001','AML.T0043','AML.T0040'],
     impactTechs: ['IMP-0002','PER-0001'],
-    validActors: ['KINGFISHER','GHOSTWIRE','WARDEN'],
+    validActors: ['KINGFISHER','GHOSTWIRE','HOLLOWKEY','WARDEN'],
     defaultActor: 'KINGFISHER',
   },
   'TIDEBREAK': {
@@ -1997,9 +2134,10 @@ const MISSIONS = {
     frameworks: ['attack','ics','d3fend'],
     maxRounds: 11,
     loseThreshold: 4,
-    threatMix: ['T1190','T1078','T0883','T0855','T0832','T0826','T1486','T1059','T1021','PER-0001'],
+    // v0.9: added HOLLOWKEY cred-theft + CRYO slow-dwell TTPs; TIDEMARK already covered
+    threatMix: ['T1190','T1133','T1078','T1078.001','T1555.003','T1110','T1021.001','T0883','T0855','T0832','T0826','T1486','T1490','T1059','T1021','T1087.001','PER-0001'],
     impactTechs: ['T0832','T0826','T1486'],
-    validActors: ['TIDEMARK','CRYO','KINGFISHER','GHOSTWIRE','VOLTFORGE'],
+    validActors: ['TIDEMARK','CRYO','KINGFISHER','GHOSTWIRE','HOLLOWKEY','VOLTFORGE'],
     defaultActor: 'TIDEMARK',
   },
 };
@@ -3710,6 +3848,18 @@ function aiPlanThreats() {
   if (actor.burstPattern) {
     baseDesired = (STATE.round % 2 === 1) ? Math.ceil(baseDesired * 1.5) : 0;
   }
+  // v0.9: CRYO-style slow_dwell_fast_impact — few threats early, surge after dwell
+  if (actor.tempo === 'slow_dwell_fast_impact') {
+    const dwellRounds = actor.dwellRoundsBeforeImpact || 2;
+    if (STATE.round <= dwellRounds) {
+      baseDesired = 1;  // just the dwell footprint; mostly recon/lateral in quiet
+    } else {
+      // Detonation phase: aggressive multi-vector spawning. This is the
+      // "70-minute explosive window" per Huntress/M-Trends 2026 patterns —
+      // compressed to in-game tempo.
+      baseDesired = Math.max(baseDesired, 2) + 1;
+    }
+  }
   // Difficulty multiplier
   const diffMod = STATE.difficulty === 'analyst' ? 1.3 : STATE.difficulty === 'novice' ? 0.7 : 1.0;
   const desired = Math.max(0, Math.round(baseDesired * actor.spawnRateMod * diffMod));
@@ -3956,6 +4106,16 @@ function generateCFINote(rubric) {
       notes.push(`Faced ${A.name} — supply-chain compromise via vendor remote-access. Patient and cascading.`);
     } else if (A.archetype === 'pre_positioning') {
       notes.push(`Faced ${A.name} — pre-positioning operator in the Volt Typhoon mold (per CISA AA24-038A). Their win condition was undetected dwell, not Impact; detection speed and attribution mattered more than disruption. LotL tradecraft evades signature detection, so VIGIL ▸ DEEP SCAN carried the mission.`);
+    } else if (A.archetype === 'ransomware' && A.tempo === 'slow_dwell_fast_impact') {
+      const dwellR = A.dwellRoundsBeforeImpact || 2;
+      notes.push(`Faced ${A.name} — modern RaaS tempo per Mandiant M-Trends 2026: ~14-day median dwell before detonation (compressed to ${dwellR} game rounds). The quiet first rounds are the window to catch them — once backups fall and exfil begins, it's too late.`);
+    } else if (A.archetype === 'initial_access_broker') {
+      const handed = STATE.handoffFired ? 'did' : 'did not';
+      notes.push(`Faced ${A.name} — initial access broker. ${handed === 'did' ? 'Attribution shifted mid-run as the IAB sold the foothold to a buyer per Rapid7 2025 pattern.' : 'IAB did not reach handoff; your containment denied the sale.'}`);
+    } else if (A.archetype === 'compromised_credentials') {
+      notes.push(`Faced ${A.name} — compromised credentials, not a real insider. Per Ponemon 2025, this is ~20% of what organizations label "insider threats." Response differs: rotate credentials, kill sessions, enforce device-bound tokens — do not treat the account owner as hostile.`);
+    } else if (A.archetype === 'hacktivist' && A.availabilityFocused) {
+      notes.push(`Faced ${A.name} — DDoS-primary hacktivist in the NoName057(16) / CyberAv3ngers mold. Availability was the target, not persistence. Mitigation lives at the edge (CDN scrubbing, rate limiting, BCP 38) more than at the endpoint.`);
     }
   }
 
@@ -4093,6 +4253,8 @@ function startIntelPhase() {
       else if (A.archetype === 'insider') line = 'Anomalies in authorized credentials. Hostile may already be inside the perimeter.';
       else if (A.archetype === 'cybercriminal') line = 'Initial-access broker pattern detected. Expect bursts and possible buyer handoff.';
       else if (A.archetype === 'supply_chain') line = 'Anomalies traced to vendor remote-access channels. Trusted maintenance pathways may be compromised.';
+      else if (A.archetype === 'initial_access_broker') line = 'Reconnaissance-pattern activity detected. Signature matches an initial access broker — expect the foothold to be sold to a successor actor within the operational window.';
+      else if (A.archetype === 'compromised_credentials') line = 'Credential-abuse signature from external geography. Account belongs to a legitimate user but behavior is not. Infostealer-sourced credentials likely.';
       else line = 'Hostile activity detected. Stand by.';
       logJoshua(line);
     }, 800);
@@ -4502,8 +4664,17 @@ function advanceThreat(t) {
     target.state = 'compromised';
     log(`&nbsp;&nbsp;└ <b>${target.id} COMPROMISED</b>`, 'log-crit');
     STATE.threats = STATE.threats.filter(x => x !== t);
+    // v0.9: Actor-specific impact flavor
+    const A = STATE.activeActor;
+    if (A && A.doubleExtortion) {
+      log(`&nbsp;&nbsp;└ <span style="color:var(--red);">⚠ Data exfil detected on ${target.id} (per double-extortion pattern — exfil preceded encryption)</span>`, 'log-crit');
+      // Record exfil as an IOC proxy
+      STATE.iocs = STATE.iocs || [];
+      STATE.iocs.push(`Exfil staging detected → ${target.id} (double-extortion precursor)`);
+    }
+    const cascadeChance = (A && typeof A.cascadeChance === 'number') ? A.cascadeChance : 0.3;
     adjacent(target.id).forEach(adj => {
-      if (adj.state === 'healthy' && Math.random() < 0.3) {
+      if (adj.state === 'healthy' && Math.random() < cascadeChance) {
         adj.state = 'stressed';
         log(`&nbsp;&nbsp;└ Cascade stress on ${adj.id}`, 'log-warn');
       }
@@ -4588,6 +4759,22 @@ function advanceRound() {
   }
   STATE.round++;
   STATE.killBoxActive = false;  // v0.4: combo effect expires at round end
+  // v0.9: WARDEN handoff — after N rounds the IAB "sells access" and a successor
+  // takes over execution. Attribution shift mid-mission is the real IAB signature.
+  if (A && A.handoffAfterRounds && A.successorPool && STATE.round === A.handoffAfterRounds + 1 && !STATE.handoffFired) {
+    STATE.handoffFired = true;
+    const successorId = A.successorPool[Math.floor(Math.random() * A.successorPool.length)];
+    const successor = THREAT_ACTORS[successorId];
+    if (successor) {
+      const prevName = A.name;
+      STATE.activeActor = successor;
+      STATE.actorRevealed = false;  // player re-earns attribution for the new actor
+      STATE.actorAttribution = Math.max(0, STATE.actorAttribution - 30);  // partial carry-over
+      log(`<b style="color:${successor.color};">▸▸ ATTRIBUTION SHIFT — ${prevName} appears to have handed off access</b>`, 'log-crit');
+      log(`<span style="color:var(--muted);">New activity signature matches ${successor.name} (${successor.tagline}). Re-attribute.</span>`);
+      setTimeout(() => logJoshua(`Attribution shift, Operator. ${prevName} sold the foothold. ${successor.name} is now in the driver's seat. Their TTPs differ — adjust your hypothesis.`), 900);
+    }
+  }
   updateStatusBar();
   // v0.8: snapshot the run at each round boundary so a tab close doesn't lose progress
   if (!STATE.demoMode) saveRun();
@@ -6571,6 +6758,7 @@ function beginGame(missionId) {
   STATE.viewMode = 'ground_truth';       // v0.6: start in ground truth
   STATE.reasoningShown = {};             // v0.7: reset OODA triggers
   STATE.achGatePassed = false;           // v0.7: reset ACH gate
+  STATE.handoffFired = false;            // v0.9: reset IAB handoff flag
   if (document.getElementById('view-mode-btn')) updateViewModeButton();
   STATE.killBoxActive = false;
   STATE.metrics = {
@@ -6946,8 +7134,13 @@ function showThreatActorIntro(onDone) {
       ${A.insiderMode ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ INSIDER — no external C2; identify foothold to contain</div>' : ''}
       ${A.burstPattern ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ BURST PATTERN — alternating tempo</div>' : ''}
       ${A.dwellMode ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ PRE-POSITIONING — wins by accumulating ' + A.dwellRoundsToWin + ' undetected dwell rounds, not by Impact. Hunt them.</div>' : ''}
+      ${A.tempo === 'slow_dwell_fast_impact' ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ SLOW-DWELL + FAST-IMPACT — recon ' + (A.dwellRoundsBeforeImpact || 2) + ' rounds, then detonation. Catch window is EARLY.</div>' : ''}
+      ${A.doubleExtortion ? '<div style="margin-top:4px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ DOUBLE EXTORTION — exfils before encrypt. Data is already gone when the ransom note appears.</div>' : ''}
+      ${A.handoffAfterRounds ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ INITIAL ACCESS BROKER — recon-only. Hands off to a successor actor after round ' + A.handoffAfterRounds + '. Re-attribution required.</div>' : ''}
+      ${A.externalCredSource ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ EXTERNAL-CRED SOURCE — looks like insider, isn\'t one. Rotate credentials, don\'t investigate the user.</div>' : ''}
+      ${A.availabilityFocused ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ AVAILABILITY-FOCUSED — DDoS and defacement, not data theft. Loud, fast, symbolic.</div>' : ''}
       ${A.lolBins ? '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--grid-line);"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ LIVING-OFF-THE-LAND TOOLING</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;font-family:monospace;">' + A.lolBins.join(' · ') + '</div></div>' : ''}
-      ${A.source ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model source: ' + A.source + '</div>' : ''}
+      ${A.sources && A.sources.length ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model sources: ' + A.sources.join(' · ') + '</div>' : (A.source ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model source: ' + A.source + '</div>' : '')}
       <button class="action-btn primary" id="actor-intro-ack" style="width:100%;margin-top:14px;">▶ ACKNOWLEDGE</button>
     </div>
   `;
@@ -6999,6 +7192,15 @@ function buildSilhouetteSVG(shape, color) {
       <line x1="36" y1="40" x2="68" y2="40" stroke="${color}" stroke-width="3"/>
       <line x1="56" y1="40" x2="56" y2="52" stroke="${color}" stroke-width="3"/>
       <line x1="64" y1="40" x2="64" y2="48" stroke="${color}" stroke-width="3"/>
+    </svg>`;
+  }
+  if (shape === 'keyhole') {
+    // v0.9: HOLLOWKEY — hollow keyhole, suggesting credentials stolen and reused
+    return `<svg ${s}>
+      <rect x="20" y="12" width="40" height="56" rx="4" fill="none" stroke="${color}" stroke-width="2"/>
+      <circle cx="40" cy="34" r="7" fill="none" stroke="${color}" stroke-width="2"/>
+      <rect x="37" y="38" width="6" height="18" fill="${color}"/>
+      <line x1="26" y1="60" x2="54" y2="60" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>
     </svg>`;
   }
   if (shape === 'wave') {
