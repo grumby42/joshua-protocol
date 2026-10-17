@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.6</title>
+<title>JOSHUA PROTOCOL v0.7</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -958,6 +958,7 @@
       <button class="term-tab" data-tab="brief">BRIEF</button>
       <button class="term-tab" data-tab="codex">CODEX</button>
       <button class="term-tab" data-tab="intel">INTEL</button>
+      <button class="term-tab" data-tab="frames">FRAMES</button>
     </div>
     <div id="terminal-content"></div>
   </div>
@@ -997,6 +998,109 @@
 
 <script>
 'use strict';
+
+// v0.7: Build stamping — borrowed from DFIR Trainers convention. Surfaced
+// in-boot and in debrief footer so playtest screenshots carry provenance.
+const BUILD_ID = 'HUNT-20261017-1121Z';
+const STAMP_UTC = '2026-10-17T11:21Z';
+const APP_VERSION = 'v0.7';
+
+// v0.7: Framework meters model — the live state of four reasoning frameworks
+// as the player works. All four are widely-published analyst frameworks:
+// - Cyber Kill Chain® (Lockheed Martin, 2011): Recon → Weapon → Delivery →
+//   Exploit → Install → C2 → Actions on Objectives
+// - NIST SP 800-61 Rev. 2 IR phases: Detect → Analyze → Contain → Eradicate → Recover
+// - Diamond Model (Caltagirone, Pendergast, Betz 2013): four vertices
+// - Pyramid of Pain (David Bianco 2013): six rungs
+const KILL_CHAIN_PHASES = [
+  { id: 'recon',    name: 'Reconnaissance',          short: 'RECON' },
+  { id: 'weapon',   name: 'Weaponization',           short: 'WEAPON' },
+  { id: 'delivery', name: 'Delivery',                short: 'DELIV' },
+  { id: 'exploit',  name: 'Exploitation',            short: 'EXPLT' },
+  { id: 'install',  name: 'Installation',            short: 'INSTL' },
+  { id: 'c2',       name: 'Command & Control',       short: 'C2' },
+  { id: 'actions',  name: 'Actions on Objectives',   short: 'ACTIONS' },
+];
+const NIST_IR_PHASES = [
+  { id: 'detect',    name: 'Detect',    short: 'DET' },
+  { id: 'analyze',   name: 'Analyze',   short: 'ANA' },
+  { id: 'contain',   name: 'Contain',   short: 'CON' },
+  { id: 'eradicate', name: 'Eradicate', short: 'ERAD' },
+  { id: 'recover',   name: 'Recover',   short: 'REC' },
+];
+const DIAMOND_VERTICES = [
+  { id: 'adversary',      name: 'Adversary'      },
+  { id: 'capability',     name: 'Capability'     },
+  { id: 'infrastructure', name: 'Infrastructure' },
+  { id: 'victim',         name: 'Victim'         },
+];
+const PYRAMID_RUNGS = [
+  { id: 'hashes',       name: 'Hash Values',          cost: 'trivial'  },
+  { id: 'ips',          name: 'IP Addresses',         cost: 'easy'     },
+  { id: 'domains',      name: 'Domain Names',         cost: 'simple'   },
+  { id: 'artifacts',    name: 'Network/Host Artifacts', cost: 'annoying' },
+  { id: 'tools',        name: 'Tools',                cost: 'challenging' },
+  { id: 'ttps',         name: 'TTPs',                 cost: 'tough'    },
+];
+
+// Derive the live framework state from STATE at any moment. Pure function —
+// safe to call during render loops. Never mutates STATE.
+function computeFrameworkMeters() {
+  // Kill Chain: phase index derived from the deepest-progressed active threat
+  // and the overall run state. Mapping: no threats → recon; threats revealed
+  // → delivery; threat phase 1 → exploit; phase 2 → install; C2 revealed → c2;
+  // phase 3 any = actions on objectives.
+  let kcIndex = 0;
+  if (STATE.threats && STATE.threats.length > 0) {
+    kcIndex = Math.max(kcIndex, 2);  // Delivery (we see activity)
+    const maxPhase = STATE.threats.reduce((m, t) => Math.max(m, t.phase || 0), 0);
+    if (maxPhase >= 1) kcIndex = Math.max(kcIndex, 3);  // Exploit
+    if (maxPhase >= 2) kcIndex = Math.max(kcIndex, 4);  // Install
+    if (maxPhase >= 3) kcIndex = Math.max(kcIndex, 6);  // Actions
+  }
+  if (STATE.c2Revealed) kcIndex = Math.max(kcIndex, 5);  // C2
+  if (STATE.metrics && STATE.metrics.threatSpawns && STATE.metrics.threatSpawns.length > 0) {
+    kcIndex = Math.max(kcIndex, 1);  // Weaponization inferred
+  }
+
+  // NIST IR phase
+  let nistIndex = 0;  // Detect
+  const revealed = (STATE.threats || []).filter(t => t.revealed).length;
+  if (revealed > 0) nistIndex = 1;  // Analyze
+  if (STATE.c2Revealed) nistIndex = Math.max(nistIndex, 2);  // Contain
+  const anyDisrupts = STATE.metrics && STATE.metrics.actions &&
+    STATE.metrics.actions.some(a => a.actionId === 'disrupt' && a.outcome === 'effective');
+  if (anyDisrupts) nistIndex = Math.max(nistIndex, 2);  // Contain
+  if (STATE.c2Severed) nistIndex = Math.max(nistIndex, 3);  // Eradicate
+  const anyRestores = STATE.metrics && STATE.metrics.actions &&
+    STATE.metrics.actions.some(a => a.actionId === 'restore' && a.outcome === 'effective');
+  if (anyRestores && STATE.c2Severed) nistIndex = 4;  // Recover
+
+  // Diamond — four vertices. Each lit when relevant data is in hand.
+  const diamond = {
+    adversary:      !!(STATE.actorRevealed),           // threat actor attributed
+    capability:     Object.keys(STATE.observedTTPs || {}).length > 0,
+    infrastructure: !!(STATE.c2Revealed),
+    victim:         !!(STATE.mission),  // victim = this mission's asset set
+  };
+
+  // Pyramid of Pain — highest rung with evidence. Mapped:
+  // hashes/IPs/domains → not generated by the game (synthetic placeholders only)
+  // artifacts → each revealed threat is a host-artifact-level observation
+  // tools → mentioned when codex surfaces 'tools' for an observed TTP
+  // ttps → observing any TTP ID (ATT&CK) is a TTP-level observation
+  let pyramidIndex = -1;
+  if ((STATE.iocs || []).length > 0) pyramidIndex = Math.max(pyramidIndex, 2);  // Domains (IOCs are our proxy)
+  if (revealed > 0) pyramidIndex = Math.max(pyramidIndex, 3);  // Artifacts
+  if (Object.keys(STATE.observedTTPs || {}).length > 0) pyramidIndex = Math.max(pyramidIndex, 5);  // TTPs
+
+  return {
+    killChain: kcIndex,
+    nistIR: nistIndex,
+    diamond,
+    pyramid: pyramidIndex,
+  };
+}
 
 // =============================================================================
 // JOSHUA PROTOCOL v0.2
@@ -1534,6 +1638,14 @@ const COMBOS = [
         STATE.metrics.c2RevealedRound = STATE.round;
         log(`&nbsp;&nbsp;└ <b>C2 PARTIALLY EXPOSED via combo → ${STATE.c2Node}</b>`, 'log-crit');
         STATE.iocs.push(`C2 attribution via combo trace → ${STATE.c2Node}`);
+        setTimeout(() => maybeShowOODAReflection('first_c2_reveal', {
+          when: 'first C2 attribution (combo path)',
+          title: 'C2 EXPOSED VIA COMBO — ORIENTATION MOMENT',
+          observe: `RECON STRIKE on ${ctx.target} partially exposed the C2 pathway. 30% bonus chance landed.`,
+          orient: `Combos accelerate attribution — enhanced disrupt also surfaced the beacon source. In real IR, this maps to EDR process-ancestry + egress telemetry pivoted in one tempo.`,
+          relevance: `C2 attribution unlocks SEVER. SEVER is irreversible — wrong target = burned infrastructure and tipped-off adversary.`,
+          sufficiency: `A combo-sourced reveal is still an attribution. Do you trust it? The ACH gate before SEVER will ask you to consider alternatives.`,
+        }), 1200);
       }
     },
   },
@@ -1604,6 +1716,14 @@ const COMBOS = [
         STATE.metrics.c2RevealedRound = STATE.round;
         log(`&nbsp;&nbsp;└ <b>C2 LOCATED via triangulation → ${STATE.c2Node}</b>`, 'log-crit');
         STATE.iocs.push(`C2 located via VIGIL triangulation → ${STATE.c2Node}`);
+        setTimeout(() => maybeShowOODAReflection('first_c2_reveal', {
+          when: 'first C2 attribution (triangulation)',
+          title: 'C2 LOCATED VIA TRIANGULATE',
+          observe: `TRIANGULATE combo guaranteed the reveal given revealed-threat evidence. C2 at ${STATE.c2Node}.`,
+          orient: `Triangulation = cross-source correlation. In real IR, this is Zeek beacon-pattern + MISP cross-ref + endpoint pivot in one tempo.`,
+          relevance: `You now know the SEVER target. Choice: swing now (3 AP) or build hardening first.`,
+          sufficiency: `Triangulation sourced the attribution; evidence is strong. ACH gate before SEVER still asks you to consider the else.`,
+        }), 1200);
       } else if (!anyRevealed) {
         log('&nbsp;&nbsp;└ No revealed threats to triangulate from. Combo wasted.', 'log-warn');
       } else {
@@ -1657,6 +1777,15 @@ function detectAndApplyCombos() {
       if (firstEver) {
         setTimeout(() => {
           logJoshua(`Combo synergy detected, Operator. Coordinated agent actions on shared targets unlock force-multiplier effects. Reference CODEX ▸ COMBO SYNERGIES for the full list.`);
+          // v0.7: OODA reflection — teach the thinking behind coordinated action
+          setTimeout(() => maybeShowOODAReflection('first_combo', {
+            when: 'first combo trigger this run',
+            title: `COMBO: ${combo.name}`,
+            observe: `Two or more agent actions converged on the same target or an adjacent pair, triggering ${combo.name}.`,
+            orient: `Combos are not random — they model force-multiplier effects real teams get from coordination. KILL BOX = adjacent containment. BULWARK = defense-in-depth stacking. RECON STRIKE = detection-plus-eviction in one tempo.`,
+            relevance: `This combo cost you ${combo.detect(STATE.plannedActions.filter(a => true)) ? 'the AP commit you just made' : 'the AP you already spent'}. Was the trigger a plan, or an accident?`,
+            sufficiency: `If accidental: what adjacent decisions could you now sequence intentionally? If planned: carry the pattern forward — same combo on the next adaptive-actor run blocks their pivot.`,
+          }), 1400);
         }, 1100);
       }
     }
@@ -2103,6 +2232,9 @@ const STATE = {
   actionPointsUsed: 0,    // sum of costs of queued actions this round
   combosTriggered: [],    // {round, comboId, agentIds, target} for replay/debrief
   killBoxActive: false,   // set by KILL_BOX combo; blocks adversary pivots this round
+
+  // v0.7: Reasoning layer trigger tracking — show each reflection card at most once per run
+  reasoningShown: {},     // keyed by trigger id
 
   // v0.5: tutorial demo playback
   demoMode: false,        // true when running a scripted demo
@@ -4045,6 +4177,15 @@ function executeAction(ag, a) {
           ? 'Insider foothold located. Recommend ANCHOR ▸ RESTORE the affected asset.'
           : 'Adversary command node located. Severing recommended.';
         setTimeout(() => logJoshua(followUp), 400);
+        // v0.7: OODA reflection on first C2 reveal (any path)
+        setTimeout(() => maybeShowOODAReflection('first_c2_reveal', {
+          when: 'first C2 attribution',
+          title: 'C2 LOCATED — ORIENTATION MOMENT',
+          observe: `C2 traced to ${STATE.c2Node}. ${Object.keys(STATE.observedTTPs).length} unique TTPs observed en route. ${STATE.iocs.length} IOCs collected.`,
+          orient: `Attribution is a reasoning step, not a mechanical reveal. In the real version you'd correlate beacon jitter against known-good egress profiles, pivot through DNS/HTTP metadata, and cross-reference IOCs against TI feeds (MISP / STIX-TAXII).`,
+          relevance: `C2 attribution unlocks SEVER (3 AP). But SEVER is irreversible — if your hypothesis is wrong you burn infrastructure, don't disrupt the adversary, and tip them off.`,
+          sufficiency: `Do you have enough? Low observed-TTP count = weak evidence. Multiple corroborating actions = strong. The ACH gate before SEVER will ask you to list competing hypotheses — be ready.`,
+        }), 1200);
       } else {
         speak('Trace incomplete. Beacon obfuscated. More intel needed.');
         recordAction(ag.id, a.actionId, a.target, 'wasted', 'insufficient intel', []);
@@ -4264,6 +4405,15 @@ function advanceThreat(t) {
         log(`&nbsp;&nbsp;└ Cascade stress on ${adj.id}`, 'log-warn');
       }
     });
+    // v0.7: OODA reflection on first compromise — relevance/sufficiency teaching moment
+    setTimeout(() => maybeShowOODAReflection('first_compromise', {
+      when: 'first node compromised',
+      title: 'FIRST COMPROMISE — WAS YOUR READ SUFFICIENT?',
+      observe: `${target.id} reached phase 3. Final technique: ${t.techniqueId}. Full chain history: ${t.history.join(' → ')}.`,
+      orient: `A compromise means the player had the decision window and did not close it — either SCAN didn't fire on this target, DISRUPT missed, or HARDEN was spent elsewhere. The question isn't blame, it's pattern.`,
+      relevance: `Replay the last 2 rounds mentally: did you have observable signal that this target was escalating? If yes, the gap was prioritization. If no, the gap was detection coverage.`,
+      sufficiency: `Senior-level question: what's the *earliest* round you could have known this chain would land here? That's where to invest VIGIL ▸ SCAN next run — the detection-latency improvement is worth more than the DISRUPT you spent too late.`,
+    }), 900);
   }
 }
 
@@ -4824,7 +4974,96 @@ function renderTerminal() {
     STATE.unreadComms = 0;
     renderTabs();
     renderIntelTab(el);
+  } else if (STATE.activeTab === 'frames') {
+    renderFramesTab(el);
   }
+}
+
+// v0.7: Framework meters tab — Kill Chain / NIST IR / Diamond / Pyramid of Pain
+// All four frameworks shown live, filling in as evidence accumulates. Teaches
+// the mental models senior analysts carry alongside the task-level mechanics.
+function renderFramesTab(el) {
+  if (!STATE.mission) {
+    el.innerHTML = '<div class="log-line">No mission active.</div>';
+    return;
+  }
+  const m = computeFrameworkMeters();
+  // Build each meter as a horizontal stepped bar
+  function kcBar() {
+    const cells = KILL_CHAIN_PHASES.map((p, i) => {
+      const active = i <= m.killChain;
+      const curr = i === m.killChain;
+      const color = active ? (curr ? 'var(--red)' : 'var(--amber)') : 'var(--grid-line)';
+      const bg = curr ? 'rgba(255,58,58,0.15)' : (active ? 'rgba(255,184,77,0.08)' : 'transparent');
+      return `<div style="flex:1;border:1px solid ${color};background:${bg};padding:3px 2px;text-align:center;font-size:8px;color:${active?color:'var(--muted)'};letter-spacing:0.05em;" title="${p.name}">${p.short}</div>`;
+    }).join('');
+    return `<div style="display:flex;gap:2px;">${cells}</div>`;
+  }
+  function nistBar() {
+    const cells = NIST_IR_PHASES.map((p, i) => {
+      const active = i <= m.nistIR;
+      const curr = i === m.nistIR;
+      const color = active ? (curr ? 'var(--cyan)' : 'var(--green)') : 'var(--grid-line)';
+      const bg = curr ? 'rgba(78,226,255,0.18)' : (active ? 'rgba(92,255,138,0.08)' : 'transparent');
+      return `<div style="flex:1;border:1px solid ${color};background:${bg};padding:4px 2px;text-align:center;font-size:9px;color:${active?color:'var(--muted)'};letter-spacing:0.05em;" title="NIST SP 800-61 Rev.2 — ${p.name}">${p.short}</div>`;
+    }).join('');
+    return `<div style="display:flex;gap:2px;">${cells}</div>`;
+  }
+  function diamondVis() {
+    const d = m.diamond;
+    const cell = (v, filled, label) => `<div style="border:1px solid ${filled ? 'var(--cyan)' : 'var(--grid-line)'};background:${filled?'rgba(78,226,255,0.1)':'transparent'};padding:6px 4px;text-align:center;font-size:9px;color:${filled?'var(--cyan)':'var(--muted)'};">${label}${filled?' ✓':''}</div>`;
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;max-width:220px;">
+      ${cell('adversary', d.adversary, 'ADVERSARY')}
+      ${cell('capability', d.capability, 'CAPABILITY')}
+      ${cell('infrastructure', d.infrastructure, 'INFRASTRUCTURE')}
+      ${cell('victim', d.victim, 'VICTIM')}
+    </div>`;
+  }
+  function pyramidVis() {
+    // Draw from top (TTPs - hardest) to bottom (hashes - easiest). Highlight current rung.
+    const rows = PYRAMID_RUNGS.slice().reverse().map((r, revI) => {
+      const i = PYRAMID_RUNGS.length - 1 - revI;
+      const reached = i <= m.pyramid;
+      const curr = i === m.pyramid;
+      const color = curr ? 'var(--amber)' : (reached ? 'var(--green)' : 'var(--grid-line)');
+      const width = 20 + revI * 15;  // pyramid shape — narrow at top
+      return `<div style="margin:0 auto;width:${width}%;border:1px solid ${color};background:${curr?'rgba(255,184,77,0.18)':(reached?'rgba(92,255,138,0.08)':'transparent')};padding:4px;text-align:center;font-size:9px;color:${reached?color:'var(--muted)'};">
+        ${r.name} <span style="color:var(--muted);font-size:8px;">· ${r.cost}</span>
+      </div>`;
+    }).join('');
+    return `<div>${rows}</div>`;
+  }
+  el.innerHTML = `
+    <div class="log-line log-cyan" style="font-weight:bold;">// FRAMEWORK METERS</div>
+    <div class="log-line log-divider">─────────────────────────────</div>
+    <div class="log-line" style="color:var(--muted);font-size:9px;margin-bottom:8px;">Live state of four analyst frameworks as evidence accumulates. Senior-level reasoning layer; not required to play.</div>
+
+    <div style="margin-bottom:14px;">
+      <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;margin-bottom:3px;">▸ CYBER KILL CHAIN® — attacker position</div>
+      <div style="color:var(--muted);font-size:9px;margin-bottom:4px;">Deepest-progressed threat on the board. Source: Lockheed Martin (2011).</div>
+      ${kcBar()}
+      <div style="color:var(--muted);font-size:9px;margin-top:3px;font-style:italic;">Current: ${KILL_CHAIN_PHASES[m.killChain] ? KILL_CHAIN_PHASES[m.killChain].name : 'none'}</div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;margin-bottom:3px;">▸ NIST SP 800-61 IR PHASE — your position</div>
+      <div style="color:var(--muted);font-size:9px;margin-bottom:4px;">Where you are in the IR lifecycle. Source: NIST SP 800-61 Rev. 2.</div>
+      ${nistBar()}
+      <div style="color:var(--muted);font-size:9px;margin-top:3px;font-style:italic;">Current: ${NIST_IR_PHASES[m.nistIR] ? NIST_IR_PHASES[m.nistIR].name : 'Detect'}</div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;margin-bottom:3px;">▸ DIAMOND MODEL — attribution completeness</div>
+      <div style="color:var(--muted);font-size:9px;margin-bottom:6px;">Four vertices required for complete intrusion analysis. Source: Caltagirone, Pendergast, Betz (2013).</div>
+      ${diamondVis()}
+    </div>
+
+    <div>
+      <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;margin-bottom:3px;">▸ PYRAMID OF PAIN — attribution rung</div>
+      <div style="color:var(--muted);font-size:9px;margin-bottom:6px;">Highest-value evidence you have. Higher rung = more pain to the adversary when burned. Source: David Bianco (2013).</div>
+      ${pyramidVis()}
+    </div>
+  `;
 }
 
 function renderBriefTab(el) {
@@ -5437,6 +5676,24 @@ function queueAction(agentIdx, action, targetId) {
     renderAgentStrip();
     return;
   }
+  // v0.7: ACH gate before SEVER. Fires on first SEVER queued per run, non-demo
+  // runs only. Forces the player to list ≥2 competing hypotheses before
+  // committing the irreversible 3-AP action. Pattern: Richards J. Heuer Jr.
+  // (Analysis of Competing Hypotheses). Also used in dfir-trainers.
+  if (action.id === 'sever' && !STATE.demoMode && !STATE.achGatePassed) {
+    showACHGate(() => {
+      STATE.achGatePassed = true;   // one-time per run
+      queueAction(agentIdx, action, targetId);  // re-enter
+    }, () => {
+      // Rejected — don't queue
+      STATE.selectedAgent = null;
+      STATE.selectedAction = null;
+      document.getElementById('tap-hint').textContent = 'SELECT AGENT, THEN TARGET NODE';
+      renderAgentStrip();
+      log(`<span class="log-warn">SEVER aborted. Re-evaluating.</span>`, 'log-warn');
+    });
+    return;
+  }
   STATE.plannedActions.push({
     agent: agentIdx,
     actionId: action.id,
@@ -5733,12 +5990,83 @@ document.getElementById('btn-back').addEventListener('click', () => {
   }
 });
 
+// v0.7: Keyboard navigation — desktop-first-class for senior reviewers.
+// Priorities: don't eat typing in text inputs; narrator cards take precedence;
+// modals (OODA, ACH) consume keys when open.
+document.addEventListener('keydown', (e) => {
+  // Don't hijack typing
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+    return;
+  }
+  // Narrator card active? ← back (not supported — demos are forward-only), → / Enter / Space continue; Esc exit
+  const narrator = document.getElementById('narrator-card');
+  if (narrator && narrator.classList.contains('shown')) {
+    if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const cont = document.getElementById('narrator-continue');
+      if (cont) cont.click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      const exit = document.getElementById('narrator-exit');
+      if (exit) exit.click();
+    }
+    return;
+  }
+  // Any blocking modal open? Let it handle its own keys via its own listeners.
+  if (document.querySelector('.modal')) return;
+  // In PLAN phase: 1/2/3 select agent, Enter = execute, Backspace = recall last
+  if (STATE.phase === 'PLAN') {
+    if (e.key === '1' || e.key === '2' || e.key === '3') {
+      e.preventDefault();
+      onAgentTap(parseInt(e.key, 10) - 1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btn-main').click();
+      return;
+    }
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      document.getElementById('btn-back').click();
+      return;
+    }
+  }
+  // In INTEL phase: Enter = advance to PLAN
+  if (STATE.phase === 'INTEL') {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      document.getElementById('btn-main').click();
+      return;
+    }
+  }
+  // Any phase: V toggles view mode, P toggles Purdue
+  if (e.key === 'v' || e.key === 'V') {
+    e.preventDefault();
+    const b = document.getElementById('view-mode-btn');
+    if (b) b.click();
+    return;
+  }
+  if (e.key === 'p' || e.key === 'P') {
+    e.preventDefault();
+    const b = document.getElementById('purdue-btn');
+    if (b) b.click();
+    return;
+  }
+  // Settings
+  if (e.key === ',' || e.key === 'S' /* shift+s */) {
+    const b = document.getElementById('settings-btn');
+    if (b && e.key === ',') { e.preventDefault(); b.click(); }
+  }
+});
+
 
 // =============================================================================
 // 15. BOOT & MISSION SELECT
 // =============================================================================
 const BOOT_LINES = [
-  '> JOSHUA SYSTEM v0.6 // BOOT',
+  '> JOSHUA SYSTEM ' + APP_VERSION + ' // BOOT',
+  '> BUILD ' + BUILD_ID + ' // STAMP ' + STAMP_UTC,
   '> Initializing operator console...',
   '> Loading agent roster: VIGIL, WRAITH, ANCHOR ✓',
   '> Loading framework registry: ATT&CK, ICS v20, SPARTA, ATLAS, D3FEND ✓',
@@ -5867,6 +6195,8 @@ function beginGame(missionId) {
   STATE.combosTriggered = [];
   STATE.dwellRoundsAccumulated = 0;      // v0.6: reset dwell counter
   STATE.viewMode = 'ground_truth';       // v0.6: start in ground truth
+  STATE.reasoningShown = {};             // v0.7: reset OODA triggers
+  STATE.achGatePassed = false;           // v0.7: reset ACH gate
   if (document.getElementById('view-mode-btn')) updateViewModeButton();
   STATE.killBoxActive = false;
   STATE.metrics = {
@@ -6100,6 +6430,119 @@ function renderLoop() {
 }
 
 // v0.3: Threat actor intro card
+// v0.7: ACH gate — Analysis of Competing Hypotheses before SEVER.
+// Pattern: Richards J. Heuer Jr., CIA Center for the Study of Intelligence (1999).
+// Forces hypothesis discipline before an irreversible action: list the primary
+// hypothesis AND the strongest alternatives, then commit (or back out).
+// The gate fires at most once per run (STATE.achGatePassed).
+function showACHGate(onConfirm, onReject) {
+  const observedTTPs = Object.keys(STATE.observedTTPs || {}).length;
+  const iocCount = (STATE.iocs || []).length;
+  const revealedThreats = (STATE.threats || []).filter(t => t.revealed).length;
+  // Generate alternative hypotheses from the asset topology
+  const altNodes = (STATE.nodes || [])
+    .filter(n => n.id !== STATE.c2Node)
+    .slice(0, 4);
+  const altList = altNodes.length > 0
+    ? altNodes.map(n => `<li style="margin-bottom:3px;">C2 is actually on <b>${n.id}</b>, and ${STATE.c2Node} is a <i>decoy/jump-host/misattribution</i></li>`).join('')
+    : '<li>No alternative candidates on this topology.</li>';
+  const evidenceStrength = (observedTTPs * 20) + (iocCount * 15) + (revealedThreats * 10);
+  const strengthLabel = evidenceStrength >= 80 ? 'STRONG' : evidenceStrength >= 50 ? 'MODERATE' : 'THIN';
+  const strengthColor = evidenceStrength >= 80 ? 'var(--green)' : evidenceStrength >= 50 ? 'var(--amber)' : 'var(--red)';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'ach-modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:420px;border-color:var(--amber);box-shadow:0 0 24px rgba(255,184,77,0.4);">
+      <div style="color:var(--muted);font-size:9px;letter-spacing:0.15em;">// ACH GATE — IRREVERSIBLE ACTION</div>
+      <div class="modal-title" style="color:var(--amber);">BEFORE YOU SEVER</div>
+      <div style="color:var(--white);font-size:11px;line-height:1.5;margin-top:6px;">SEVER C2 is a 3-AP action with no undo. Burning the wrong infrastructure tips off the adversary and gives up collection without disruption.</div>
+
+      <div style="margin-top:10px;padding:6px;background:rgba(78,226,255,0.05);border-left:3px solid var(--cyan);">
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ PRIMARY HYPOTHESIS (H1)</div>
+        <div style="color:var(--white);font-size:11px;margin-top:3px;">C2 is at <b>${STATE.c2Node}</b>.</div>
+        <div style="color:var(--muted);font-size:10px;margin-top:3px;">Evidence basis: ${observedTTPs} observed TTPs · ${iocCount} IOCs · ${revealedThreats} revealed threats.</div>
+        <div style="margin-top:4px;color:${strengthColor};font-size:10px;font-weight:bold;">Evidence strength: ${strengthLabel} (${evidenceStrength})</div>
+      </div>
+
+      <div style="margin-top:10px;padding:6px;background:rgba(255,184,77,0.05);border-left:3px solid var(--amber);">
+        <div style="color:var(--amber);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ COMPETING HYPOTHESES (H2…Hn)</div>
+        <ul style="color:var(--white);font-size:10px;margin:4px 0 0 14px;padding:0;line-height:1.4;">
+          ${altList}
+        </ul>
+        <div style="margin-top:6px;color:var(--muted);font-size:10px;line-height:1.4;">
+          Also consider: adversary is <b>using ${STATE.c2Node} as a cutout and real C2 is upstream</b>; your attribution was <b>planted by the adversary</b> via T1692.002 reporting-message spoof; attack is a <b>burst-pattern diversion</b> ahead of a second-vector main attack.
+        </div>
+      </div>
+
+      <div style="margin-top:10px;padding:6px;background:rgba(92,255,138,0.05);border-left:3px solid var(--green);">
+        <div style="color:var(--green);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ ACH DISCIPLINE</div>
+        <div style="color:var(--white);font-size:10px;margin-top:3px;line-height:1.4;">The ACH method (Heuer, 1999) ranks hypotheses by <i>consistency with evidence</i>, not by familiarity. Prefer the hypothesis with the <i>fewest</i> disconfirming observations. If every hypothesis fits, your evidence is thin — collect more before committing.</div>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-top:14px;">
+        <button class="action-btn" id="ach-abort" style="flex:1;">◀ BACK OUT</button>
+        <button class="action-btn primary" id="ach-confirm" style="flex:1;">▶ COMMIT H1 (Enter)</button>
+      </div>
+      <div style="margin-top:6px;color:var(--muted);font-size:9px;font-style:italic;">The ACH gate fires once per run. After this, SEVER proceeds without gating.</div>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  const confirmBtn = modal.querySelector('#ach-confirm');
+  const abortBtn = modal.querySelector('#ach-abort');
+  const close = () => { modal.remove(); document.removeEventListener('keydown', onKey, true); };
+  confirmBtn.addEventListener('click', () => { close(); if (onConfirm) onConfirm(); });
+  abortBtn.addEventListener('click', () => { close(); if (onReject) onReject(); });
+  const onKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmBtn.click(); }
+    else if (e.key === 'Escape') { e.preventDefault(); abortBtn.click(); }
+  };
+  document.addEventListener('keydown', onKey, true);
+}
+
+// v0.7: OODA reflection modal — Observe → Orient → Relevance → Sufficiency.
+// Pattern lifted from DFIR Trainers (grumby42/dfir-trainers) TRAINER_SPEC.md.
+// Fires at most once per trigger per run so experienced players aren't blocked.
+// Keyboard: Enter/Space/→ dismisses.
+function maybeShowOODAReflection(triggerId, content) {
+  if (!STATE.reasoningShown) STATE.reasoningShown = {};
+  if (STATE.reasoningShown[triggerId]) return;
+  STATE.reasoningShown[triggerId] = true;
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'ooda-modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:400px;border-color:var(--cyan);">
+      <div style="color:var(--muted);font-size:9px;letter-spacing:0.15em;">// REASONING LAYER — ${content.when}</div>
+      <div class="modal-title" style="margin-top:4px;">${content.title}</div>
+      <div style="margin-top:8px;">
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ OBSERVE</div>
+        <div style="color:var(--white);font-size:11px;line-height:1.5;margin:3px 0 10px;">${content.observe}</div>
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ ORIENT</div>
+        <div style="color:var(--white);font-size:11px;line-height:1.5;margin:3px 0 10px;">${content.orient}</div>
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ RELEVANCE</div>
+        <div style="color:var(--white);font-size:11px;line-height:1.5;margin:3px 0 10px;">${content.relevance}</div>
+        <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ SUFFICIENCY</div>
+        <div style="color:var(--white);font-size:11px;line-height:1.5;margin:3px 0 4px;">${content.sufficiency}</div>
+      </div>
+      <div style="margin-top:10px;color:var(--muted);font-size:9px;font-style:italic;">The Observe → Orient → Relevance → Sufficiency loop is the senior-analyst reasoning layer. It shows at most once per run per trigger.</div>
+      <button class="action-btn primary" id="ooda-ack" style="width:100%;margin-top:12px;">▶ ACKNOWLEDGE (Enter)</button>
+    </div>
+  `;
+  document.getElementById('app').appendChild(modal);
+  const ack = modal.querySelector('#ooda-ack');
+  const close = () => modal.remove();
+  ack.addEventListener('click', close);
+  const onKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight' || e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      document.removeEventListener('keydown', onKey, true);
+    }
+  };
+  document.addEventListener('keydown', onKey, true);
+}
+
 function showThreatActorIntro(onDone) {
   const A = STATE.activeActor;
   if (!A) { if (onDone) onDone(); return; }

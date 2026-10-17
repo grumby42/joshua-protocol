@@ -25,7 +25,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.6)
+## What's in the box (v0.7)
 
 ### Three missions, each grounded in real incident patterns
 
@@ -83,6 +83,21 @@ Every reference entry has a visible source citation.
 ### Round-over-round debrief
 
 Pylons-style full-screen rubric (DETECTION / ATTRIBUTION / EFFICIENCY / HARDENING / CASCADE / DOCTRINE), TRENDS tab with sparklines, MOVES tab with repeat-failure pattern detection. CFI-style debrief notes adapt to the adversary actor and difficulty tier.
+
+### v0.7: Senior-analyst reasoning layer
+
+New in v0.7, inspired by [grumby42/dfir-trainers](https://github.com/grumby42/dfir-trainers)' TRAINER_SPEC:
+
+- **FRAMES tab** — four analyst frameworks shown live, filling in as evidence accumulates:
+  - Cyber Kill Chain® (Lockheed Martin, 2011) — attacker position
+  - NIST SP 800-61 Rev. 2 IR phases — your position
+  - Diamond Model of Intrusion Analysis (Caltagirone, Pendergast, Betz 2013) — attribution completeness
+  - Pyramid of Pain (David Bianco, 2013) — attribution rung quality
+- **OODA reflection cards** — Observe → Orient → Relevance → Sufficiency reasoning prompts at three key moments per run (first combo, first C2 reveal, first compromise). Fires at most once per run per trigger — not for every event.
+- **ACH gate before SEVER** — Analysis of Competing Hypotheses discipline per Richards J. Heuer Jr. (CIA Center for the Study of Intelligence, 1999). Before you commit the irreversible 3-AP SEVER action, you're forced to acknowledge the primary hypothesis AND the strongest alternatives with their evidence strength scored.
+- **Keyboard navigation** — ←/→, Enter, Space, Esc for narrator / modal interaction; 1/2/3 to select agents during PLAN; V toggles view mode; P toggles Purdue overlay; `,` opens settings.
+- **BUILD stamping** — every build carries `BUILD_ID = HUNT-YYYYMMDD-HHMMZ` + `STAMP_UTC` surfaced in-boot. Pattern borrowed from DFIR Trainers.
+- **[DETECTIONS.md](DETECTIONS.md)** companion — one starter detection *play* per threat actor archetype, authored to the seven-field schema from Bollinger/Enright/Valites' *Crafting the InfoSec Playbook* and Murdoch's *Blue Team Handbook*. Teaches how to author detections, not what rules to paste.
 
 ---
 
@@ -166,4 +181,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.6** (October 2026)
+Current version: **v0.7** (October 2026) · BUILD `HUNT-20261017-1121Z`
