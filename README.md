@@ -26,12 +26,12 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.5)
+## What's in the box (v0.9.6)
 
 ### Five missions, each grounded in real incident patterns
 
-- **OP. BLACKFROST** — 8-node Northeast power grid. Ransomware / APT / insider / hacktivist / supply-chain / pre-positioning adversary pool.
-- **OP. NIGHTWATCH** — 5-asset satellite constellation (GEO + 2 LEO sun-synchronous + ground station + mission control). Uses real orbital propagation (SGP4-style Kepler solver, J2 perturbation, ECI→geodetic, GMST, link budget) lifted from the author's AeroSec-Lab platform. Grounded in SPARTA technique catalog.
+- **OP. BLACKFROST** — 8-node Northeast distribution grid at winter peak. Grounded in Ukraine 23 Dec 2015 (E-ISAC/SANS: three oblenergos, ~225,000 customers, breakers opened from the dispatchers' own HMIs, serial-to-ethernet firmware corrupted to block remote restoration) and Ukraine 17 Dec 2016 (Dragos CRASHOVERRIDE / ESET Industroyer — the first malware framework built to attack electric grids). Control-center compromise cascades to all four substations; SUB-B (medical center + water treatment feeders) and SUB-D (winter residential heating) are critical-load life-safety nodes.
+- **OP. NIGHTWATCH** — 5-asset satellite constellation (GEO + 2 LEO sun-synchronous + ground station + mission control). Mission-control compromise cascades to the whole fleet — the ViaSat KA-SAT Feb 2022 lesson that the ground segment is the chokepoint. Uses real orbital propagation (SGP4-style Kepler solver, J2 perturbation, ECI→geodetic, GMST, link budget) lifted from the author's AeroSec-Lab platform. Grounded in SPARTA technique catalog.
 - **OP. TIDEBREAK** — 8-asset Gulf Coast container terminal. Grounded in Port of Houston Aug 2021 (CVE-2021-40539 Zoho ManageEngine ADSelfService Plus — CISA Director Easterly publicly described as a "nation-state actor" intrusion; no primary source has named a specific cluster), Maersk NotPetya 2017 ($300M loss, operations disrupted across Maersk's 76-terminal network), and ZPMC crane supply-chain concerns.
 - **OP. HEARTLINE** — 8-node regional hospital system (EDGE / AD / EHR / PACS / LAB / PHARM / BIOMED-PUMP / BIOMED-TELEM). Grounded in NHS WannaCry 2017 (£92M loss, ~19,000 appointments cancelled, surgeries diverted) and Change Healthcare Feb 2024 (ALPHV/BlackCat; $872M Q1 2024 impact [$593M direct + $279M business disruption], full-year 2024 impact >$3B; ~190M individuals' PHI; pharmacy claims nationwide offline for weeks). First mission with a **life-safety consequence model**: compromise of a patient-connected biomed device registers as a care-delivery event (per FDA Medical Device Cybersecurity Guidance 2023 + HHS 405(d) Healthcare Industry Cybersecurity Practices), not a dollar-value event.
 - **OP. RAILGUARD** 🆕 — 8-node regional railway (AD / DISPATCH / PTC-SERVER / FREIGHT-TMS / INTERLOCK-A / INTERLOCK-B / VHF-LINK / GRADE-X). Grounded in Belarusian Cyber-Partisans Jan 2022 (encrypted the bulk of BelZhD IT during Russian troop movements), Polish ABW Aug 2023 investigation of radio-stop command injection (approximately 20 trains halted using legitimate cleartext VHF signaling), and generic rail-sector ransomware exposure per CISA #StopRansomware advisories + APTA Cybersecurity Toolkit. Life-safety consequence model: trackside signaling or grade-crossing compromise = passenger- or motorist-safety event per FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements) + TSA Security Directive 1580/82-2022-01C.
@@ -159,7 +159,7 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Belarusian sector cascade: when DISPATCH compromises, interlockings + PTC + FREIGHT-TMS go stressed with narrator beat citing the real BelZhD-pattern lesson (when the IT backbone that coordinates movement goes down, movement authorities freeze while trackside gear stays physically fine).
 - Valid actor pool: CRYO (ransomware against rail IT per CISA #StopRansomware archetype), **IRONHAZE** (hacktivist with command-injection — maps Belarus Partisans + Polish VHF patterns), WARDEN → CRYO/HOLLOWKEY handoff, HOLLOWKEY, GHOSTWIRE insider, VOLTFORGE pre-positioning. 6 actors.
 - 2 new ATT&CK for ICS techniques: **T0871 Execution Through API** (rail SCADA / PTC back-office API abuse per CISA ICS-CERT advisories), **T0836 Modify Parameter** (parameter manipulation of signaling/PTC gains — Polish Aug 2023 investigation documented command-side parameter abuse).
-- 2 new codex entries: **Belarusian Cyber-Partisans / BelZhD Jan 2022** (Reuters + AP reporting, TSA 1580/82, CENELEC 50159), **Polish Freight Railway VHF Radio-Stop Incidents** (Polish ABW statements Aug-Sep 2023, PAP reporting, CENELEC 50159 doctrine).
+- 2 new codex entries: **Belarusian Cyber-Partisans / BelZhD Jan 2022** (Reuters + AP reporting, TSA 1580/82, EN 50159), **Polish Freight Railway VHF Radio-Stop Incidents** (Polish ABW statements Aug-Sep 2023, PAP reporting, EN 50159 doctrine).
 - Custom node rendering: INTERLOCK draws as a 3-lamp signal aspect; VHF-LINK draws as an antenna mast with animated RF wave arcs; GRADE-X draws as a diamond with X-mark motif. Track-plane band + public-zone (life-safety) band at the bottom of the map.
 
 **TIMELINE debrief tab**
@@ -171,6 +171,18 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Reuses `STATE.metrics` + `STATE.combosTriggered` + `STATE.lifeSafetyEvents` (now with new `metrics.compromisesByRound`, `metrics.handoffRound`, `metrics.handoffFrom/To` tracking)
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
+
+### v0.9.6: Consequence-model back-port, five-for-five demos, self-description accuracy
+
+Closes the debt the Oct 27 review found: the two oldest missions had never received the consequence model every later mission got, two missions had no instructor demo, and the game's own boot banner was lying about its contents.
+
+- **BLACKFROST gets its anchors.** The flagship mission was the only one citing no real-world incident. It now carries the two best-documented ICS attacks on record: Ukraine Dec 2015 (E-ISAC/SANS analysis, 18 Mar 2016 — figures verified against the primary: ~225,000 customers, three oblenergos, breakers opened via the dispatchers' HMIs, serial-to-ethernet firmware "blowing the bridges," KillDisk, UPS reconfiguration, call-center telephony DoS) and Ukraine Dec 2016 (Dragos CRASHOVERRIDE / ESET Industroyer — native IEC 101 / 104 / 61850 / OPC DA modules; Dragos assessed it as closer to proof-of-concept than full capability). New codex entry with both sources.
+- **BLACKFROST consequence model.** `sectorCascade` on CTRL (all four substations stressed — the 2015 pattern). `lifeSafetyNodes` SUB-B and SUB-D, now described in the map as critical-load feeders (medical center + water treatment; winter residential heating). Debrief cites NERC CIP-008 and the DOE OE-417 1-hour Emergency Alert for a cyber event interrupting operations (criterion 3 — verified against the form instructions). `loseThreshold` 5 → 4: still the on-ramp, no longer two nodes more forgiving than every other sector.
+- **NIGHTWATCH consequence model.** `sectorCascade` on MCC → all three spacecraft stressed, with the KA-SAT ground-segment doctrine. Deliberately no life-safety node: an imagery constellation doesn't have one and the game doesn't invent one.
+- **Instructor demos for HEARTLINE and RAILGUARD** — five for five. Both use TRIANGULATE for a deterministic C2 reveal and SEVER at round 6; verified headlessly to a clean WIN with zero compromises and zero life-safety events. HEARTLINE teaches EHR-first BULWARK, patient-connected-first priority, and the VPN-without-MFA entry; RAILGUARD teaches life-safety-first ordering, the Belarus dispatch lesson, and the Poland VHF lesson.
+- **Boot banner and onboarding now compute from the registries** — "8 archetypes / 5 operations / 5 walkthroughs" can never drift again (it had said 7 / 3 / 3 for two releases). Onboarding card lists all eight archetypes.
+- **EN 50159 "Category 3" softened** — the category definitions could not be primary-verified in session; the claim now cites only what BSI confirms (standard designation, title, cryptographic techniques among its defence methods) and notes the 2025-11 revision draft.
+- **README roadmap rewritten** — four shipped items removed; the stale "Pacific NW / Taiwan" rail anchors (both rejected by the v0.9.5 audit) gone.
 
 ### v0.9.5: SME hostile-audit remediation
 
@@ -262,13 +274,15 @@ Older builds are archived in `builds/` for reference.
 
 Issues and discussions welcome. Pull requests considered carefully — the single-file architecture is intentional, so cross-cutting refactors need to preserve that constraint.
 
-Priorities for future work (v0.7+):
-- OP. HEARTLINE — healthcare mission (EHR / PACS / BIOMED / etc.) with life-safety consequence model
-- OP. RAILGUARD — railway signaling mission grounded in Pacific NW / Poland / Taiwan recent events
-- Save/load + cross-run TRENDS
-- Deterministic seeded scenarios (shareable `?seed=…` URLs)
-- Sound (Web Audio)
-- More threat actor archetypes
+Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4), save/resume (v0.8), seeded `?seed=…` replay URLs (v0.9.2), TIMELINE debrief (v0.9.4), instructor demos for all five missions (v0.9.6).
+
+Open priorities:
+- **Multi-adversary scenarios** — two actors on one board (e.g. CRYO + VOLTFORGE), each with its own C2 and technique pool, forcing the ACH gate to disentangle two coherent hypotheses. The highest-leverage teaching feature left.
+- **D3FEND as a structured framework** — defensive techniques with their own IDs, linked from each attack technique's counters
+- **Insider stage chains** — GHOSTWIRE / HOLLOWKEY depth to match VOLTFORGE and KINGFISHER
+- **Protocol-centric detection plays** — HL7/DICOM interface tampering; VHF cab-signaling anomalies
+- **SOC-handoff export** — debrief → formatted incident ticket
+- Sound (Web Audio, opt-in)
 
 ---
 
@@ -298,4 +312,4 @@ Priorities for future work (v0.7+):
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.5** (October 2026) · BUILD `HUNT-20261017-1920Z`
+Current version: **v0.9.6** (October 2026) · BUILD `HUNT-20261027-1621Z`

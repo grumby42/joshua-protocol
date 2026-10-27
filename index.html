@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.5</title>
+<title>JOSHUA PROTOCOL v0.9.6</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261017-1920Z';
-const STAMP_UTC = '2026-10-17T19:20Z';
-const APP_VERSION = 'v0.9.5';
+const BUILD_ID = 'HUNT-20261027-1621Z';
+const STAMP_UTC = '2026-10-27T16:21Z';
+const APP_VERSION = 'v0.9.6';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -2186,26 +2186,24 @@ const COMBOS = [
     },
     apply(ctx) {
       log(`<b style="color:#4ee2ff;">▸▸ COMBO: TRIANGULATE</b>`, 'log-good');
-      // Guarantee C2 reveal IF any threat is revealed (otherwise nothing to triangulate from)
-      const anyRevealed = STATE.threats.some(t => t.revealed);
-      if (anyRevealed && !STATE.c2Revealed) {
-        STATE.c2Revealed = true;
-        STATE.metrics.c2RevealedRound = STATE.round;
-        log(`&nbsp;&nbsp;└ <b>C2 LOCATED via triangulation → ${STATE.c2Node}</b>`, 'log-crit');
-        STATE.iocs.push(`C2 located via VIGIL triangulation → ${STATE.c2Node}`);
-        setTimeout(() => maybeShowOODAReflection('first_c2_reveal', {
-          when: 'first C2 attribution (triangulation)',
-          title: 'C2 LOCATED VIA TRIANGULATE',
-          observe: `TRIANGULATE combo guaranteed the reveal given revealed-threat evidence. C2 at ${STATE.c2Node}.`,
-          orient: `Triangulation = cross-source correlation. In real IR, this is Zeek beacon-pattern + MISP cross-ref + endpoint pivot in one tempo.`,
-          relevance: `You now know the SEVER target. Choice: swing now (3 AP) or build hardening first.`,
-          sufficiency: `Triangulation sourced the attribution; evidence is strong. ACH gate before SEVER still asks you to consider the else.`,
-        }), 1200);
-      } else if (!anyRevealed) {
-        log('&nbsp;&nbsp;└ No revealed threats to triangulate from. Combo wasted.', 'log-warn');
-      } else {
+      if (STATE.c2Revealed) {
         log('&nbsp;&nbsp;└ C2 already known. Combo bonus IOC instead.', 'log-good');
         STATE.iocs.push('Cross-correlated beacon jitter pattern observed');
+        return;
+      }
+      // v0.9.6 fix: combos are detected BEFORE actions resolve, so a threat the
+      // same-round SCAN is about to reveal is not yet revealed here. Previously
+      // this made the "guaranteed" reveal silently fail whenever the only
+      // evidence was this round's scan (the BLACKFROST demo narrates exactly
+      // that sequence and it did not work). Now: if evidence already exists,
+      // reveal immediately; otherwise ARM the reveal and let the scan fulfil
+      // it (see triangulateFulfil, called from the scan resolver).
+      const anyRevealed = STATE.threats.some(t => t.revealed);
+      if (anyRevealed) {
+        triangulateFulfil('prior-round evidence');
+      } else {
+        STATE.triangulateArmed = true;
+        log('&nbsp;&nbsp;└ Triangulation armed — will lock on the moment this round\'s scan exposes a threat.', 'log-good');
       }
     },
   },
@@ -2235,6 +2233,26 @@ const COMBOS = [
     },
   },
 ];
+
+// v0.9.6: shared TRIANGULATE resolution. Called either immediately (evidence
+// already on the board) or from the scan resolver when an armed triangulation
+// gets its first revealed threat this round.
+function triangulateFulfil(why) {
+  if (STATE.c2Revealed) return;
+  STATE.triangulateArmed = false;
+  STATE.c2Revealed = true;
+  STATE.metrics.c2RevealedRound = STATE.round;
+  log(`&nbsp;&nbsp;└ <b>C2 LOCATED via triangulation → ${STATE.c2Node}</b> <span style="color:var(--muted);">(${why})</span>`, 'log-crit');
+  STATE.iocs.push(`C2 located via VIGIL triangulation → ${STATE.c2Node}`);
+  setTimeout(() => maybeShowOODAReflection('first_c2_reveal', {
+    when: 'first C2 attribution (triangulation)',
+    title: 'C2 LOCATED VIA TRIANGULATE',
+    observe: `TRIANGULATE combo guaranteed the reveal given revealed-threat evidence. C2 at ${STATE.c2Node}.`,
+    orient: `Triangulation = cross-source correlation. In real IR, this is Zeek beacon-pattern + MISP cross-ref + endpoint pivot in one tempo.`,
+    relevance: `You now know the SEVER target. Choice: swing now (3 AP) or build hardening first.`,
+    sufficiency: `Triangulation sourced the attribution; evidence is strong. ACH gate before SEVER still asks you to consider the else.`,
+  }), 1200);
+}
 
 function detectAndApplyCombos() {
   const triggered = [];
@@ -2334,16 +2352,39 @@ const MISSIONS = {
     sector: 'NORTHEAST POWER GRID — SECTOR 7',
     threat: 'Active Campaign',
     threatArchetype: 'ransomware',  // legacy — overridden by selected actor
-    summary: 'Defend an 8-node power grid against an active campaign. Adversary identity to be assessed during operation.',
+    // v0.9.6: incident anchors + consequence model back-ported. BLACKFROST was the
+    // only mission citing no real-world pattern; the grid sector has the two
+    // best-documented ICS attacks on record.
+    summary: 'Defend an 8-node Northeast distribution grid in winter peak against an active campaign. Ukraine 23 Dec 2015 (E-ISAC/SANS: three oblenergos, ~225,000 customers, operators locked out as adversaries opened breakers from the HMIs; KillDisk, serial-to-ethernet firmware corruption and a telephony DoS on the call center delayed restoration for hours) and Ukraine 17 Dec 2016 (Dragos CRASHOVERRIDE / ESET Industroyer: the first malware framework built to attack electric grids, speaking IEC 104 / IEC 61850 / OPC DA natively, impacting a single Kyiv transmission substation) establish ground truth: the control center is the target, substations are the effect, and in a winter scenario the critical loads downstream — a medical center, water treatment, residential heating — are the consequence.',
     frameworks: ['attack','ics','d3fend'],
     maxRounds: 10,
-    loseThreshold: 5,
+    // v0.9.6: 5 → 4. Still the gentlest mission (it's the on-ramp), but no longer
+    // two full nodes more forgiving than every other sector.
+    loseThreshold: 4,
     // v0.9: expanded for IRONHAZE DDoS, HOLLOWKEY cred theft, WARDEN broker recon
     threatMix: ['T1566.001','T1190','T1133','T1078','T1078.001','T1110','T1059','T1021','T1021.001','T1486','T1490','T1498','T1498.001','T1498.002','T1499','T1491.001','T1531','T1555.003','T1565.001','T1087.001','T0883','T0855'],
     impactTechs: ['T1486','T1498','T1491.001','T1531'],
     // v0.3: Valid threat actors for this domain. First is default; randomized per run.
     validActors: ['CRYO','IRONHAZE','WARDEN','GHOSTWIRE','HOLLOWKEY','VOLTFORGE'],
     defaultActor: 'CRYO',
+    // v0.9.6: Ukraine 2015 pattern — the control center is the point of leverage.
+    // Per E-ISAC/SANS (Mar 2016): adversaries used the dispatchers' own HMIs to
+    // open breakers, then corrupted serial-to-ethernet gateway firmware ("blowing
+    // the bridges") so remote restoration was impossible; crews drove to
+    // substations to close breakers by hand.
+    sectorCascade: {
+      triggerNode: 'CTRL',
+      effectNodes: ['SUB-A','SUB-B','SUB-C','SUB-D'],
+      effectState: 'stressed',
+      narration: 'CONTROL CENTER COMPROMISED — GRID CASCADE. The Ukraine 23 Dec 2015 pattern: dispatchers watch their own cursors open breakers. Substations are physically intact but the SCADA path to them is hostile; remote restoration is no longer trustworthy. In Ukraine, crews drove to ~30 substations to close breakers manually. Winter peak: every hour SUB-B and SUB-D are down is an hour the medical center runs on generator and residential heating load is off.',
+      doctrineRef: 'Ukraine Dec 2015 (E-ISAC/SANS)',
+    },
+    // v0.9.6: critical-load substations. Compromise = loss of power to a
+    // medical center / water treatment (SUB-B) or winter residential heating
+    // (SUB-D). DOE / CISA treat these downstream loads as the reason
+    // distribution security is a public-safety matter, not a billing one.
+    lifeSafetyNodes: ['SUB-B','SUB-D'],
+    lifeSafetyNarration: 'CRITICAL-LOAD SUBSTATION COMPROMISED. Downstream of this feeder: a regional medical center and water treatment (SUB-B) or winter residential heating (SUB-D). This is a public-safety event, not an outage ticket. In the real world: notify the state emergency operations center and the regional medical center\'s facilities team (generator fuel runway is measured in hours); dispatch field crews for manual breaker operation per the Ukraine 2015 restoration pattern; invoke the mutual-assistance agreement. NERC CIP-008 incident reporting applies, and a cyber event causing interruption of electrical system operations is a 1-hour Emergency Alert under DOE Form OE-417 (criterion 3; a Reportable Cyber Security Incident is criterion 2).',
   },
   'NIGHTWATCH': {
     id: 'NIGHTWATCH',
@@ -2362,6 +2403,20 @@ const MISSIONS = {
     impactTechs: ['IMP-0002','PER-0001'],
     validActors: ['KINGFISHER','GHOSTWIRE','HOLLOWKEY','WARDEN'],
     defaultActor: 'KINGFISHER',
+    // v0.9.6: ground-segment cascade. The ViaSat KA-SAT Feb 2022 lesson: the
+    // adversary never touched a spacecraft — they compromised the ground
+    // management segment and the fleet effect followed (AcidRain to tens of
+    // thousands of modems). Mission control is the chokepoint: lose it and
+    // every bird is flying its last uploaded plan with nobody able to
+    // re-task, safe, or recover it. No life-safety node here — an imagery
+    // constellation has none, and the game doesn't invent one.
+    sectorCascade: {
+      triggerNode: 'MCC',
+      effectNodes: ['NWATCH-1','NWATCH-2','NWATCH-3'],
+      effectState: 'stressed',
+      narration: 'MISSION CONTROL COMPROMISED — GROUND-SEGMENT CASCADE. The ViaSat KA-SAT Feb 2022 pattern: nobody touched the spacecraft; the ground management segment fell and the fleet effect followed. Every bird is now executing its last trusted plan with no verified command path to re-task, safe-mode, or recover it. Conjunction screening and collision-avoidance maneuvers cannot be commanded. Telemetry may still arrive — but you can no longer trust that what you see is what is happening.',
+      doctrineRef: 'ViaSat KA-SAT Feb 2022 (ground-segment loss)',
+    },
   },
   'TIDEBREAK': {
     id: 'TIDEBREAK',
@@ -2745,6 +2800,186 @@ const DEMOS = {
     ],
     outro: 'Mission complete by round 6. Maritime lessons: TOS is the Maersk lesson — IT compromise paralyzes OT operations, so bulwark it day one. ZPMC-pattern cranes are a supply-chain vector through cellular modems and vendor remote access. AIS spoofing has physical-world consequences — a vessel collision is the worst case. Supply-chain actors have long detection windows; lean on TRIANGULATE when traces fail.',
   },
+
+  // v0.9.6: HEARTLINE instructor demo — healthcare ransomware with life-safety stakes
+  'HEARTLINE': {
+    missionId: 'HEARTLINE',
+    actor: 'CRYO',
+    c2Node: 'EDGE',
+    difficulty: 'operator',
+    intro: `OP. HEARTLINE — regional hospital, 8 nodes. CRYO ransomware crew, and their foothold is the VPN edge appliance. That is not a coincidence: the Change Healthcare intrusion in Feb 2024 came through a Citrix remote-access gateway with no MFA.\n\nTwo things make healthcare different from the grid or the port. First, EHR is the clinical control plane — when it goes, care doesn't stop, it goes to paper at a tempo clinicians can't sustain. That is where NHS WannaCry's ~19,000 cancelled appointments came from. Second, two of these nodes are patient-connected. A compromised infusion-pump fleet is a patient-safety event, not a data event. I'll show you how that changes the priority order.`,
+    rounds: [
+      {
+        round: 1,
+        threatSpawns: [{ target: 'PACS', techniqueId: 'T1566.001' }],
+        playerActions: [
+          { agent: 'VIGIL', action: 'scan', target: 'PACS' },
+          { agent: 'ANCHOR', action: 'harden', target: 'EHR' },
+          { agent: 'ANCHOR', action: 'harden', target: 'EHR' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 1. Suspicious activity at PACS — the imaging archive. Unconfirmed. Same rule as every sector: SCAN before you DISRUPT. But notice what I am NOT doing: I am not spending offense yet. The first move in a hospital is protecting the one node everything routes through.' },
+          { phase: 'PLAN', text: 'VIGIL ▸ SCAN PACS (1 AP). ANCHOR ▸ HARDEN EHR twice (2 AP) — that triggers BULWARK, +1 bonus resilience on top. EHR is the hub: PACS, LAB, PHARM and both biomed fleets all take orders from it. If EHR falls, the game fires a clinical cascade modeled on NHS 2017 and every downstream node goes stressed at once. Bulwark it on round one, every time. 2 AP in reserve.' },
+          { phase: 'RESOLVE', text: 'T1566.001 spearphishing attachment confirmed at PACS. Textbook ransomware initial access. CRYO is a slow-dwell crew — M-Trends 2026 puts the global median at 14 days before detonation — so what you are seeing is the quiet reconnaissance phase. This is the window. Once backups start getting destroyed, you are already late.' },
+        ],
+      },
+      {
+        round: 2,
+        threatSpawns: [{ target: 'AD', techniqueId: 'T1133' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'PACS' },
+          { agent: 'VIGIL', action: 'scan', target: 'AD' },
+          { agent: 'ANCHOR', action: 'harden', target: 'BIOMED-PUMP' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 2. PACS confirmed, and now there is activity against AD — Active Directory. T1133 External Remote Services: that is the VPN-with-no-MFA pattern. The Change Healthcare CEO told Congress the adversary had nine days of access before detonation. AD is how ransomware gets to every workstation at once, so this one matters.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT PACS (2 AP) — confirmed threat, cut it before phase 2. VIGIL ▸ SCAN AD (1 AP). ANCHOR ▸ HARDEN BIOMED-PUMP (1 AP). Here is the healthcare-specific call: I am hardening the infusion-pump fleet before LAB or PHARM, even though it has no threat on it yet. Patient-connected first. A principal in a hospital SOC would make the same call.' },
+        ],
+      },
+      {
+        round: 3,
+        threatSpawns: [{ target: 'BIOMED-PUMP', techniqueId: 'T1021.001' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'AD' },
+          { agent: 'VIGIL', action: 'scan', target: 'BIOMED-PUMP' },
+          { agent: 'VIGIL', action: 'trace', target: null },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 3. And there it is — lateral movement toward the infusion-pump fleet over RDP (T1021.001). This is the moment the incident changes category. In the real world you are now notifying Patient Safety per hospital policy and preparing a manual-mode fallback with bedside confirmation of every dose. FDA Medical Device Cybersecurity Guidance and HHS 405(d) both treat this as a reportable care-delivery event.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT AD (2 AP) — kill the identity foothold. VIGIL ▸ SCAN BIOMED-PUMP (1 AP) and VIGIL ▸ TRACE C2 (2 AP) in the same round: that is TRIANGULATE, a guaranteed C2 reveal. Full 5 AP. The pump threat gets confirmed this round and disrupted next; it is hardened, so it will hold one round.' },
+        ],
+      },
+      {
+        round: 4,
+        threatSpawns: [{ target: 'LAB', techniqueId: 'T1078' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'BIOMED-PUMP' },
+          { agent: 'VIGIL', action: 'scan', target: 'LAB' },
+          { agent: 'ANCHOR', action: 'harden', target: 'BIOMED-TELEM' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 4. C2 is at EDGE — the VPN appliance, exactly where the Change Healthcare pattern said it would be. New activity at LAB using valid accounts (T1078): that is the credentials they stole from AD before we cut it. Attribution is firming up as CRYO.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT BIOMED-PUMP (2 AP) — the patient-connected threat goes first, no debate. VIGIL ▸ SCAN LAB (1 AP). ANCHOR ▸ HARDEN BIOMED-TELEM (1 AP) — the other patient-connected fleet, pre-emptively. 4 AP.' },
+        ],
+      },
+      {
+        round: 5,
+        threatSpawns: [],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'LAB' },
+          { agent: 'ANCHOR', action: 'harden', target: 'PHARM' },
+          { agent: 'ANCHOR', action: 'harden', target: 'AD' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 5. Pump fleet clear. LAB confirmed. We know where C2 is. One more cleanup round before the hammer — in healthcare I would rather spend a round making sure nothing patient-adjacent is live than rush the sever and leave a pump threat in flight.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT LAB (2 AP). ANCHOR ▸ HARDEN PHARM (1 AP) — pharmacy automation feeds the pumps — and HARDEN AD (1 AP) now that it is clean. 4 AP. Next round: SEVER.' },
+        ],
+      },
+      {
+        round: 6,
+        threatSpawns: [{ target: 'PHARM', techniqueId: 'T1566.001' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'sever', target: null },
+          { agent: 'ANCHOR', action: 'harden', target: 'EDGE' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 6. A last phishing attempt at PHARM — they are trying to get a second foothold before we close the door. Too late. C2 at EDGE, SEVER is 3 AP, and every in-flight threat loses its lifeline when the VPN foothold goes.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ SEVER C2 (3 AP). ANCHOR ▸ HARDEN EDGE (1 AP) — in the real world this is "MFA on every remote-access gateway, no exceptions," the single control that would have changed Change Healthcare. Mission complete: no patient-connected device compromised, EHR never fell, no clinical cascade.' },
+        ],
+      },
+    ],
+    outro: 'Mission complete by round 6 with zero life-safety events. Healthcare lessons: BULWARK the EHR on round one — it is the clinical control plane, and losing it is how NHS 2017 cancelled ~19,000 appointments without the malware ever touching a patient. Patient-connected nodes get hardened and disrupted first, before anything with a higher dollar value. The VPN edge is the modern entry — MFA on every remote-access gateway, no exceptions. And the slow-dwell window is real: M-Trends 2026 puts the median at 14 days, which means the quiet rounds are the ones that decide the run.',
+  },
+
+  // v0.9.6: RAILGUARD instructor demo — hacktivist RF command injection, passenger safety stakes
+  'RAILGUARD': {
+    missionId: 'RAILGUARD',
+    actor: 'IRONHAZE',
+    c2Node: 'VHF-LINK',
+    difficulty: 'operator',
+    intro: `OP. RAILGUARD — regional railway, 8 nodes: dispatch, PTC back-office, freight management, two interlockings, a grade crossing, and the VHF cab-signaling link.\n\nThe adversary is IRONHAZE, a hacktivist, and their foothold is the VHF link itself. That is the Polish August 2023 pattern: roughly twenty trains halted by unauthorized radio-stop commands sent over a legitimate cleartext signaling protocol that was never designed with cryptographic authentication. Nothing was hacked in the IT sense — the safety protocol was used as designed, by the wrong person.\n\nThree nodes here are life-safety: both interlockings and the grade crossing. I will show you why the priority order in rail is different from everything else you have played.`,
+    rounds: [
+      {
+        round: 1,
+        threatSpawns: [{ target: 'INTERLOCK-A', techniqueId: 'T0855' }],
+        playerActions: [
+          { agent: 'VIGIL', action: 'scan', target: 'INTERLOCK-A' },
+          { agent: 'ANCHOR', action: 'harden', target: 'DISPATCH' },
+          { agent: 'ANCHOR', action: 'harden', target: 'DISPATCH' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 1. Anomalous command traffic at INTERLOCK-A, the passenger-line signaling junction. Unconfirmed. Everything you know still applies — SCAN first — but note where the threat is: trackside, not in the office. Hacktivists with RF capability skip the IT network entirely.' },
+          { phase: 'PLAN', text: 'VIGIL ▸ SCAN INTERLOCK-A (1 AP). ANCHOR ▸ HARDEN DISPATCH twice (2 AP) for BULWARK. Dispatch is the coordination plane for every movement on the railway. When the Belarusian Cyber-Partisans encrypted the bulk of BelZhD\'s IT in January 2022, trackside signaling was physically fine and trains still stopped — nobody could issue movement authorities. Bulwark dispatch on round one.' },
+          { phase: 'RESOLVE', text: 'Confirmed: T0855, unauthorized command message, at INTERLOCK-A. In ATT&CK for ICS that ID was revoked and lives on as T1692.001, but every rail operator still calls it T0855. This is the radio-stop pattern. The fail-safe design will halt the train — which is exactly what the attacker wants.' },
+        ],
+      },
+      {
+        round: 2,
+        threatSpawns: [{ target: 'GRADE-X', techniqueId: 'T0836' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'INTERLOCK-A' },
+          { agent: 'VIGIL', action: 'scan', target: 'GRADE-X' },
+          { agent: 'ANCHOR', action: 'harden', target: 'INTERLOCK-B' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 2. INTERLOCK-A confirmed. New activity at GRADE-X, the grade-crossing controller — T0836 Modify Parameter. A grade crossing is where the railway meets the public: motorists and pedestrians. Parameter manipulation of warning-time values is the nightmare case. This is a life-safety node and it jumps the queue.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT INTERLOCK-A (2 AP) — confirmed, life-safety, goes first. VIGIL ▸ SCAN GRADE-X (1 AP). ANCHOR ▸ HARDEN INTERLOCK-B (1 AP), the freight-side interlocking, pre-emptively. In the real world, FRA 49 CFR 236 Subpart I fallback procedures mean a flagman at the affected crossing until it is verified. 4 AP.' },
+        ],
+      },
+      {
+        round: 3,
+        threatSpawns: [{ target: 'PTC-SERVER', techniqueId: 'T0871' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'GRADE-X' },
+          { agent: 'VIGIL', action: 'scan', target: 'PTC-SERVER' },
+          { agent: 'VIGIL', action: 'trace', target: null },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 3. GRADE-X confirmed. Now T0871, Execution Through API, against the PTC back-office. The adversary is trying to reach the movement-authority server through its own maintenance API — the detection surface for that is API audit logs, not network traffic. Three different nodes, three different techniques, one actor: that is the hacktivist signature. Loud and wide.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT GRADE-X (2 AP) — the public-safety node, no debate. VIGIL ▸ SCAN PTC-SERVER (1 AP) plus VIGIL ▸ TRACE C2 (2 AP): TRIANGULATE, guaranteed reveal. Full 5 AP.' },
+        ],
+      },
+      {
+        round: 4,
+        threatSpawns: [{ target: 'FREIGHT-TMS', techniqueId: 'T1498' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'PTC-SERVER' },
+          { agent: 'VIGIL', action: 'scan', target: 'FREIGHT-TMS' },
+          { agent: 'ANCHOR', action: 'harden', target: 'GRADE-X' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 4. C2 is on VHF-LINK. That confirms it: the foothold is a radio in range of the track, not a computer in the building. And now a DDoS (T1498) against the freight management system — that is the other half of the modern hacktivist playbook, the NoName057(16) DDOSIA pattern Europol took down in Operation Eastwood, July 2025. Availability attack on the business side while they work the trackside.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT PTC-SERVER (2 AP). VIGIL ▸ SCAN FREIGHT-TMS (1 AP). ANCHOR ▸ HARDEN GRADE-X (1 AP) now that it is clean — it stays a target. 4 AP. Notice I have not touched FREIGHT-TMS offensively yet: a freight schedule outage is money; a grade crossing is lives. Order matters.' },
+        ],
+      },
+      {
+        round: 5,
+        threatSpawns: [],
+        playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'FREIGHT-TMS' },
+          { agent: 'ANCHOR', action: 'harden', target: 'INTERLOCK-A' },
+          { agent: 'ANCHOR', action: 'harden', target: 'AD' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 5. Trackside is clean and hardened. PTC is clean. Freight TMS is the only live threat and it is the lowest-consequence node on the map. Cleanup round before the sever.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT FREIGHT-TMS (2 AP). ANCHOR ▸ HARDEN INTERLOCK-A (1 AP) and HARDEN AD (1 AP). 4 AP. The real-world equivalent of this round is TSA Security Directive 1580/82-2022-01C: you have an incident response plan, you have operational-fallback procedures, and you are executing them — not improvising.' },
+        ],
+      },
+      {
+        round: 6,
+        threatSpawns: [{ target: 'INTERLOCK-B', techniqueId: 'T0855' }],
+        playerActions: [
+          { agent: 'WRAITH', action: 'sever', target: null },
+          { agent: 'ANCHOR', action: 'harden', target: 'INTERLOCK-B' },
+        ],
+        narration: [
+          { phase: 'INTEL', text: 'Round 6. One more radio-stop attempt, this time at INTERLOCK-B on the freight side. C2 is on the VHF link. SEVER is 3 AP. In the physical world, "sever" here means direction-finding the transmitter and putting a radio in a police evidence bag — in Poland, two arrests followed within days.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ SEVER C2 (3 AP). ANCHOR ▸ HARDEN INTERLOCK-B (1 AP) as the hedge — it is hardened already, this makes it very hard to take. Mission complete: three life-safety nodes threatened, zero compromised, dispatch never fell.' },
+        ],
+      },
+    ],
+    outro: 'Mission complete by round 6 with zero life-safety events. Rail lessons: life-safety nodes — interlockings and grade crossings — jump the queue over every business system, every time. Dispatch is the Belarus lesson: bulwark it on round one because movement authorities, not trackside hardware, are what stop trains. The VHF foothold is the Poland lesson: legacy cab-signaling was safety-engineered to fail safe, not cyber-engineered to authenticate, and the fix is cryptographic protection of command messages per EN 50159. And the modern hacktivist runs two plays at once — RF on the trackside, DDoS on the business side — so attribute by the pattern, not by any single technique.',
+  },
 };
 
 
@@ -3112,15 +3347,17 @@ function render() {
 // 7. ENERGY MISSION (BLACKFROST)
 // =============================================================================
 function setupEnergyGrid() {
+  // v0.9.6: fullName descriptors added so the life-safety and cascade logic
+  // is grounded in what each node actually serves (mirrors HEARTLINE / RAILGUARD).
   const nodeDefs = [
-    { id: 'SUB-A', type: 'substation', label: 'SUB-A' },
-    { id: 'SUB-B', type: 'substation', label: 'SUB-B' },
-    { id: 'SUB-C', type: 'substation', label: 'SUB-C' },
-    { id: 'SUB-D', type: 'substation', label: 'SUB-D' },
-    { id: 'GEN-1', type: 'generator',  label: 'GEN-1' },
-    { id: 'GEN-2', type: 'generator',  label: 'GEN-2' },
-    { id: 'GEN-3', type: 'generator',  label: 'GEN-3' },
-    { id: 'CTRL',  type: 'control',    label: 'CTRL'  },
+    { id: 'SUB-A', type: 'substation', label: 'SUB-A', fullName: 'Distribution Substation A — commercial / light industrial feeders' },
+    { id: 'SUB-B', type: 'substation', label: 'SUB-B', fullName: 'Distribution Substation B — regional medical center + water treatment plant feeders (critical load)' },
+    { id: 'SUB-C', type: 'substation', label: 'SUB-C', fullName: 'Distribution Substation C — transmission interconnect' },
+    { id: 'SUB-D', type: 'substation', label: 'SUB-D', fullName: 'Distribution Substation D — residential heating load, winter peak (critical load)' },
+    { id: 'GEN-1', type: 'generator',  label: 'GEN-1', fullName: 'Generation Unit 1 — gas turbine' },
+    { id: 'GEN-2', type: 'generator',  label: 'GEN-2', fullName: 'Generation Unit 2 — combined cycle' },
+    { id: 'GEN-3', type: 'generator',  label: 'GEN-3', fullName: 'Generation Unit 3 — peaker' },
+    { id: 'CTRL',  type: 'control',    label: 'CTRL',  fullName: 'Distribution Control Center — SCADA / EMS / dispatcher HMIs' },
   ];
   STATE.nodes = nodeDefs.map(d => ({
     ...d, x: 0, y: 0,
@@ -4235,7 +4472,7 @@ function drawEHRNode(n) {
 //   • TSA Security Directive 1580/82-2022-01C (current rail cybersecurity reqs; successor to 01A/01B)
 //   • FRA 49 CFR Part 236 Subpart I §236.1033 (PTC communications and security requirements)
 //   • APTA Cybersecurity Toolkit
-//   • CENELEC 50159 (safety-critical rail communications)
+//   • EN 50159:2010+A1:2020 (safety-related communication in transmission systems)
 //
 // Topology: AD authenticates ops consoles; DISPATCH is the control plane
 // for all movements; PTC-SERVER + FREIGHT-TMS are rail back-office; the
@@ -5025,8 +5262,23 @@ function generateCFINote(rubric) {
       notes.push(`Clinical cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real NHS WannaCry incident (~19,000 appointments cancelled, surgeries diverted, £92M in direct/indirect loss), the ransomware itself did not kill patients — the loss of the information backbone that coordinates care did, by forcing clinicians onto manual workflows at a tempo they could not sustain safely. Bulwark EHR day one; have a tested paper/manual-mode runbook; practice it before you need it.`);
     } else if (sc.doctrineRef === 'Belarusian Cyber-Partisans / BelZhD Jan 2022') {
       notes.push(`Operational cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the real BelZhD incident the bulk of BelZhD servers, databases, and workstations were encrypted during Russian troop movements into Belarus (Partisans public statements); movement coordination was lost while trackside signaling and locomotives remained physically operational. The operational effect was days of service suspension even though no OT equipment was touched. For a U.S. operator, the equivalent lesson is TSA Security Directive 1580/82-2022-01C compliance (incident response plan, operational-fallback procedures, access-control review): practice the dispatch-less day before you have one.`);
+    } else if (sc.doctrineRef === 'Ukraine Dec 2015 (E-ISAC/SANS)') {
+      notes.push(`Grid cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. On 23 Dec 2015 adversaries used the dispatchers' own HMIs to open breakers at three oblenergos (~225,000 customers, outages of up to several hours), then corrupted serial-to-ethernet gateway firmware so remote restoration was impossible and crews had to close breakers by hand at ~30 substations. E-ISAC/SANS's core finding: BlackEnergy 3, KillDisk and the firmware uploads did not cause the outage — direct adversary manipulation of the ICS did; the tools only enabled access and delayed restoration. Defensive doctrine: two-factor on every business-to-ICS VPN (the 2015 VPNs lacked it), out-of-band operator authority to field crews, and a rehearsed manual-restoration plan.`);
+    } else if (sc.doctrineRef === 'ViaSat KA-SAT Feb 2022 (ground-segment loss)') {
+      notes.push(`Ground-segment cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern. In the KA-SAT incident the adversary never touched a spacecraft: the ground management segment was compromised and the AcidRain wiper reached tens of thousands of modems across Europe, with ~5,800 Enercon wind turbines in Germany losing remote management for months. The doctrine for an operator: ground-segment IT is mission-critical, not corporate; a verified out-of-band command path (second ground site, pre-authorised safe-mode plan onboard) is the difference between a bad day and a lost constellation.`);
     } else {
       notes.push(`Sector cascade fired on round ${sc.round} when ${sc.triggerNode} compromised — ${sc.doctrineRef} pattern.`);
+    }
+  }
+  // v0.9.6: BLACKFROST energy-specific debrief notes
+  if (STATE.mission && STATE.mission.id === 'BLACKFROST') {
+    const lse = (STATE.lifeSafetyEvents || []).length;
+    if (lse > 0) {
+      const nodes = STATE.lifeSafetyEvents.map(e => e.node).join(', ');
+      notes.push(`${lse} critical-load event${lse > 1 ? 's' : ''} this run (${nodes}). A compromised feeder to a medical center / water treatment or to winter residential heating is a PUBLIC-SAFETY event, not an outage ticket: generator fuel runway at a hospital is measured in hours. A cyber event that interrupts electrical system operations is a 1-hour Emergency Alert under DOE Form OE-417 (criterion 3), and NERC CIP-008 incident reporting applies. Field crews for manual breaker operation and the mutual-assistance agreement are the restoration path — exactly as in Ukraine 2015.`);
+    }
+    if (STATE.phase === 'LOSE') {
+      notes.push('Grid loss analysis: Ukraine 2015 (E-ISAC/SANS) and Ukraine 2016 (Dragos CRASHOVERRIDE / ESET Industroyer — the first malware framework built to attack grids, speaking IEC 104 / IEC 61850 / OPC DA natively) both prove the same point: the adversary goes after the control plane, and the physical grid is the effect. Volt Typhoon pre-positioning (CISA AA24-038A, Energy is a named sector) is the strategic version of the same play. The defensive posture is NERC CIP as a floor, not a ceiling: two-factor on every business-to-ICS path, protocol-aware monitoring (IEC 104 / DNP3) at the control-center boundary, and a manual-restoration plan the field crews have actually rehearsed.');
     }
   }
   if (STATE.mission && STATE.mission.id === 'TIDEBREAK' && STATE.phase === 'LOSE') {
@@ -5327,6 +5579,7 @@ function executeAction(ag, a) {
       recordAction(ag.id, a.actionId, a.target, 'wasted', 'no threats present', []);
     } else {
       recordAction(ag.id, a.actionId, a.target, 'effective', null, foundTechs);
+      if (STATE.triangulateArmed) triangulateFulfil('this round\'s scan');  // v0.9.6
     }
   }
   else if (a.actionId === 'trace') {
@@ -5715,6 +5968,7 @@ function advanceRound() {
   STATE.killBoxActive = false;  // v0.4: combo effect expires at round end
   // v0.9: WARDEN handoff — after N rounds the IAB "sells access" and a successor
   // takes over execution. Attribution shift mid-mission is the real IAB signature.
+  STATE.triangulateArmed = false;  // v0.9.6: an armed-but-unfulfilled triangulation does not carry across rounds
   if (A && A.handoffAfterRounds && A.successorPool && STATE.round === A.handoffAfterRounds + 1 && !STATE.handoffFired) {
     STATE.handoffFired = true;
     STATE.metrics.handoffRound = STATE.round;  // v0.9.4: timeline capture
@@ -6887,10 +7141,24 @@ function renderCodexTab(el) {
       <b>Vector</b>: VHF transmitter in RF range of track; cleartext signaling protocol; no mutual authentication between transmitter and receiver on legacy cab-signaling.<br>
       <b>Payload</b>: emergency-stop tone sequences, which cause rolling stock to brake. The brake is a safety-design response (fail-safe); the attack weaponizes the safety behavior itself.<br>
       <b>Operational effect</b>: ~20 unauthorized stops in the investigation window; service suspensions; forensic investigation across the Polish network to confirm safety margins.<br>
-      <b>Doctrine lesson</b>: legacy safety-engineering authentication (fail-safe design) is NOT cybersecurity authentication. The command protocol needs cryptographic signing. CENELEC 50159 (safety-related communications in transmission systems) is the European-standard successor pattern for signed, authenticated rail communications.
+      <b>Doctrine lesson</b>: legacy safety-engineering authentication (fail-safe design) is NOT cybersecurity authentication. The command protocol needs cryptographic signing. EN 50159 (<i>Safety-related communication in transmission systems</i>) is the European-standard successor pattern for signed, authenticated rail communications.
     </div>
-    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: cryptographic signing on command messages per CENELEC 50159 Category 3 (where upgrade is feasible); monitoring of RF spectrum around rail corridors for anomalous command-tone transmissions; dispatcher cross-check procedures when emergency stops are received without a known cause.</div>
-    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Polish Agencja Bezpieczeństwa Wewnętrznego (ABW) public statements Aug-Sep 2023; Polish Press Agency (PAP) reporting; CENELEC 50159 standard. In-game: IRONHAZE actor on RAILGUARD can land on VHF-LINK to model this pattern.</div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: cryptographic protection of command messages — one of the defence methods EN 50159:2010+A1:2020 (<i>Safety-related communication in transmission systems</i>) lists for transmission systems with unauthorised-access risk (where upgrade is feasible; a 2025-11 revision draft is in circulation); monitoring of RF spectrum around rail corridors for anomalous command-tone transmissions; dispatcher cross-check procedures when emergency stops are received without a known cause.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: Polish Agencja Bezpieczeństwa Wewnętrznego (ABW) public statements Aug-Sep 2023; Polish Press Agency (PAP) reporting; EN 50159:2010+A1:2020 (BSI). In-game: IRONHAZE actor on RAILGUARD can land on VHF-LINK to model this pattern.</div>
+  </div>`;
+
+  // v0.9.6: Ukraine grid attacks 2015 / 2016 — the BLACKFROST anchor
+  html += `<div class="codex-entry" style="border-left:2px solid #ffd84d;padding-left:6px;margin-top:8px;">
+    <div><span style="color:#ffd84d;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ UKRAINE GRID ATTACKS DEC 2015 &amp; DEC 2016 (E-ISAC/SANS · Dragos · ESET)</span></div>
+    <div class="codex-desc" style="margin-top:3px;"><b>23 Dec 2015.</b> Three Ukrainian distribution companies (oblenergos) were attacked within about 30 minutes of each other; approximately 225,000 customers lost power for several hours (Kyivoblenergo: seven 110 kV and twenty-three 35 kV substations disconnected for three hours). The E-ISAC/SANS analysis (18 Mar 2016) is the canonical account: spear-phishing with macro documents delivered BlackEnergy 3; credentials were stolen from the business network; VPNs into the ICS lacked two-factor authentication; adversaries then used the dispatchers' own HMIs to open breakers while operators watched. Amplifying actions delayed restoration — a modified KillDisk wiped workstations, malicious firmware was uploaded to serial-to-ethernet gateways ("blowing the bridges" so remote restoration was impossible), UPS systems were reconfigured, and a telephony denial-of-service flooded the call center so customers could not report outages. Crews drove to substations and closed breakers by hand.<br><br><b>17 Dec 2016.</b> A single transmission-level substation in Kyiv was impacted by what Dragos named CRASHOVERRIDE and ESET named Industroyer — per Dragos, "the first ever malware framework designed and deployed to attack electric grids." It carries native modules for IEC 101, IEC 104, IEC 61850 and OPC DA; Dragos assessed the deployment as closer to a proof of concept than the malware's full capability.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Entry vector</b>: T1566.001 macro spear-phishing → T1078 valid accounts → T1133 VPN without MFA.<br>
+      <b>ICS attack</b>: T0855 / T1692.001 Unauthorized Command Message via the operators' HMIs (2015); native-protocol command injection (2016).<br>
+      <b>Restoration denial</b>: firmware corruption of serial-to-ethernet gateways; KillDisk; UPS reconfiguration; call-center telephony DoS.<br>
+      <b>Doctrine lesson</b>: E-ISAC/SANS is explicit that the malware did not cause the outage — direct adversary manipulation of the ICS did. The tools bought access and delayed recovery. Defend the control plane; rehearse manual restoration.
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ Hunt / preventive: two-factor on every business-to-ICS VPN; protocol-aware monitoring (IEC 104 / DNP3 / IEC 61850) at the control-center boundary; firmware integrity on gateway devices; out-of-band dispatcher-to-field-crew authority; NERC CIP-008 reporting and DOE OE-417 Emergency Alert (1 hour for a cyber event interrupting operations).</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: E-ISAC / SANS ICS, "Analysis of the Cyber Attack on the Ukrainian Power Grid" (18 Mar 2016); Dragos, "CRASHOVERRIDE: Analyzing the Threat to Electric Grid Operations" (Jun 2017); ESET, "Win32/Industroyer" (Jun 2017); DOE Form OE-417 instructions. In-game: BLACKFROST sectorCascade fires on CTRL compromise; SUB-B / SUB-D are critical-load life-safety nodes.</div>
   </div>`;
 
   // v0.9.2: Aerospace APT codex entry
@@ -7771,10 +8039,12 @@ const BOOT_LINES = [
   '> Loading framework registry: ATT&CK, ICS v20, SPARTA, ATLAS, D3FEND ✓',
   '> Loading orbital propagator (AeroSec-Lab) ✓',
   '> Loading Purdue model (ISA-95 / IEC 62264) ✓',
-  '> Loading threat actor registry: 7 archetypes ✓',
-  '> Loading combo synergy engine: 5 named combos ✓',
-  '> Loading mission registry: 3 active operations ✓',
-  '> Loading instructor demos: 3 walkthroughs ✓',
+  // v0.9.6: counts computed from the registries so the banner can never drift
+  // from reality again (it said 7 / 3 / 3 for two releases after they were 8 / 5 / 3).
+  '> Loading threat actor registry: ' + Object.keys(THREAT_ACTORS).length + ' archetypes ✓',
+  '> Loading combo synergy engine: ' + COMBOS.length + ' named combos ✓',
+  '> Loading mission registry: ' + Object.keys(MISSIONS).length + ' active operations ✓',
+  '> Loading instructor demos: ' + Object.keys(DEMOS).length + ' walkthroughs ✓',
   '> Loading telemetry-trust engine (GT/OPS toggle) ✓',
   '> Codex decision-support: ONLINE',
   '> Threat intel feed: ACTIVE',
@@ -7822,10 +8092,10 @@ function showOnboardingCard(onDone) {
         You're an incident commander with three agents: <b style="color:#4ee2ff;">VIGIL</b> (detect), <b style="color:#ff4ea8;">WRAITH</b> (disrupt), <b style="color:#ffb84d;">ANCHOR</b> (harden/recover). Each round costs <b>action points</b> — you can't do everything.
       </div>
       <div style="color:var(--white);font-size:11px;line-height:1.55;margin-top:8px;">
-        Threat actors are archetypes based on real-world patterns: ransomware (CRYO), nation-state APT (KINGFISHER), insider (GHOSTWIRE), supply-chain (TIDEMARK), pre-positioning operator modeled on Volt Typhoon per CISA AA24-038A (VOLTFORGE), and others.
+        Threat actors are archetypes based on real-world patterns, never attributions: ransomware (CRYO), aerospace APT (KINGFISHER), hacktivist (IRONHAZE), malicious insider (GHOSTWIRE), compromised credentials (HOLLOWKEY), initial access broker (WARDEN), supply-chain (TIDEMARK), and a pre-positioning operator modeled on Volt Typhoon per CISA AA24-038A (VOLTFORGE).
       </div>
       <div style="color:var(--amber);font-size:11px;line-height:1.55;margin-top:8px;">
-        <b>▸ New here?</b> Pick <b>WATCH DEMO</b> on any mission for an instructor walkthrough.<br>
+        <b>▸ New here?</b> Pick <b>WATCH DEMO</b> on a mission for an instructor walkthrough.<br>
         <b>▸ Experienced?</b> The <b>FRAMES tab</b> shows live Kill Chain / NIST IR / Diamond / Pyramid of Pain state.
       </div>
 
@@ -8082,6 +8352,7 @@ function beginGame(missionId) {
   STATE.handoffFired = false;            // v0.9: reset IAB handoff flag
   STATE.sectorCascadeFired = false;      // v0.9.1: reset mission-level sector cascade flag
   STATE.lifeSafetyEvents = [];           // v0.9.3: reset life-safety event log
+  STATE.triangulateArmed = false;        // v0.9.6: reset armed triangulation
   if (document.getElementById('view-mode-btn')) updateViewModeButton();
   STATE.killBoxActive = false;
   STATE.metrics = {
