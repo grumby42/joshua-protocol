@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.7</title>
+<title>JOSHUA PROTOCOL v0.9.8</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261027-1634Z';
-const STAMP_UTC = '2026-10-27T16:34Z';
-const APP_VERSION = 'v0.9.7';
+const BUILD_ID = 'HUNT-20261027-1655Z';
+const STAMP_UTC = '2026-10-27T16:55Z';
+const APP_VERSION = 'v0.9.8';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -2908,27 +2908,27 @@ const DEMOS = {
         round: 2,
         threatSpawns: [{ target: 'PCS', techniqueId: 'T1190' }],
         playerActions: [
-          { agent: 'VIGIL', action: 'scan', target: 'GANTRY-1' },
           { agent: 'WRAITH', action: 'disrupt', target: 'GANTRY-1' },
+          { agent: 'VIGIL', action: 'scan', target: 'PCS' },
           { agent: 'ANCHOR', action: 'harden', target: 'CTRL' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 2. Another threat at PCS. Multi-vector. Port Community System is the trade interconnect — customs, shippers, truckers all hit it. If PCS gets compromised the supply chain ripples outward fast.' },
-          { phase: 'PLAN', text: 'RECON STRIKE setup on GANTRY-1: VIGIL ▸ SCAN (1 AP) plus WRAITH ▸ DISRUPT (2 AP) on the same target. The combo gives enhanced disrupt PLUS a 30 percent chance to partially expose C2 along the way. Big leverage. ANCHOR hardens CTRL (1 AP). 4 AP total.' },
-          { phase: 'RESOLVE', text: 'RECON STRIKE fired. The combo bonus did not expose C2 this time but the disrupt was enhanced — kill chain broken cleanly.' },
+          { phase: 'INTEL', text: 'Round 2. GANTRY-1 confirmed — T0883, an internet-accessible device. That is the cellular modem on a vendor-built crane. New probing at PCS, the port community system. TIDEMARK is ADAPTIVE: when we disrupt them, they do not go away, they pivot to an adjacent node. Watch for it this round.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT GANTRY-1 (2 AP). VIGIL ▸ SCAN PCS (1 AP). ANCHOR ▸ HARDEN CTRL (1 AP) — operations control is adjacent to the crane, and I expect the pivot to land there. 4 AP. Hardening the likely pivot target before the pivot is how you buy a round.' },
+          { phase: 'RESOLVE', text: 'There it is: ADVERSARY ADAPTING — campaign pivoting to CTRL. The pivot threat is automatically revealed because we watched it happen. It is on a hardened node, so it will hold. Next round I close the box.' },
         ],
       },
       {
         round: 3,
         threatSpawns: [],
         playerActions: [
+          { agent: 'WRAITH', action: 'disrupt', target: 'CTRL' },
           { agent: 'WRAITH', action: 'disrupt', target: 'PCS' },
-          { agent: 'VIGIL', action: 'trace', target: null },
-          { agent: 'ANCHOR', action: 'harden', target: 'PCS' },
+          { agent: 'ANCHOR', action: 'harden', target: 'GANTRY-2' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 3. PCS still has the active threat from last round. Time to clean up and start attribution. TIDEMARK is ADAPTIVE so the disrupt may pivot — be ready.' },
-          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT PCS (2 AP), VIGIL ▸ TRACE C2 (2 AP), ANCHOR hardens PCS (1 AP). Trace odds are decent now — two confirmed threats this run.' },
+          { phase: 'INTEL', text: 'Round 3. Two live threats, CTRL and PCS, and they are adjacent to each other. That is the setup for KILL BOX: two DISRUPTs on adjacent nodes in the same round create a containment field, and an adaptive actor cannot pivot out of it. This is the combo that beats TIDEMARK.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT CTRL (2 AP) + WRAITH ▸ DISRUPT PCS (2 AP) — KILL BOX. ANCHOR ▸ HARDEN GANTRY-2 (1 AP), the other crane. Full 5 AP. No pivot this round, guaranteed.' },
         ],
       },
       {
@@ -2936,24 +2936,25 @@ const DEMOS = {
         threatSpawns: [{ target: 'AIS', techniqueId: 'T1078' }],
         playerActions: [
           { agent: 'VIGIL', action: 'scan', target: 'AIS' },
-          { agent: 'WRAITH', action: 'disrupt', target: 'AIS' },
-          { agent: 'ANCHOR', action: 'harden', target: 'GANTRY-2' },
+          { agent: 'VIGIL', action: 'trace', target: null },
+          { agent: 'ANCHOR', action: 'harden', target: 'DALI' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 4. C2 still hidden — trace did not land last round. New threat at AIS. AIS is vessel tracking — if compromised, you can spoof ship positions, which is the kind of thing that ends with a freighter hitting a bridge. Take it seriously.' },
-          { phase: 'PLAN', text: 'Another RECON STRIKE on AIS: SCAN plus DISRUPT. ANCHOR hardens GANTRY-2 — the second crane is exposed. With this combo we should reveal C2 this round if our luck holds.' },
+          { phase: 'INTEL', text: 'Round 4. The box held — no pivot. Now valid-account activity at the AIS station: the vessel-tracking feed. Spoofed AIS has physical consequences; the worst case is a collision in the channel. Time to find C2.' },
+          { phase: 'PLAN', text: 'VIGIL ▸ SCAN AIS (1 AP) plus VIGIL ▸ TRACE C2 (2 AP) in the same round — TRIANGULATE, a guaranteed reveal once the scan exposes the threat. ANCHOR ▸ HARDEN DALI (1 AP), the vessel in port, because it is adjacent to AIS and it is where the next pivot would go. 4 AP.' },
         ],
       },
       {
         round: 5,
         threatSpawns: [],
         playerActions: [
-          { agent: 'VIGIL', action: 'scan', target: 'GANTRY-1' },
-          { agent: 'VIGIL', action: 'trace', target: null },
+          { agent: 'WRAITH', action: 'disrupt', target: 'AIS' },
+          { agent: 'WRAITH', action: 'disrupt', target: 'DALI' },
+          { agent: 'ANCHOR', action: 'harden', target: 'VTS' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 5. Still no C2. The supply-chain actor has long detection windows — that is part of what makes TIDEMARK dangerous. Go for the guaranteed reveal.' },
-          { phase: 'PLAN', text: 'TRIANGULATE: SCAN GANTRY-1 (1 AP) plus TRACE (2 AP). Guaranteed C2 reveal. Save the rest for SEVER.' },
+          { phase: 'INTEL', text: 'Round 5. C2 located at GANTRY-1 — the crane\'s cellular modem, exactly the ZPMC pattern: an out-of-band channel the port\'s own firewall never sees. One live threat left at AIS, adjacent to the vessel. I am not going to let a supply-chain actor pivot onto a ship.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT AIS (2 AP) + WRAITH ▸ DISRUPT DALI (2 AP). DALI has no threat on it — that DISRUPT is 2 AP spent purely to form a KILL BOX and deny the pivot. On a node with physical-world consequences, that is a good trade. ANCHOR ▸ HARDEN VTS (1 AP). 5 AP.' },
         ],
       },
       {
@@ -2964,12 +2965,12 @@ const DEMOS = {
           { agent: 'WRAITH', action: 'disrupt', target: 'CTRL' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 6. C2 at GANTRY-1 — the cellular modem foothold. T0855 unauthorized command at CTRL — adversary trying for last-minute impact. SEVER ends this.' },
-          { phase: 'PLAN', text: 'WRAITH ▸ SEVER C2 (3 AP), then WRAITH ▸ DISRUPT CTRL (2 AP) as cleanup. 5 AP, full budget. Mission complete — supply chain compromise contained, port operations intact, vessel safe.' },
+          { phase: 'INTEL', text: 'Round 6. C2 at GANTRY-1. One last unauthorized command attempt at CTRL — T0855 — the adversary trying for impact before the door closes. SEVER ends this.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ SEVER C2 (3 AP), then WRAITH ▸ DISRUPT CTRL (2 AP) as cleanup. 5 AP, full budget. Mission complete — supply-chain compromise contained, port operations intact, vessel safe, nothing compromised.' },
         ],
       },
     ],
-    outro: 'Mission complete by round 6. Maritime lessons: TOS is the Maersk lesson — IT compromise paralyzes OT operations, so bulwark it day one. ZPMC-pattern cranes are a supply-chain vector through cellular modems and vendor remote access. AIS spoofing has physical-world consequences — a vessel collision is the worst case. Supply-chain actors have long detection windows; lean on TRIANGULATE when traces fail.',
+    outro: 'Mission complete by round 6 with nothing compromised. Maritime lessons: TOS is the Maersk lesson — IT compromise paralyzes OT operations, so bulwark it day one. ZPMC-pattern cranes are a supply-chain vector through cellular modems the port\'s firewall never sees. Adaptive actors pivot when disrupted — harden the likely pivot target first, then close a KILL BOX with two DISRUPTs on adjacent nodes; spending a DISRUPT on an empty node to deny a pivot onto a vessel is a good trade. TRIANGULATE is the reliable path to C2.',
   },
 
   // v0.9.6: HEARTLINE instructor demo — healthcare ransomware with life-safety stakes
@@ -5828,7 +5829,12 @@ function executeAction(ag, a) {
           !STATE.threats.some(t2 => t2.target === n.id)
         );
         if (adjacents.length > 0) {
-          const pivotTarget = adjacents[Math.floor(Math.random() * adjacents.length)];
+          // v0.9.8: in instructor demos the pivot is deterministic (first eligible
+          // adjacent by id) so the script can teach the player how to answer it.
+          // Live play keeps the random pivot.
+          const pivotTarget = STATE.demoMode
+            ? adjacents.slice().sort((a, b) => a.id < b.id ? -1 : 1)[0]
+            : adjacents[Math.floor(Math.random() * adjacents.length)];
           // Queue pivot to fire NEXT round so player has agency
           STATE.pivotEvents.push({
             round: STATE.round,
@@ -6248,6 +6254,7 @@ function showDebrief(win, reason) {
     <div class="debrief-footer">
       <button class="action-btn" id="db-mission-select" style="flex:1;">◀ MISSION SELECT</button>
       <button class="action-btn" id="db-share" style="flex:0 0 auto;" title="Copy a shareable replay URL (?seed=…) to clipboard — same seed reproduces this run.">SHARE</button>
+      <button class="action-btn" id="db-ticket" style="flex:0 0 auto;" title="Export a SOC handoff ticket (Markdown) — timeline, observed TTPs, hypothesis state, open items">TICKET</button>
       <button class="action-btn" id="db-export" style="flex:0 0 auto;" title="Export case log as JSON — dfir-trainers compatible">EXPORT</button>
       <button class="action-btn primary" id="db-retry" style="flex:1;">▶ RETRY</button>
     </div>
@@ -6326,6 +6333,11 @@ function showDebrief(win, reason) {
   const exportBtn = overlay.querySelector('#db-export');
   if (exportBtn) {
     exportBtn.addEventListener('click', () => exportCaseLog(rubric, cfiNote, win, reason));
+  }
+  // v0.9.8: SOC-handoff ticket
+  const ticketBtn = overlay.querySelector('#db-ticket');
+  if (ticketBtn) {
+    ticketBtn.addEventListener('click', () => exportHandoffTicket(rubric, cfiNote, win, reason));
   }
   // v0.9.2: SHARE — copy a seeded replay URL to the clipboard. If the current
   // run was not seeded at boot, mint a short seed from current Math.random so
@@ -6420,6 +6432,127 @@ function exportCaseLog(rubric, cfiNote, win, reason) {
   const ts = now.toISOString().replace(/[:.]/g,'-').replace('T','_').slice(0,19);
   a.href = url;
   a.download = `joshua-protocol-caselog-${(STATE.mission && STATE.mission.id) || 'mission'}-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+}
+
+// v0.9.8: SOC-handoff ticket. Builds the Markdown a Tier-1 would hand to
+// Tier-2 at shift change: what happened, what we did, what we think, what is
+// still open. Pure function of STATE + metrics so it can be unit-tested
+// headlessly; the download wrapper is separate.
+function buildHandoffTicket(rubric, cfiNote, win, reason) {
+  const m = STATE.metrics || {};
+  const M = STATE.mission || {};
+  const A = STATE.activeActor || {};
+  const now = new Date();
+  const L = [];
+  const pad = n => String(n).padStart(2, '0');
+  const utc = d => d.toISOString().slice(0, 16).replace('T', ' ') + 'Z';
+  const maxRound = Math.max(1, STATE.round);
+
+  L.push(`# INCIDENT HANDOFF — ${M.name || 'MISSION'} — ${win ? 'RESOLVED' : 'UNRESOLVED'}`);
+  L.push('');
+  L.push(`| Field | Value |`);
+  L.push(`|---|---|`);
+  L.push(`| Ticket generated | ${utc(now)} |`);
+  L.push(`| Sector / domain | ${M.domain || '—'} — ${M.sector || '—'} |`);
+  L.push(`| Outcome | **${win ? 'WIN' : 'LOSE'}** — ${reason || '—'} |`);
+  L.push(`| Rounds elapsed | ${STATE.round} / ${M.maxRounds || '—'} |`);
+  L.push(`| Difficulty | ${STATE.difficulty || '—'} |`);
+  L.push(`| Build | ${APP_VERSION} · ${BUILD_ID}${JOSHUA_SEED ? ' · seed ' + JOSHUA_SEED.raw + ' (deterministic replay)' : ''} |`);
+  L.push('');
+
+  // ---- Executive summary (3 lines max) ----
+  const compromised = STATE.nodes.filter(n => n.state === 'compromised').map(n => n.id);
+  const stressed = STATE.nodes.filter(n => n.state === 'stressed').map(n => n.id);
+  L.push(`## 1. Summary`);
+  L.push(`- Adversary assessed as **${A.name || 'UNKNOWN'}** (${A.tagline || A.archetype || 'archetype unknown'}) — attribution confidence ${STATE.actorAttribution || 0}%${STATE.handoffFired ? ' — ATTRIBUTION SHIFTED mid-incident (' + (m.handoffFrom || '?') + ' → ' + (m.handoffTo || '?') + ' at R' + (m.handoffRound || '?') + ')' : ''}.`);
+  L.push(`- C2 ${STATE.c2Revealed ? 'located at **' + STATE.c2Node + '** (R' + (m.c2RevealedRound || '?') + ')' : '**not located**'}; ${STATE.c2Severed ? 'severed R' + (m.c2SeveredRound || '?') : 'NOT severed'}.`);
+  L.push(`- Assets compromised: ${compromised.length ? '**' + compromised.join(', ') + '**' : 'none'}. Stressed: ${stressed.length ? stressed.join(', ') : 'none'}.`);
+  if (m.sectorCascade) L.push(`- **Sector cascade fired** R${m.sectorCascade.round} on ${m.sectorCascade.triggerNode} (${m.sectorCascade.doctrineRef}).`);
+  if ((STATE.lifeSafetyEvents || []).length) L.push(`- **LIFE-SAFETY EVENT(S):** ${STATE.lifeSafetyEvents.map(e => e.node + ' (R' + e.round + ')').join(', ')} — escalate per sector protocol (see §6).`);
+  L.push('');
+
+  // ---- Timeline ----
+  L.push(`## 2. Timeline`);
+  L.push(`| Round | Adversary activity | Our actions | Outcome |`);
+  L.push(`|---|---|---|---|`);
+  for (let r = 1; r <= maxRound; r++) {
+    const spawns = (m.threatSpawns || []).filter(t => t.round === r).map(t => `${t.target}:${t.techniqueId}`);
+    const comps = (m.compromisesByRound || []).filter(c => c.round === r).map(c => `${c.target} COMPROMISED`);
+    const acts = (m.actions || []).filter(a => a.round === r).map(a => `${(a.agentId||'').toUpperCase()}▸${(a.actionId||'').toUpperCase()}${a.targetId ? '→' + a.targetId : ''}${a.outcome === 'wasted' ? ' ✗' : a.outcome === 'effective' ? ' ✓' : ''}`);
+    const combos = (STATE.combosTriggered || []).filter(c => c.round === r).map(c => c.comboName || c.comboId);
+    const events = [];
+    if (m.c2RevealedRound === r) events.push('C2 revealed');
+    if (m.c2SeveredRound === r) events.push('C2 SEVERED');
+    if (m.handoffRound === r) events.push('attribution shift');
+    if (m.sectorCascade && m.sectorCascade.round === r) events.push('SECTOR CASCADE');
+    (STATE.lifeSafetyEvents || []).filter(e => e.round === r).forEach(e => events.push('LIFE-SAFETY ' + e.node));
+    L.push(`| R${r} | ${[...spawns, ...comps].join('; ') || '—'} | ${acts.join('; ') || '—'}${combos.length ? ' · combos: ' + combos.join(', ') : ''} | ${events.join('; ') || '—'} |`);
+  }
+  L.push('');
+
+  // ---- Observed TTPs ----
+  L.push(`## 3. Observed techniques`);
+  const ttps = Object.entries(STATE.observedTTPs || {}).sort((a, b) => b[1] - a[1]);
+  if (ttps.length === 0) L.push('_None observed._');
+  else {
+    L.push(`| ID | Name | Tactic | Observed |`);
+    L.push(`|---|---|---|---|`);
+    ttps.forEach(([tid, n]) => { const T = TECHNIQUES[tid] || {}; L.push(`| ${tid} | ${T.name || '?'} | ${T.tactic || '?'} | ${n}× |`); });
+  }
+  L.push('');
+
+  // ---- Hypothesis / attribution state ----
+  L.push(`## 4. Hypothesis state (for ACH continuation)`);
+  L.push(`- **Primary hypothesis:** ${A.name || 'UNKNOWN'} — ${A.summary || ''}`);
+  if (A.techniqueAffinity) {
+    const matched = ttps.filter(([tid]) => A.techniqueAffinity.includes(tid)).map(([tid]) => tid);
+    const unmatched = ttps.filter(([tid]) => !A.techniqueAffinity.includes(tid)).map(([tid]) => tid);
+    L.push(`- Observed TTPs consistent with primary: ${matched.join(', ') || 'none'}`);
+    L.push(`- Observed TTPs **inconsistent** with primary (weigh the alternatives): ${unmatched.join(', ') || 'none'}`);
+  }
+  const alts = (M.validActors || []).filter(id => id !== A.id).map(id => THREAT_ACTORS[id]).filter(Boolean);
+  if (alts.length) L.push(`- Alternatives still open for this sector: ${alts.map(x => x.name).join(', ')}`);
+  L.push(`- IOCs collected (${(STATE.iocs || []).length}): ${(STATE.iocs || []).slice(0, 8).map(i => '`' + String(i).replace(/`/g, "'") + '`').join('; ') || 'none'}${(STATE.iocs || []).length > 8 ? ' …' : ''}`);
+  L.push('');
+
+  // ---- Scorecard ----
+  if (rubric) {
+    L.push(`## 5. Scorecard`);
+    L.push(`| Dimension | Score |`); L.push(`|---|---|`);
+    ['detection','attribution','efficiency','hardening','cascade','doctrine'].forEach(k => { if (rubric[k]) L.push(`| ${k} | ${rubric[k].score} |`); });
+    L.push('');
+    if (cfiNote) { L.push(`**Instructor note:** ${cfiNote}`); L.push(''); }
+  }
+
+  // ---- Open items for the next shift ----
+  L.push(`## 6. Open items for next shift`);
+  const open = [];
+  if (!STATE.c2Severed) open.push(`C2 ${STATE.c2Revealed ? 'located but NOT severed — SEVER is the pending action' : 'NOT located — continue TRACE / TRIANGULATE'}.`);
+  compromised.forEach(id => open.push(`${id} compromised — eradication + RESTORE; preserve forensic image first.`));
+  stressed.forEach(id => open.push(`${id} stressed — RESTORE to prevent cascade.`));
+  if (STATE.handoffFired) open.push(`Attribution shifted mid-incident — re-run ACH for ${A.name}; the prior actor's foothold may have been sold, assume two parties have been present.`);
+  if ((STATE.lifeSafetyEvents || []).length) open.push(`Life-safety escalation: ${M.lifeSafetyNarration ? M.lifeSafetyNarration.split('. ').slice(0, 2).join('. ') + '.' : 'per sector protocol.'}`);
+  if (m.sectorCascade) open.push(`Sector cascade in effect — manual / fallback operations until ${m.sectorCascade.triggerNode} is restored and re-verified.`);
+  if (!open.length) open.push('None — incident closed. Retain this ticket and the JSON case log for the post-incident review.');
+  open.forEach(o => L.push(`- [ ] ${o}`));
+  L.push('');
+  L.push(`---`);
+  L.push(`_Generated by JOSHUA PROTOCOL ${APP_VERSION} (${BUILD_ID}). Archetypes are mechanical patterns, not attributions. Technique references: MITRE ATT&CK®, ATT&CK for ICS®, D3FEND®, SPARTA. See SOURCES.md in the repository for the verification ledger behind every real-world claim._`);
+  return L.join('\n');
+}
+
+function exportHandoffTicket(rubric, cfiNote, win, reason) {
+  const md = buildHandoffTicket(rubric, cfiNote, win, reason);
+  const now = new Date();
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = now.toISOString().replace(/[:.]/g,'-').replace('T','_').slice(0,19);
+  a.href = url;
+  a.download = `joshua-protocol-handoff-${(STATE.mission && STATE.mission.id) || 'mission'}-${ts}.md`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);

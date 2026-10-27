@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.7)
+## What's in the box (v0.9.8)
 
 ### Five missions, each grounded in real incident patterns
 
@@ -172,6 +172,12 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
 
+### v0.9.8: Verification ledger, SOC-handoff ticket, TIDEBREAK demo determinism
+
+- **[SOURCES.md](SOURCES.md)** — a verification ledger: every real-world claim in the game (statistic, incident detail, advisory number, regulation, framework ID) mapped to its primary source, what exactly was checked, the date, and a status of **V** verified against primary / **C** corroborated by secondary press only / **N** not independently verified. This is the mechanism that lets the game keep growing without the accuracy decaying — a reviewer can re-check any row, and the "N" rows are an honest list of what has not been read against its primary.
+- **TICKET export** — a second export beside the JSON case log: a Markdown SOC-handoff ticket in the shape a Tier-1 hands to Tier-2 at shift change. Summary (adversary assessment, attribution shift, C2 state, compromised assets, cascades, life-safety events), round-by-round timeline, observed techniques with tactics, hypothesis state for ACH continuation (TTPs consistent and inconsistent with the primary hypothesis; alternatives still open; IOCs), scorecard with instructor note, and a checklist of open items for the next shift. Built as a pure function of game state so it is unit-tested headlessly.
+- **TIDEBREAK demo rewritten** — the adaptive pivot used to land on a random adjacent node the script never addressed, so a "textbook" walkthrough quietly lost CTRL or DALI. Adaptive pivots are now deterministic in demo mode (first eligible adjacent by id; live play keeps the random pivot) and the script teaches the counter: harden the likely pivot target, then close a **KILL BOX** with two DISRUPTs on adjacent nodes — including spending a DISRUPT on an empty node to deny a pivot onto the vessel. 10/10 runs: nothing compromised, two KILL BOXes, one narrated pivot.
+
 ### v0.9.7: Insider depth, D3FEND as a real framework, protocol-centric detection plays
 
 - **GHOSTWIRE `insiderChain`** — six stages from the CERT National Insider Threat Center models (IT sabotage / theft of IP / fraud): precipitating event → entitlement accumulation → crown-jewel reconnaissance → staging + archiving → exfiltration → after-termination sabotage. Grounded in the SEI/CERT *Common Sense Guide to Mitigating Insider Threats*, 7th ed. (Sep 2022, 22 practices), *The CERT Guide to Insider Threats* (Cappelli, Moore, Trzeciak, 2012), and CERT's departing-insider pattern report (DTIC ADA585504: "many insiders who stole IP did so within 30 days of their termination"). Affinity 7 → 11.
@@ -287,7 +293,6 @@ Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4
 
 Open priorities:
 - **Multi-adversary scenarios** — two actors on one board (e.g. CRYO + VOLTFORGE), each with its own C2 and technique pool, forcing the ACH gate to disentangle two coherent hypotheses. The highest-leverage teaching feature left.
-- **SOC-handoff export** — debrief → formatted incident ticket
 - Sound (Web Audio, opt-in)
 
 ---
@@ -318,4 +323,4 @@ Open priorities:
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.7** (October 2026) · BUILD `HUNT-20261027-1634Z`
+Current version: **v0.9.8** (October 2026) · BUILD `HUNT-20261027-1655Z`
