@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261027-1655Z';
-const STAMP_UTC = '2026-10-27T16:55Z';
-const APP_VERSION = 'v0.9.8';
+const BUILD_ID = 'HUNT-20261027-1658Z';
+const STAMP_UTC = '2026-10-27T16:58Z';
+const APP_VERSION = 'v0.9.9';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -2835,11 +2835,11 @@ const DEMOS = {
         playerActions: [
           { agent: 'VIGIL', action: 'scan', target: 'NWATCH-2' },
           { agent: 'VIGIL', action: 'trace', target: null },
-          { agent: 'ANCHOR', action: 'harden', target: 'KEYSTONE' },
+          { agent: 'WRAITH', action: 'disrupt', target: 'KEYSTONE' },
         ],
         narration: [
           { phase: 'INTEL', text: 'Round 2. New activity on NWATCH-2 — and the RPO vehicle is also near it. SPARTA technique EX-0014 is signal jamming. Two-vector campaign: ground intrusion plus orbital interference. Classic APT playbook — make you fight on multiple fronts.' },
-          { phase: 'PLAN', text: 'TRIANGULATE setup: VIGIL ▸ SCAN NWATCH-2 (1 AP) plus VIGIL ▸ TRACE (2 AP) — guaranteed C2 reveal once SCAN confirms NWATCH-2. ANCHOR hardens KEYSTONE (1 AP) where we suspect the foothold.' },
+          { phase: 'PLAN', text: 'TRIANGULATE setup: VIGIL ▸ SCAN NWATCH-2 (1 AP) plus VIGIL ▸ TRACE (2 AP) — guaranteed C2 reveal once SCAN confirms NWATCH-2. And WRAITH ▸ DISRUPT KEYSTONE (2 AP): the recon threat we confirmed in round one has to be cut before it matures, hardened or not. Full 5 AP. KINGFISHER is ADAPTIVE — expect a pivot off KEYSTONE, and expect it to go toward MCC, because command authority is what an aerospace APT wants.' },
         ],
       },
       {
@@ -2851,21 +2851,21 @@ const DEMOS = {
           { agent: 'WRAITH', action: 'disrupt', target: 'NWATCH-2' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 3. C2 is at KEYSTONE. Standard play would be SEVER right away, but I want to bulwark first. KINGFISHER is ADAPTIVE — when we DISRUPT, they will pivot to an adjacent node. We need to be ready for that pivot.' },
-          { phase: 'PLAN', text: 'BULWARK on MCC (two HARDENs, 2 AP) for +1 bonus resilience, plus DISRUPT NWATCH-2 (2 AP). Total 4 AP. Watch what happens after the disrupt — KINGFISHER will pivot to an adjacent node and we want MCC bulletproof for that.' },
+          { phase: 'INTEL', text: 'Round 3. C2 is at KEYSTONE, and the pivot went exactly where I said: MCC. It is sitting on a hardened node, so it will hold a round. Standard play would be SEVER right away, but I want to bulwark mission control first — if MCC falls we lose command authority over the whole constellation, and that is the one outcome we cannot recover from in-mission.' },
+          { phase: 'PLAN', text: 'BULWARK on MCC (two HARDENs, 2 AP) for +1 bonus resilience, plus WRAITH ▸ DISRUPT NWATCH-2 (2 AP). 4 AP. Watch the pivot again after the disrupt — with NWATCH-2 cut, the next adjacent node toward the ground is KEYSTONE itself.' },
         ],
       },
       {
         round: 4,
         threatSpawns: [],
         playerActions: [
-          { agent: 'WRAITH', action: 'disrupt', target: 'NWATCH-1' },
-          { agent: 'WRAITH', action: 'disrupt', target: 'NWATCH-2' },
-          { agent: 'ANCHOR', action: 'harden', target: 'MCC' },
+          { agent: 'WRAITH', action: 'disrupt', target: 'MCC' },
+          { agent: 'WRAITH', action: 'disrupt', target: 'KEYSTONE' },
+          { agent: 'ANCHOR', action: 'harden', target: 'NWATCH-1' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 4. As predicted, KINGFISHER pivoted after we hit NWATCH-2. They are adaptive. Time for the counter: KILL BOX. Two DISRUPTs on adjacent nodes block all adversary pivots this round.' },
-          { phase: 'PLAN', text: 'KILL BOX setup: WRAITH ▸ DISRUPT NWATCH-1 (2 AP) + WRAITH ▸ DISRUPT NWATCH-2 (2 AP). NWATCH-1 and NWATCH-2 share a direct crosslink in the constellation topology, so they are adjacent — KILL BOX fires. ANCHOR ▸ HARDEN MCC (1 AP) with the leftover action point. Total 5 AP exactly. The combo blocks any pivot from this disrupt. Giving up offense for one round to break their adaptability is worth it against an APT.' },
+          { phase: 'INTEL', text: 'Round 4. Two live threats now, MCC and KEYSTONE — both ground segment, and they are adjacent. That is the KILL BOX setup: two DISRUPTs on adjacent nodes in one round block every pivot. Notice the pattern across three rounds: every time we hit a satellite, the campaign fell back toward the ground. Aerospace APTs want the uplink, not the bus.' },
+          { phase: 'PLAN', text: 'KILL BOX: WRAITH ▸ DISRUPT MCC (2 AP) + WRAITH ▸ DISRUPT KEYSTONE (2 AP). Both live threats cut, no pivot possible. ANCHOR ▸ HARDEN NWATCH-1 (1 AP) — the imager we have not touched yet. 5 AP. Next round: sever.' },
         ],
       },
       {
@@ -2876,12 +2876,12 @@ const DEMOS = {
           { agent: 'ANCHOR', action: 'harden', target: 'KEYSTONE' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 5. Pivots blocked, kill chains broken, MCC bulwarked. Now we sever. KEYSTONE is the C2.' },
+          { phase: 'INTEL', text: 'Round 5. Board is clear: pivots blocked, both ground-segment threats cut, MCC bulwarked. KEYSTONE is the C2 — in the real world, this is the ground station whose management plane the adversary owns, the KA-SAT pattern. Now we sever.' },
           { phase: 'PLAN', text: 'WRAITH ▸ SEVER C2 at KEYSTONE (3 AP). ANCHOR hardens KEYSTONE (1 AP) as a final hedge. Mission complete on sever — KINGFISHER\'s aerospace campaign is finished. Constellation operationally normal.' },
         ],
       },
     ],
-    outro: 'Mission complete by round 5. Aerospace lessons: ground segment is your defense priority because it is the gateway to orbital command. Adaptive actors require special handling — KILL BOX exists specifically to deny them their pivot. Always assume an APT is patient. The two-vector campaign — ground intrusion plus orbital interference — is the standard nation-state playbook for aerospace targeting.',
+    outro: 'Mission complete by round 5 with nothing compromised. Aerospace lessons: ground segment is your defense priority because it is the gateway to orbital command. Adaptive actors require special handling — KILL BOX exists specifically to deny them their pivot. Always assume an APT is patient. The two-vector campaign — ground intrusion plus orbital interference — is the standard nation-state playbook for aerospace targeting.',
   },
 
   'TIDEBREAK': {

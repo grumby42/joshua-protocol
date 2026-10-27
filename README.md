@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.8)
+## What's in the box (v0.9.9)
 
 ### Five missions, each grounded in real incident patterns
 
@@ -171,6 +171,12 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Reuses `STATE.metrics` + `STATE.combosTriggered` + `STATE.lifeSafetyEvents` (now with new `metrics.compromisesByRound`, `metrics.handoffRound`, `metrics.handoffFrom/To` tracking)
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
+
+### v0.9.9: NIGHTWATCH demo correction (and a correction to the v0.9.8 record)
+
+- **Correction.** The v0.9.8 release note and commit message said all five instructor demos finished "with nothing compromised." That was true for four. The NIGHTWATCH walkthrough scanned and hardened the round-one KEYSTONE threat but never DISRUPTed it, so it matured at round 4 and KEYSTONE was compromised in every run. The harness output was there; the claim was written before it was read. Logged here so the record is accurate, not quietly fixed.
+- **NIGHTWATCH demo rewritten to the real board.** Round 2 now spends its fifth AP on `WRAITH ▸ DISRUPT KEYSTONE`; the narration describes the deterministic adaptive pivots the engine actually makes (KEYSTONE → MCC at round 2, NWATCH-2 → KEYSTONE at round 3) and closes with a **KILL BOX** on MCC + KEYSTONE at round 4 before severing at round 5. Teaching line: every time the satellite is hit, an aerospace APT falls back toward the ground segment — the uplink is the prize, not the bus.
+- **Verified headlessly, 8× per mission: five for five, WIN, nothing compromised** — BLACKFROST R6, NIGHTWATCH R5 (TRIANGULATE + KILL BOX), TIDEBREAK R6, HEARTLINE R6, RAILGUARD R6. This is the claim v0.9.8 should have made, now with the evidence behind it.
 
 ### v0.9.8: Verification ledger, SOC-handoff ticket, TIDEBREAK demo determinism
 
@@ -323,4 +329,4 @@ Open priorities:
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.8** (October 2026) · BUILD `HUNT-20261027-1655Z`
+Current version: **v0.9.9** (October 2026) · BUILD `HUNT-20261027-1658Z`

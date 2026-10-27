@@ -880,4 +880,4 @@ project: time, asset, action, value_before, value_after, caller, session_match
 
 ---
 
-*Appendix generated for Joshua Protocol v0.9.8 — BUILD HUNT-20261027-1655Z · STAMP 2026-10-27T16:55Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.9.9 — BUILD HUNT-20261027-1658Z · STAMP 2026-10-27T16:58Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
