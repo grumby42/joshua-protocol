@@ -1,6 +1,6 @@
 # Detection Engineering Appendix — think it, don't paste it
 
-> **Scope.** One starter detection *play* per threat actor archetype in the Joshua Protocol game. The game teaches *decisions under tempo*; this appendix teaches *the detection work that would catch the tradecraft the game models.* Reusable playbook units in the sense of Bollinger, Enright & Valites, *Crafting the InfoSec Playbook* (O'Reilly) and Don Murdoch, *Blue Team Handbook: SOC, SIEM, and Threat Hunting Use Cases*.
+> **Scope.** One starter detection *play* per threat actor archetype in the Joshua Protocol game (Plays 1–8), plus two protocol-centric plays (9–10) for exposures that belong to the wire rather than to any actor. The game teaches *decisions under tempo*; this appendix teaches *the detection work that would catch the tradecraft the game models.* Reusable playbook units in the sense of Bollinger, Enright & Valites, *Crafting the InfoSec Playbook* (O'Reilly) and Don Murdoch, *Blue Team Handbook: SOC, SIEM, and Threat Hunting Use Cases*.
 >
 > **Each play has seven fields.** Fill all seven when you adapt one for your environment:
 >
@@ -731,6 +731,147 @@ where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vida
 
 ---
 
+## Play 9 · HL7 / DICOM interface tampering (HEARTLINE — protocol play, not actor play)
+
+The first eight plays are organised by adversary. This one and the next are organised by **protocol**, because in healthcare and rail the exposure is a property of the wire, not of who is on it: any actor on the segment inherits it.
+
+### Objective
+Detect adversary-in-the-middle manipulation (T1557) of clinical interface traffic — HL7 v2 orders/results between EHR, LIS and pharmacy, and DICOM imaging between modalities and PACS. The reason this is a play of its own: HL7 v2's de-facto transport, MLLP, "does not natively support any encryption or authentication" (Google Cloud Healthcare API documentation), and the common mitigation is to wrap the TCP connection in a VPN rather than to authenticate the messages. HHS 405(d) HICP Practice #8 (Network Management) treats these interfaces as known-exposed. An adversary on the clinical VLAN can read, alter or inject orders and results without touching the EHR itself.
+
+### Hypothesis
+On a clinical interface segment, an HL7 or DICOM message arrives at a receiving system (LIS, pharmacy, PACS, EHR interface engine) whose transport-layer source is not the documented sending system for that interface — or whose message-level sending application / facility fields (HL7 `MSH-3` / `MSH-4`; DICOM `Calling AE Title`) do not match the transport source they arrived from. Secondary: a message that modifies a patient identifier, result value or medication order outside the sending system's normal value distribution.
+
+### Data source
+Zeek with the `hl7` and `dicom` protocol analysers (or Suricata with application-layer keywords) on a SPAN/tap of the clinical interface VLAN. Interface-engine audit logs (Rhapsody, Cloverleaf, Mirth/NextGen Connect, InterSystems) — these record sender, receiver, message control ID and ACK status per message. PACS association logs (AE title, calling IP). The interface inventory (every HL7/DICOM interface, its documented sender, receiver, port and AE titles) as ground truth — if you don't have this, building it is step one.
+
+### Starter logic
+```
+# Ground truth: the interface inventory
+interfaces = { (dest_ip, dest_port) : { sender_ip, msh3_app, msh4_facility, ae_title_calling } }
+
+source: zeek_hl7 | zeek_dicom | interface_engine_audit
+join: interfaces on (dest_ip, dest_port)
+where (ANY):
+  # transport source is not the documented sender
+  src_ip != interfaces.sender_ip
+  # message claims an identity its transport does not match
+  or (hl7.msh3 != interfaces.msh3_app or hl7.msh4 != interfaces.msh4_facility)
+  or (dicom.calling_ae != interfaces.ae_title_calling)
+  # a sender that normally emits one message type starts emitting another
+  or hl7.msh9_type not in baseline_message_types(src_ip, 90d)
+  # result / order value outside the sending system's distribution
+  or (hl7.msh9_type in ("ORU^R01","RDE^O11","OMP^O09") and value_zscore(hl7.obx5 | hl7.rxe) > 4)
+project: time, src_ip, dest_ip, interface_name, msh3, msh4, msh9_type, patient_id_hash, deviation
+```
+
+### Known false positives
+- Interface-engine failover: the backup engine's IP is a legitimate second sender (put it in the inventory)
+- Vendor remote-support sessions replaying test messages (should be ticketed; see Play 6)
+- Modality replacements / PACS migrations changing AE titles (change-management event)
+- Downtime-procedure re-sends after an EHR outage (bulk replays with old timestamps — correlate with the outage window)
+- Documentation drift — the inventory is stale (fix the inventory, not the rule)
+
+### Response / triage
+1. **Do not act on the clinical system first.** Confirm with the interface engine's own audit log whether the message was processed, ACKed and delivered — that tells you whether a clinician has already seen an altered result or order.
+2. **If a result or order was altered and delivered**: this is a patient-safety event. Notify the patient-safety officer and the clinical lead for the affected service per hospital policy; the clinical team re-verifies the affected results/orders against the source system (the analyser, the prescriber). Preserve the interface-engine message store.
+3. **Contain the segment**: isolate the rogue source; if the source is a legitimate host, treat it as compromised (pivot to Play 1 / Play 8).
+4. **Report**: HHS OCR if PHI integrity is affected; FDA MedWatch if a device's output was altered; H-ISAC for sector sharing.
+
+### Maintenance & trend
+- **Baseline**: 90 days per interface — message types, volume per hour, value distributions for high-risk result and order types.
+- **Tune**: the inventory is the control. Review it on every interface change; alert on any interface not in it.
+- **Trends**: a new sender IP appearing on multiple interfaces at once → segment compromise, not a config change. Value-distribution drift on one analyser → instrument fault first, then adversary.
+
+### Real anchors
+- Google Cloud Healthcare API documentation, HL7v2 concepts — "MLLP does not natively support any encryption or authentication"
+- HHS 405(d) Health Industry Cybersecurity Practices, Practice #8 Network Management
+- MITRE ATT&CK T1557 Adversary-in-the-Middle; T1565.001 Stored Data Manipulation
+- Zeek `hl7` / `dicom` analyser packages
+- FDA Medical Device Cybersecurity guidance (2023) for device-output integrity
+
+### Evolve it
+- *Easy*: alert on unknown source IPs to interface ports. Attacker spoofs or compromises the legitimate sender.
+- *Harder*: validate message-level identity fields against transport identity. Attacker forges MSH-3/MSH-4 to match.
+- *Toughest*: value-distribution and clinical-plausibility checks on results and orders — an altered potassium or insulin dose is caught by the content, not the envelope. That is a detection the attacker cannot evade by fixing headers.
+
+### Pivot to
+- The receiving system's audit trail: which clinician viewed the altered message, and when
+- The sending host's EDR timeline (how did an adversary reach the clinical VLAN?)
+- Play 1 (CRYO) if the segment compromise is ransomware staging; Play 8 (HOLLOWKEY) if the source authenticated with valid credentials
+
+---
+
+## Play 10 · VHF cab-signalling / trackside command anomalies (RAILGUARD — protocol play)
+
+### Objective
+Detect unauthorised command transmission on legacy rail radio and trackside protocols — the Polish August 2023 pattern, in which approximately 20 trains were halted by radio-stop commands sent over the legitimate VHF cab-signalling system (Polish ABW investigation; TheRecord / Euronews coverage). The protocol was safety-engineered to fail safe, not cyber-engineered to authenticate: any transmitter in range that sends the right tones is obeyed. EN 50159:2010+A1:2020 (*Safety-related communication in transmission systems*) lists cryptographic techniques among its defence methods for transmission systems with unauthorised-access risk; most legacy deployments predate it.
+
+### Hypothesis
+A command is received by rolling stock or trackside equipment that (a) did not originate from an authorised transmitter — by RF direction-finding, by signal characteristics, or by absence from the dispatcher's command log — or (b) is inconsistent with the operational state (an emergency stop with no dispatcher-initiated cause; a parameter change on an interlocking or grade crossing with no authorised engineering session).
+
+### Data source
+This play has an RF half and an IT half.
+- **RF**: spectrum monitoring receivers along corridors (fixed or on-train SDRs) logging command-tone events with timestamp, frequency, received signal strength and, where available, direction-finding bearing. Transmitter authorisation inventory (every licensed base and cab transmitter, location, hours).
+- **IT**: dispatcher command log (CAD/dispatch system); PTC / interlocking / grade-crossing controller audit logs where the equipment produces them; engineering-workstation session logs; TSA SD 1580/82-2022-01C-required logging for critical cyber systems.
+
+### Starter logic
+```
+# RF half — command events not matched to an authorised transmitter
+source: rf_monitor_log
+where: event_type in ("radio_stop", "emergency_stop_tone", "cab_signal_command")
+join_optional: dispatcher_command_log on time within ±30s and corridor
+where: no matching dispatcher command
+join_optional: transmitter_inventory on bearing/location within tolerance
+where: no authorised transmitter in that bearing
+      or received_signal_strength outside the profile of the nearest authorised transmitter
+project: time, corridor, event_type, frequency, rssi, bearing, nearest_authorised_tx, dispatcher_match
+
+# IT half — trackside parameter or command changes without an engineering session
+source: interlocking_audit | grade_crossing_audit | ptc_backoffice_api_log
+where: action in ("parameter_write", "command_issue", "config_change")
+join_optional: engineering_session_log on asset, time ±15m
+where: no_matching_session
+   or session_user not in authorised_engineers(asset)
+   or (ptc_api.caller not in authorised_api_principals)        # T0871
+project: time, asset, action, value_before, value_after, caller, session_match
+```
+
+### Known false positives
+- Legitimate dispatcher-initiated emergency stops (will match the dispatcher log — that is the point of the join)
+- Maintenance-of-way crews using handheld radios within procedure (should be in the inventory with hours)
+- RF propagation anomalies producing phantom events on marginal receivers (tune the RSSI floor)
+- Scheduled engineering sessions whose ticket closed early / late (widen the session window before blaming the operator)
+
+### Response / triage
+1. **Safety first, forensics second.** An unexplained stop is handled as a safety event by operations under FRA 49 CFR Part 236 Subpart I fallback procedures; the security team's job is to tell operations within minutes whether it was authorised.
+2. **If unauthorised RF command confirmed**: notify TSA Transportation Security Operations Center per SD 1580/82-2022-01C and FRA; hand bearing/time data to law enforcement for direction-finding (in Poland, arrests followed within days).
+3. **If trackside parameter change without session**: treat the asset as compromised; restore known-good parameters from the engineering baseline; the asset stays under flagman / manual authority until re-verified.
+4. **Correlate the two halves**: an RF event and an IT event in the same window is a coordinated campaign (IRONHAZE pattern — RF trackside plus DDoS/IT), not two incidents.
+
+### Maintenance & trend
+- **Baseline**: 90 days of RF command-event rate per corridor; parameter-change rate per asset; engineering-session cadence.
+- **Tune**: the transmitter inventory and the engineering-authorisation list are the controls — audit both quarterly.
+- **Trends**: events clustered on one corridor at odd hours → a mobile transmitter working the line. Parameter writes trending up on one asset class → firmware/tooling change or adversary staging.
+
+### Real anchors
+- Polish Agencja Bezpieczeństwa Wewnętrznego (ABW) statements, Aug–Sep 2023; TheRecord, Euronews coverage (~20 trains halted; two arrests)
+- EN 50159:2010+A1:2020, *Railway applications — Communication, signalling and processing systems — Safety-related communication in transmission systems* (BSI)
+- TSA Security Directive 1580/82-2022-01C (rail cybersecurity mitigation actions and testing)
+- FRA 49 CFR Part 236 Subpart I, §236.1033 (PTC communications and security requirements)
+- MITRE ATT&CK for ICS T0855 / T1692.001 Unauthorized Command Message; T0836 Modify Parameter; T0871 Execution Through API
+
+### Evolve it
+- *Easy*: alert on any emergency-stop tone. Drowns in legitimate stops.
+- *Harder*: join to the dispatcher log and transmitter inventory. Catches the rogue transmitter; misses a compromised authorised one.
+- *Toughest*: cryptographic authentication of command messages (EN 50159 defence method) so an unauthenticated command is rejected by the receiver, not merely detected. That is the architectural fix — detection is the bridge until it is deployed.
+
+### Pivot to
+- RAILGUARD Play 3 (IRONHAZE) for the DDoS half of a coordinated campaign
+- Play 7 (VOLTFORGE) if the IT-side parameter changes show LotL tradecraft on the back-office
+- Sector ISAC (Surface Transportation ISAC) — a rogue transmitter pattern on one operator's corridors is usually not unique to them
+
+---
+
 ## Detection authoring notes
 
 - **Build these for authoring, not copying.** Every environment is different. The seven-field schema is the discipline; the specific logic is yours.
@@ -739,4 +880,4 @@ where: edr.ioc in known_infostealer_families  // RedLine, Raccoon, LummaC2, Vida
 
 ---
 
-*Appendix generated for Joshua Protocol v0.9.6 — BUILD HUNT-20261027-1621Z · STAMP 2026-10-27T16:21Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.9.7 — BUILD HUNT-20261027-1634Z · STAMP 2026-10-27T16:34Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

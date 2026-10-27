@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#03060a">
-<title>JOSHUA PROTOCOL v0.9.6</title>
+<title>JOSHUA PROTOCOL v0.9.7</title>
 <style>
   :root {
     --bg-deep: #03060a;
@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261027-1621Z';
-const STAMP_UTC = '2026-10-27T16:21Z';
-const APP_VERSION = 'v0.9.6';
+const BUILD_ID = 'HUNT-20261027-1634Z';
+const STAMP_UTC = '2026-10-27T16:34Z';
+const APP_VERSION = 'v0.9.7';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -1368,17 +1368,17 @@ const TECHNIQUES = {
     desc:'Adversaries exploit vulnerabilities in internet-facing systems.',
     novice:'Hacker breaks into a public website or VPN.',
     tools:['Suricata','Snort','Zeek','WAF'],
-    counters:['D3-NTA: Network Traffic Analysis','Patch management'] },
+    counters:['D3-NTA: Network Traffic Analysis','Patch management','D3-SU: Software Update (CISA KEV patch cadence)'] },
   'T1078': { fw:'attack', name:'Valid Accounts', tactic:'Initial Access',
     desc:'Use of legitimate credentials to bypass detection.',
     novice:'Adversary uses stolen passwords to log in.',
     tools:['Sigma','Velociraptor','UEBA platforms'],
-    counters:['D3-MFA: Multi-Factor Authentication','D3-CR: Credential Rotation'] },
+    counters:['D3-MFA: Multi-Factor Authentication','D3-ANCI: Authentication Cache Invalidation (revoke sessions) + credential rotation','D3-UGLPA: User Geolocation Logon Pattern Analysis','D3-DTP: Domain Trust Policy'] },
   'T1059': { fw:'attack', name:'Command and Scripting Interpreter', tactic:'Execution',
     desc:'Execution via PowerShell, Bash, etc.',
     novice:'Adversary runs malicious commands.',
     tools:['Sigma','Velociraptor','Sysmon'],
-    counters:['D3-PSA: Process Spawn Analysis','Application allowlisting'] },
+    counters:['D3-PA: Process Analysis','Application allowlisting'] },
   'T1053': { fw:'attack', name:'Scheduled Task/Job', tactic:'Execution, Persistence, Privilege Escalation',
     desc:'Persistence via scheduled execution.',
     novice:'Adversary plants a hidden timer to keep coming back.',
@@ -1393,19 +1393,19 @@ const TECHNIQUES = {
     desc:'Ransomware encryption stage. Final detonation.',
     novice:'Ransomware locks files and demands payment.',
     tools:['EDR','YARA','Suricata'],
-    counters:['D3-FBA: File Backup','Immutable backups'] },
+    counters:['Immutable / offline backups (D3FEND Restore tactic)','Immutable backups','D3-EDL: Executable Denylisting (low Pyramid rung — hashes rotate per victim)'] },
   'T1490': { fw:'attack', name:'Inhibit System Recovery', tactic:'Impact',
     desc:'Deletion of shadow copies, backups. Often precedes T1486.',
     novice:'Adversary destroys backups before encrypting files.',
     tools:['Sigma','Sysmon'],
-    counters:['D3-FBA: File Backup','Offline backups'] },
+    counters:['Immutable / offline backups (D3FEND Restore tactic)','Offline backups'] },
 
   // ATT&CK for ICS
   'T0883': { fw:'ics', name:'Internet Accessible Device', tactic:'Initial Access (ICS)',
     desc:'ICS devices reachable from the public internet.',
     novice:'Industrial system exposed to the open internet.',
     tools:['Shodan','Censys','GreyNoise'],
-    counters:['Network segmentation','Jump hosts'] },
+    counters:['Network segmentation','Jump hosts','D3-SU: Software Update','D3-ITF: Inbound Traffic Filtering'] },
   // v0.6: T0855 was revoked in ATT&CK for ICS v19. Current ID is T1692.001 (Unauthorized Message: Command Message).
   // We keep T0855 as a lookup alias so legacy references still resolve, and surface both IDs in the codex.
   'T0855': { fw:'ics', name:'Unauthorized Command Message', tactic:'Evasion, Impair Process Control',
@@ -1414,35 +1414,35 @@ const TECHNIQUES = {
     desc:'Adversary sends an unauthorized command message to an asset. Message may contain forged values or commands.',
     novice:'Bad commands sent to industrial equipment.',
     tools:['Zeek (modbus/dnp3)','Claroty xDome','Dragos Platform'],
-    counters:['D3-ANA: Message Authentication','Signed-command enforcement','Role-based process authorization'] },
+    counters:['Message authentication (D3FEND Message Hardening; D3-MENCR Message Encryption)','Signed-command enforcement','Role-based process authorization'] },
   'T1692.001': { fw:'ics', name:'Unauthorized Message: Command Message', tactic:'Evasion, Impair Process Control',
     aliases: ['T0855'],
     desc:'Adversary sends an unauthorized command message, often spoofed as a trusted source, to coerce an asset into a different state. Current ATT&CK for ICS v20 ID (replaces revoked T0855).',
     novice:'Bad commands sent to industrial equipment under a trusted name.',
     tools:['Zeek (modbus/dnp3)','Claroty xDome','Dragos Platform'],
-    counters:['D3-ANA: Message Authentication','Signed-command enforcement','Role-based process authorization'] },
+    counters:['Message authentication (D3FEND Message Hardening; D3-MENCR Message Encryption)','Signed-command enforcement','Role-based process authorization'] },
   'T1692.002': { fw:'ics', name:'Unauthorized Message: Reporting Message', tactic:'Evasion, Impair Process Control',
     aliases: ['T0856'],
     desc:'Adversary sends unauthorized reporting messages (status, telemetry) to make the operator see a false picture of the process. Enables Impact without the operator reacting. Replaces revoked T0856 in ATT&CK for ICS v19+.',
     novice:'Fake sensor readings sent to the operators so they see the wrong thing.',
     tools:['Zeek (modbus/dnp3)','Historian anomaly detection'],
-    counters:['D3-ANA: Message Authentication','Cross-source telemetry validation','Out-of-band verification'] },
+    counters:['Message authentication (D3FEND Message Hardening; D3-MENCR Message Encryption)','Cross-source telemetry validation','Out-of-band verification'] },
   'T1691.001': { fw:'ics', name:'Block OT Message: Command Message', tactic:'Inhibit Response Function',
     aliases: ['T0803'],
     desc:'Adversary blocks legitimate command messages from reaching the field, denying operators control. Replaces revoked T0803 in ATT&CK for ICS v19+.',
     novice:'Operator commands blocked from reaching the equipment.',
     tools:['Zeek','Network taps','Historian correlation'],
-    counters:['D3-ANA','Redundant command paths','Latency alerting'] },
+    counters:['Message authentication (D3FEND Message Hardening)','Redundant command paths','Latency alerting'] },
   'T0832': { fw:'ics', name:'Manipulation of View', tactic:'Impact',
     desc:'Operator HMI shows false readings while system is being manipulated.',
     novice:'Operator displays show fake data while attack progresses.',
     tools:['Process historian baselining','Out-of-band sensors'],
-    counters:['D3-IVV: Independent Variable Verification'] },
+    counters:['Independent process-variable verification (out-of-band sensing)'] },
   'T0829': { fw:'ics', name:'Loss of View', tactic:'Impact',
     desc:'Operators lose their window into the process — HMIs go dark, historians stop updating. The process may still be running, but no one can see it. Pairs with manipulation techniques to buy adversary time.',
     novice:'Operators lose the ability to see what the equipment is doing.',
     tools:['HMI heartbeat monitoring','Historian write-rate alerting','Out-of-band telemetry'],
-    counters:['D3-RA: Resource Access Pattern Analysis','Redundant HMI paths','Independent process visibility'] },
+    counters:['D3-RAPA: Resource Access Pattern Analysis','Redundant HMI paths','Independent process visibility'] },
   'T0826': { fw:'ics', name:'Loss of Availability', tactic:'Impact',
     desc:'Process is rendered inoperable.',
     novice:'Equipment goes offline or stops working.',
@@ -1484,7 +1484,38 @@ const TECHNIQUES = {
     desc:'Modify flight software (FSW) in spacecraft memory — bootloader, FSW application image, or configuration tables. The highest-leverage persistence in orbit: once FSW is modified, no ground-side containment removes it; the adversary waits for a future trigger (specific uplink pattern, orbital event, timed activation) to disable or redirect the asset. CSIS, Secure World Foundation, and USSF reporting have described state-nexus concern over FSW-compromise-capability staging against commercial and defense payloads; specific public incident reporting is limited.',
     novice:'Adversary plants malicious code onboard satellite.',
     tools:['Software attestation (per-boot cryptographic measurement)','Memory checksums','Secure-boot chain verification','Ground-side build artifact signing'],
-    counters:['D3-EI: Executable Integrity','Secure boot with hardware root of trust','Signed FSW uploads with per-image counter','Dual-authority FSW upload approval'] },
+    counters:['D3-SBV: Service Binary Verification + D3-EAL: Executable Allowlisting','Secure boot with hardware root of trust','Signed FSW uploads with per-image counter','Dual-authority FSW upload approval'] },
+  // v0.9.7: insider-family techniques for GHOSTWIRE / HOLLOWKEY stage chains
+  'T1539': { fw:'attack', name:'Steal Web Session Cookie', tactic:'Credential Access',
+    desc:'Adversary steals browser session cookies — typically via infostealer malware on the user\'s device — so an authenticated session can be replayed without the password or a fresh MFA prompt. The core enabler of the 2024-2026 infostealer economy: a stolen cookie is a logged-in session, not a credential to crack.',
+    novice:'Adversary steals the browser\'s "already logged in" token.',
+    tools:['EDR browser-cookie-store access alerts','Infostealer-log market monitoring (your domain)','Session-origin anomaly on the IdP'],
+    counters:['Short session TTLs','Device-bound / token-binding sessions','Re-prompt MFA on sensitive actions','Credential Hardening: D3-MFA + D3-SPP Strong Password Policy'] },
+  'T1550.004': { fw:'attack', name:'Use Alternate Authentication Material: Web Session Cookie', tactic:'Defense Evasion, Lateral Movement',
+    desc:'Adversary replays a stolen session cookie to authenticate as the victim, bypassing password and MFA entirely because the session was already authenticated. The reason "we have MFA" is not a complete answer to infostealer-sourced access.',
+    novice:'Adversary uses the stolen "logged in" token to get in without a password.',
+    tools:['IdP session logs: new device fingerprint on an existing session','Impossible-travel on session, not just on login'],
+    counters:['Device-bound tokens','Continuous access evaluation (revoke on risk)','Session revocation as the first IR action','D3-UGLPA: User Geolocation Logon Pattern Analysis'] },
+  'T1621': { fw:'attack', name:'Multi-Factor Authentication Request Generation', tactic:'Credential Access',
+    desc:'Adversary with a valid password repeatedly triggers MFA push prompts until the user accepts one ("push fatigue" / "MFA bombing"), or socially engineers acceptance. Documented in multiple 2022-2025 intrusions; the control that defeats it is number-matching or phishing-resistant MFA.',
+    novice:'Adversary spams approval prompts until the user taps "yes".',
+    tools:['IdP: denied/expired push count per user per hour','Push accepted after N denials'],
+    counters:['Number-matching MFA','FIDO2 / passkeys (phishing-resistant)','Rate-limit and alert on push volume','D3-ANET: Authentication Event Thresholding'] },
+  'T1560': { fw:'attack', name:'Archive Collected Data', tactic:'Collection',
+    desc:'Adversary compresses or encrypts collected data (zip, 7z, rar, password-protected archives) prior to exfiltration. For the malicious insider this is the tell: a user who never archives suddenly building large archives of crown-jewel content.',
+    novice:'Adversary bundles the stolen files up before moving them out.',
+    tools:['EDR: archive-utility execution with large output','DLP: archive creation on sensitive shares','UEBA volume baseline per user'],
+    counters:['Block password-protected archives at egress','Alert on first-seen archiving by user','D3-FA: File Analysis'] },
+  'T1052.001': { fw:'attack', name:'Exfiltration Over Physical Medium: Exfiltration over USB', tactic:'Exfiltration',
+    desc:'Adversary — in practice, overwhelmingly the malicious insider — copies data to removable media. CERT insider-threat case data consistently shows removable media as a primary exfil path for departing employees stealing IP.',
+    novice:'Adversary copies the data to a USB drive and walks out.',
+    tools:['Removable-media mount events (Windows 6416, Sysmon)','DLP endpoint agent','USB device control logs'],
+    counters:['USB device control (allow-list by serial)','DLP block on sensitive classifications','Alert removable-media use by users with resignation/termination flags'] },
+  'T1567.002': { fw:'attack', name:'Exfiltration Over Web Service: Exfiltration to Cloud Storage', tactic:'Exfiltration',
+    desc:'Adversary uploads data to a personal or attacker-controlled cloud storage account (Dropbox, Google Drive, MEGA, personal OneDrive). Blends with legitimate SaaS traffic; the signal is personal-tenant destinations and volume, not the protocol.',
+    novice:'Adversary uploads the data to a personal cloud account.',
+    tools:['CASB: personal-tenant upload detection','Proxy: destination categorisation + volume','DLP on upload'],
+    counters:['CASB tenant restrictions (corporate tenants only)','Block personal cloud storage categories','Egress volume baselining per user'] },
   // v0.9.5: catalog consistency fixes — these were referenced in actor
   // affinity / mission threatMix but had no catalog entry, so lookups via
   // TECHNIQUES[tid] silently returned undefined and the codex couldn't render.
@@ -1492,7 +1523,7 @@ const TECHNIQUES = {
     desc:'Adversary stages collected data in a central location (often a staging directory on a compromised host) prior to exfiltration. Lower-noise step than exfil itself; the signature is bulk write to an unusual path by a credential that doesn\'t normally touch that path.',
     novice:'Adversary gathers files into one place to exfiltrate later.',
     tools:['File-create audit on sensitive shares','DLP agent events','SMB session audit'],
-    counters:['Honey-files in common staging paths','D3-ITV: Internal Traffic Validation','UEBA baseline on per-user file-write volumes'] },
+    counters:['Honey-files in common staging paths','D3-UDTA: User Data Transfer Analysis','UEBA baseline on per-user file-write volumes'] },
   'T1657': { fw:'attack', name:'Financial Theft', tactic:'Impact',
     desc:'Adversary monetizes access through financial theft — ransom payment, extortion, BEC fraud, direct account draining, or data-extortion payouts. Added to ATT&CK Enterprise v14 (Oct 2023) to recognize that financial impact is the actual objective of RaaS and e-crime, not merely a side effect of T1486. Mandiant M-Trends and Verizon DBIR annual reports consistently rank financial motivation as the dominant category for 2023-2026 breaches.',
     novice:'Adversary steals money or forces a payment.',
@@ -1504,14 +1535,14 @@ const TECHNIQUES = {
     desc:'Adversary blocks legitimate command messages from reaching the field, denying operators control.',
     novice:'Operator commands blocked from reaching the equipment.',
     tools:['Zeek','Network taps','Historian correlation'],
-    counters:['D3-ANA','Redundant command paths','Latency alerting'] },
+    counters:['Message authentication (D3FEND Message Hardening)','Redundant command paths','Latency alerting'] },
   'T0856': { fw:'ics', name:'Spoof Reporting Message', tactic:'Evasion, Impair Process Control (ICS)',
     canonicalId: 'T1692.002',
     legacyNote: 'Revoked in ATT&CK for ICS v19 → T1692.002 (Unauthorized Message: Reporting Message). Preserved here with its legacy ID because many public writeups still use T0856.',
     desc:'Adversary sends unauthorized reporting messages (status, telemetry) to make the operator see a false picture of the process. Enables Impact without the operator reacting.',
     novice:'Fake sensor readings sent to the operators so they see the wrong thing.',
     tools:['Zeek (modbus/dnp3)','Historian anomaly detection'],
-    counters:['D3-ANA: Message Authentication','Cross-source telemetry validation','Out-of-band verification'] },
+    counters:['Message authentication (D3FEND Message Hardening; D3-MENCR Message Encryption)','Cross-source telemetry validation','Out-of-band verification'] },
   // v0.9.4: railway signaling techniques for OP. RAILGUARD
   'T0871': { fw:'ics', name:'Execution Through API', tactic:'Execution (ICS)',
     desc:'Adversary executes functionality on an OT asset via its documented API — HMI, maintenance API, OPC-UA, DNP3, or (in rail) a train-control back-office RESTful or SCADA API. The authentication is often legitimate (stolen credentials, abused service accounts); the detection surface is API audit logs, not network traffic. CISA ICS-CERT advisories 2023-2025 document this pattern against rail dispatch and PTC back-office servers.',
@@ -1588,7 +1619,7 @@ const TECHNIQUES = {
     desc:'Adversary uses externally-exposed remote services (VPN, Citrix, RDP) with valid or default credentials for initial access or persistence.',
     novice:'Adversary logs in through a company remote-access service.',
     tools:['VPN concentrator logs','Edge appliance telemetry','Impossible-travel detection'],
-    counters:['D3-MFA: Multi-factor authentication','D3-NTA: Network Traffic Analysis','Patching edge appliances'] },
+    counters:['D3-MFA: Multi-factor authentication','D3-NTA: Network Traffic Analysis','Patching edge appliances','D3-OTP: One-time Password (minimum) — prefer D3-MFA number-matching / FIDO2'] },
   'T1059.001': { fw:'attack', name:'Command and Scripting Interpreter: PowerShell', tactic:'Execution',
     desc:'Adversary executes PowerShell commands or scripts, often with -NoProfile -ExecutionPolicy Bypass, for discovery or lateral movement. Core LotL technique.',
     novice:'Adversary runs PowerShell to blend in with admin work.',
@@ -1598,27 +1629,27 @@ const TECHNIQUES = {
     desc:'Adversary executes payloads or performs discovery via WMI (wmic.exe, Invoke-WmiMethod). Often paired with remote execution for lateral movement.',
     novice:'Adversary uses built-in Windows admin tooling to run commands.',
     tools:['Sysmon event 19/20/21','WMI-Activity log'],
-    counters:['WMI logging + hunting','Credential tiering','D3-UBA: User Behavior Analytics'] },
+    counters:['WMI logging + hunting','Credential tiering','D3-RAPA Resource Access Pattern Analysis + D3-JFAPA Job Function Access Pattern Analysis'] },
   'T1218': { fw:'attack', name:'System Binary Proxy Execution', tactic:'Defense Evasion',
     desc:'Adversary executes malicious payloads via signed, trusted Microsoft binaries (certutil, rundll32, regsvr32, mshta). Living-off-the-land binaries (LOLBins).',
     novice:'Adversary uses legitimate Windows tools to run their code.',
     tools:['Sysmon','EDR process-ancestry analysis','LOLBAS reference'],
-    counters:['Application allow-listing (WDAC)','D3-EI: Executable Integrity'] },
+    counters:['Application allow-listing (WDAC)','D3-SBV: Service Binary Verification + D3-EAL: Executable Allowlisting'] },
   'T1003.001': { fw:'attack', name:'OS Credential Dumping: LSASS Memory', tactic:'Credential Access',
     desc:'Adversary dumps the LSASS process memory to extract credentials (via comsvcs.dll MiniDump, procdump, Mimikatz).',
     novice:'Adversary extracts passwords from Windows memory.',
     tools:['Sysmon event 10','Attack Surface Reduction rules','EDR credential-access telemetry'],
-    counters:['LSASS protection (RunAsPPL)','Credential Guard','D3-CH: Credential Hardening'] },
+    counters:['LSASS protection (RunAsPPL)','Credential Guard','Credential Hardening: D3-MFA + D3-SPP Strong Password Policy','D3-PH: Platform Hardening (RunAsPPL / Credential Guard)'] },
   'T1003.003': { fw:'attack', name:'OS Credential Dumping: NTDS', tactic:'Credential Access',
     desc:'Adversary extracts the Active Directory NTDS.dit database (via ntdsutil, vssadmin shadow copies) from a domain controller to recover all domain password hashes.',
     novice:'Adversary steals the Windows domain password database.',
     tools:['DC audit logging','Volume Shadow Copy monitoring','Event ID 216, 325, 326, 327, 637 (ESENT)'],
-    counters:['DC hardening','Restrict backup operator roles','D3-CH: Credential Hardening'] },
+    counters:['DC hardening','Restrict backup operator roles','Credential Hardening: D3-MFA + D3-SPP Strong Password Policy'] },
   'T1021.001': { fw:'attack', name:'Remote Services: Remote Desktop Protocol', tactic:'Lateral Movement',
     desc:'Adversary uses stolen credentials over RDP to move between hosts. Often paired with domain-admin accounts for broad reach.',
     novice:'Adversary opens remote-desktop sessions using stolen credentials.',
     tools:['Windows Event 4624 type 10','RDP gateway logs','UEBA'],
-    counters:['Network segmentation','MFA on RDP','Tiered admin','D3-NI: Network Isolation'] },
+    counters:['Network segmentation','MFA on RDP','Tiered admin','D3-NI: Network Isolation','D3-DTP: Domain Trust Policy'] },
   'T1070.001': { fw:'attack', name:'Indicator Removal: Clear Windows Event Logs', tactic:'Defense Evasion',
     desc:'Adversary clears or selectively deletes Windows event logs (wevtutil cl, Clear-EventLog) to hide activity. VOLTFORGE operators selectively clear only the entries that would reveal them.',
     novice:'Adversary erases Windows audit records.',
@@ -1643,7 +1674,7 @@ const TECHNIQUES = {
     desc:'Adversary scans internal networks to identify services and hosts (nmap, nltest, net view). Common pre-lateral-movement discovery step.',
     novice:'Adversary maps out the internal network.',
     tools:['IDS (Suricata/Zeek)','Honeypot services'],
-    counters:['Network segmentation','Deception technology'] },
+    counters:['Network segmentation','Deception technology','D3-DO: Decoy Object (honey-services)'] },
   'T1082': { fw:'attack', name:'System Information Discovery', tactic:'Discovery',
     desc:'Adversary collects system info (systeminfo, hostname, ipconfig, net config workstation) to understand the environment and plan next steps.',
     novice:'Adversary gathers details about the compromised machine.',
@@ -1655,7 +1686,7 @@ const TECHNIQUES = {
     desc:'Adversary floods a target with network traffic to degrade or deny availability. The dominant hacktivist signature in 2024-2026 (per Europol Operation Eastwood July 2025 reporting on NoName057(16) / DDOSIA): crowdsourced-DDoS platforms + pro-Russian collectives.',
     novice:'Adversary floods a website or service with so much traffic that it stops working.',
     tools:['NetFlow baseline','DDoS mitigation (Cloudflare, Akamai, AWS Shield)','ISP scrubbing'],
-    counters:['D3-NTF: Network Traffic Filtering','Anycast absorption','Rate limiting'],
+    counters:['D3-ITF Inbound Traffic Filtering + D3-OTF Outbound Traffic Filtering','Anycast absorption','Rate limiting'],
   },
   'T1498.001': { fw:'attack', name:'Network DoS: Direct Network Flood', tactic:'Impact',
     desc:'Volumetric flood directed at victim bandwidth (SYN flood, UDP flood, HTTP flood). Botnet-driven at scale.',
@@ -1686,12 +1717,12 @@ const TECHNIQUES = {
     desc:'Adversary iterates credential guesses against an authentication endpoint. Includes password spraying, credential stuffing, and classic brute-force.',
     novice:'Adversary tries many passwords until one works.',
     tools:['Auth log monitoring (4625 Windows, auth.log Linux)','Rate-limit alerting','MFA failure spike'],
-    counters:['Account lockout policy','MFA','Impossible-travel detection','D3-MFA'] },
+    counters:['Account lockout policy','MFA','Impossible-travel detection','D3-MFA','D3-ANET: Authentication Event Thresholding','D3-AL: Account Locking'] },
   'T1565.001': { fw:'attack', name:'Stored Data Manipulation', tactic:'Impact',
     desc:'Adversary alters data at rest to influence outcomes. CyberAv3ngers overwrote PLC ladder logic with no-op code so devices lost control functions per CISA AA23-335A.',
     novice:'Adversary changes stored data to cause problems or hide activity.',
     tools:['File integrity monitoring','Configuration baseline','Historian anomaly'],
-    counters:['D3-FBA File Backup','Signed configurations','Change management'] },
+    counters:['Immutable / offline backups (D3FEND Restore tactic)','Signed configurations','Change management'] },
   'T1531': { fw:'attack', name:'Account Access Removal', tactic:'Impact',
     desc:'Adversary locks legitimate users out of accounts or devices. CyberAv3ngers renamed PLCs and enabled upload passwords, blocking operator access per CISA AA23-335A.',
     novice:'Adversary locks owners out of their own systems.',
@@ -1702,12 +1733,12 @@ const TECHNIQUES = {
     desc:'Adversary enumerates local accounts on a host (net user, net localgroup administrators) to understand privilege landscape before lateral movement. IAB verification step.',
     novice:'Adversary looks up what accounts exist on the machine.',
     tools:['Sysmon event 1','Windows Event 4798'],
-    counters:['UEBA behavioral baseline','Credential-tiering enforcement'] },
+    counters:['UEBA behavioral baseline','Credential-tiering enforcement','D3-DO: Decoy Object (honey-accounts)'] },
   'T1555.003': { fw:'attack', name:'Credentials from Password Stores: Credentials from Web Browsers', tactic:'Credential Access',
     desc:'Adversary (often via infostealer malware — Lumma, RedLine, Vidar) extracts saved passwords, session cookies, and tokens from browser credential stores. Session cookie theft enables MFA bypass. The 2025-2026 infostealer economy produced billions of credential records traded on criminal markets.',
     novice:'Malware steals passwords and session cookies saved in the browser.',
     tools:['EDR process monitoring (chrome.exe child reads)','Browser integrity','Sysmon event 11 (FileCreate)'],
-    counters:['Hardened browser profile','Short session TTL','Device-bound tokens','D3-CH Credential Hardening'] },
+    counters:['Hardened browser profile','Short session TTL','Device-bound tokens','Credential Hardening: D3-MFA + D3-SPP Strong Password Policy'] },
   // v0.9.1 — TIDEMARK cellular-modem signature (ZPMC-pattern per 2024 U.S.
   // House Select Committee on CCP report + CISA/USCG maritime-cyber briefings).
   'T1205': { fw:'attack', name:'Traffic Signaling', tactic:'Command and Control, Persistence, Defense Evasion',
@@ -1737,6 +1768,87 @@ const TECHNIQUES = {
     counters:['OT firewalling at Purdue L2/L3 boundary','PLC audit logging','Change-management correlation'] },
 };
 
+
+// =============================================================================
+// v0.9.7: D3FEND — structured defensive-technique catalog.
+// Every ID and name below was verified against MITRE D3FEND 1.3.0 (Dec 2025)
+// via the ATT&CK-mitigations mapping (next.d3fend.mitre.org). Tactic
+// assignment follows the D3FEND matrix. `counters` for each attack technique
+// in TECHNIQUES cite these IDs; the codex computes the attack→defense map by
+// scanning those strings, so the mapping cannot drift from the text.
+// =============================================================================
+const D3FEND_TACTICS = ['Model','Harden','Detect','Isolate','Deceive','Evict','Restore'];
+const D3FEND = {
+  // ---- Harden ----
+  'D3-MFA':   { tactic:'Harden', name:'Multi-factor Authentication',
+                desc:'Require more than one authentication factor. Number-matching or FIDO2/passkeys resist push fatigue (T1621); a replayed session cookie (T1550.004) bypasses MFA entirely, so pair with D3-ANCI and short session TTLs.' },
+  'D3-SPP':   { tactic:'Harden', name:'Strong Password Policy',
+                desc:'Length, uniqueness and breach-list screening. Limits the blast radius of infostealer-sourced credentials (T1555.003) that are reused across services.' },
+  'D3-OTP':   { tactic:'Harden', name:'One-time Password',
+                desc:'Single-use codes as a second factor. Weaker than number-matching/FIDO2 against real-time phishing proxies, stronger than password alone.' },
+  'D3-DTP':   { tactic:'Harden', name:'Domain Trust Policy',
+                desc:'Constrain which domains and tenants are trusted for authentication. Cuts lateral paths that valid-account abuse (T1078) rides across trusts.' },
+  'D3-EAL':   { tactic:'Harden', name:'Executable Allowlisting',
+                desc:'Only approved binaries run (e.g. WDAC). Directly blocks LOLBin abuse chains (T1218) only when the allowlist excludes the abused signed binaries — otherwise pair with D3-PA.' },
+  'D3-EDL':   { tactic:'Harden', name:'Executable Denylisting',
+                desc:'Block known-bad binaries by hash or signer. Low on the Pyramid of Pain: attackers rotate hashes per victim.' },
+  'D3-SU':    { tactic:'Harden', name:'Software Update',
+                desc:'Patch. The control that would have prevented T1190 edge-appliance exploitation in most CISA KEV-listed intrusions, and MS17-010 in NHS WannaCry.' },
+  'D3-PH':    { tactic:'Harden', name:'Platform Hardening',
+                desc:'Secure configuration of OS and firmware — secure boot, credential guard, disabled legacy protocols. Reduces T1003 credential-dumping yield.' },
+  'D3-MENCR': { tactic:'Harden', name:'Message Encryption',
+                desc:'Encrypt message content in transit. For OT/rail/health protocols (IEC 104, VHF signalling, HL7/DICOM) this is the gap: legacy protocols ship cleartext, enabling T1557 and T0855/T1692.001.' },
+  'D3-SBV':   { tactic:'Harden', name:'Service Binary Verification',
+                desc:'Verify integrity of service and flight-software binaries before load. The ground-side analogue of signed FSW uploads against PER-0001.' },
+  // ---- Detect ----
+  'D3-NTA':   { tactic:'Detect', name:'Network Traffic Analysis',
+                desc:'Analyse flows and protocol content for anomalies — beaconing (T1090/T1571/T1573), DDoS onset (T1498), protocol-aware OT monitoring (Zeek modbus/dnp3/iec104). The workhorse detection technique in this game.' },
+  'D3-PA':    { tactic:'Detect', name:'Process Analysis',
+                desc:'Examine process trees, parents and command lines. Catches office-parented script interpreters (T1059.001), LSASS access (T1003.001), ntdsutil / vssadmin / wevtutil chains (VOLTFORGE).' },
+  'D3-FA':    { tactic:'Detect', name:'File Analysis',
+                desc:'Inspect files for malicious content or anomalous creation. First-seen archive creation by a user who never archives (T1560) is a high-signal insider tell.' },
+  'D3-UDTA':  { tactic:'Detect', name:'User Data Transfer Analysis',
+                desc:'Baseline and alert on data volume moved per user. The exfiltration detection for T1052.001 (USB), T1567.002 (cloud) and double-extortion staging (T1074/T1657).' },
+  'D3-RAPA':  { tactic:'Detect', name:'Resource Access Pattern Analysis',
+                desc:'Alert when a principal touches resources outside its historical pattern. The core of UEBA for GHOSTWIRE drift and HOLLOWKEY first-session recon.' },
+  'D3-JFAPA': { tactic:'Detect', name:'Job Function Access Pattern Analysis',
+                desc:'Compare access against what the role should need. Catches the entitlement-accumulation stage of the CERT insider model.' },
+  'D3-UGLPA': { tactic:'Detect', name:'User Geolocation Logon Pattern Analysis',
+                desc:'Impossible-travel and first-seen geography on logon. The first-15-minutes detection for infostealer-sourced access (HOLLOWKEY).' },
+  'D3-ANET':  { tactic:'Detect', name:'Authentication Event Thresholding',
+                desc:'Alert on authentication volume — brute force (T1110), password spray, and MFA push floods (T1621).' },
+  'D3-FCR':   { tactic:'Detect', name:'File Content Rules',
+                desc:'Rule-based content inspection (YARA, DLP classifiers). Blocks or flags sensitive content at staging and egress.' },
+  // ---- Isolate ----
+  'D3-NI':    { tactic:'Isolate', name:'Network Isolation',
+                desc:'Segmentation and containment — Purdue L3/L4 boundaries, IEC 62443 zones and conduits, EDR network containment on a compromised host. The in-game DISRUPT / HARDEN proxy.' },
+  'D3-ITF':   { tactic:'Isolate', name:'Inbound Traffic Filtering',
+                desc:'Deny-by-default inbound at the edge. Removes exposed OT devices (T0883) from the attack surface and absorbs volumetric DDoS (T1498) with upstream scrubbing.' },
+  'D3-OTF':   { tactic:'Isolate', name:'Outbound Traffic Filtering',
+                desc:'Deny-by-default egress. Breaks C2 (T1090/T1571/T1573) and cloud exfil (T1567.002); for OT, the only answer to a cellular modem is a carrier-level allowlist.' },
+  'D3-SCF':   { tactic:'Isolate', name:'System Call Filtering',
+                desc:'Restrict the system calls a process may make (seccomp, constrained language mode). Blunts script-interpreter abuse (T1059).' },
+  // ---- Deceive ----
+  'D3-DO':    { tactic:'Deceive', name:'Decoy Object',
+                desc:'Honey-files, honey-credentials, decoy accounts. Any touch is high-signal — ideal in crown-jewel shares to catch insider reconnaissance and IAB enumeration (T1087.001).' },
+  // ---- Evict ----
+  'D3-ANCI':  { tactic:'Evict', name:'Authentication Cache Invalidation',
+                desc:'Revoke sessions and tokens. The FIRST response action against compromised credentials: a password reset alone leaves a replayed cookie (T1550.004) valid.' },
+  'D3-AL':    { tactic:'Evict', name:'Account Locking',
+                desc:'Disable the account. Correct for a confirmed external credential compromise; wrong as the first move in a malicious-insider case, where it tips the subject and destroys evidence.' },
+};
+
+// Attack→defense map, computed: for each D3FEND id, which TECHNIQUES cite it in counters.
+function d3fendCountersIndex() {
+  const idx = {};
+  Object.keys(D3FEND).forEach(d => idx[d] = []);
+  Object.entries(TECHNIQUES).forEach(([tid, T]) => {
+    (T.counters || []).forEach(c => {
+      Object.keys(D3FEND).forEach(d => { if (c.includes(d) && !idx[d].includes(tid)) idx[d].push(tid); });
+    });
+  });
+  return idx;
+}
 
 // Augment all techniques with response metadata derived from tactic.
 // This drives the contextual codex recommendations.
@@ -1915,10 +2027,10 @@ const THREAT_ACTORS = {
     spawnRateMod: 0.5,
     detectionWindow: 2.5,          // hardest to spot — insider has legitimate access
     cascadeChance: 0.0,            // no external cascades
-    techniqueAffinity: ['T1078','T1059','T1021','T1053','T1074','T0855','T0832'],
+    techniqueAffinity: ['T1078','T1059','T1021','T1053','T1074','T1560','T1052.001','T1567.002','T1087.001','T0855','T0832'],
     impactBias: 'T0832',
     biasInitialAccess: ['T1078'],
-    biasExecution: ['T1059','T1053'],
+    biasExecution: ['T1059','T1053','T1074','T1560'],
     biasImpact: ['T0832','T0826'],
     insiderMode: true,
     // v0.9: Insider's real win condition is DATA EXFIL over time, not
@@ -1926,7 +2038,38 @@ const THREAT_ACTORS = {
     // passive defender actually loses (fixing the v0.8 passivity exploit).
     dwellMode: true,
     dwellRoundsToWin: 6,  // insider patience is longer than APT dwell
-    sources: ['Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report (6th edition)', 'Verizon DBIR 2025 (Miscellaneous Errors pattern dominant for non-malicious insider actions)'],
+    // v0.9.7: stage-aware insider chain, per the CERT National Insider Threat
+    // Center models (IT sabotage / theft of IP / fraud) and the 7th-edition
+    // Common Sense Guide. The insider has no "initial access" stage — the
+    // chain starts at the trigger event and is observable long before any
+    // technical action.
+    insiderChain: [
+      { stage:'Precipitating event', ttp:'(non-technical)',
+        tools:['Denied promotion / raise','Disciplinary action, PIP','Resignation or termination notice','Perceived unfair treatment'],
+        incident:'CERT case data: insider IT sabotage is overwhelmingly preceded by a precipitating event and observable concerning behaviour; the technical act comes after the grievance, not before.' },
+      { stage:'Entitlement + access accumulation', ttp:'T1078',
+        tools:['Retained access from prior roles','Shared / service accounts','Access never revoked after project end'],
+        incident:'CERT Common Sense Guide (7th ed., 2022) practice: enforce separation of duties and least privilege — most insider cases exploit access the person legitimately held but no longer needed.' },
+      { stage:'Reconnaissance of crown jewels', ttp:'T1087.001',
+        tools:['Browsing shares outside role','Searching for customer lists, source code, designs','Testing what DLP blocks'],
+        incident:'The quiet weeks. UEBA drift signal: assets outside the 90-day baseline, hours outside the baseline, volume creeping up.' },
+      { stage:'Staging + archiving', ttp:'T1074, T1560',
+        tools:['Copy to a local folder','zip / 7z / rar — often password-protected','Email-to-self drafts'],
+        incident:'First-seen archive creation by a user who never archives is one of the highest-signal insider tells.' },
+      { stage:'Exfiltration', ttp:'T1052.001, T1567.002',
+        tools:['USB removable media','Personal cloud storage (Dropbox, Google Drive, MEGA)','Personal webmail','Printing'],
+        incident:'CERT pattern report (DTIC ADA585504): "many insiders who stole IP did so within 30 days of their termination" — the departure window is the exfil window.' },
+      { stage:'Sabotage / after-termination access (IT-sabotage variant)', ttp:'T1053, T0832',
+        tools:['Scheduled task / logic bomb','Backdoor account created before departure','Credentials retained after off-boarding'],
+        incident:'CERT IT-sabotage model: the technical employee plants persistence before leaving and triggers it after. Off-boarding that revokes everything the same day is the control.' },
+    ],
+    chainTitle: 'INSIDER CHAIN (CERT models)',
+    chainCodexRef: 'CODEX ▸ GHOSTWIRE sources',
+    sources: ['Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report (6th edition)',
+              'SEI/CERT, Common Sense Guide to Mitigating Insider Threats, 7th ed. (Sep 2022) — 22 best practices',
+              'Cappelli, Moore, Trzeciak, The CERT Guide to Insider Threats (Addison-Wesley, 2012) — IT sabotage / theft of IP / fraud models',
+              'CERT, A Pattern for Increased Monitoring for Intellectual Property Theft by Departing Insiders (DTIC ADA585504)',
+              'Verizon DBIR 2025 (Miscellaneous Errors pattern dominant for non-malicious insider actions)'],
   },
   // v0.9: HOLLOWKEY — compromised-credentials actor. Represents the dominant
   // real-world insider pattern that GHOSTWIRE misses: an external attacker
@@ -1947,16 +2090,44 @@ const THREAT_ACTORS = {
     spawnRateMod: 0.8,
     detectionWindow: 1.8,          // harder than external APT, easier than true insider
     cascadeChance: 0.3,
-    techniqueAffinity: ['T1555.003','T1078','T1133','T1021.001','T1059.001','T1486','T1657'],
+    techniqueAffinity: ['T1555.003','T1539','T1078','T1133','T1550.004','T1621','T1087.001','T1021.001','T1059.001','T1486','T1657'],
     impactBias: 'T1486',
-    biasInitialAccess: ['T1555.003','T1078','T1133'],
-    biasExecution: ['T1059.001'],
+    biasInitialAccess: ['T1555.003','T1539','T1078','T1133','T1550.004','T1621'],
+    biasExecution: ['T1087.001','T1021.001','T1059.001'],
     biasImpact: ['T1486'],
     // Not insiderMode — because it ISN'T a real insider. The player must
     // detect the behavioral anomaly (impossible travel, unusual asset access)
     // and respond via credential rotation rather than insider-threat process.
     externalCredSource: true,
-    sources: ['Recorded Future 2025 Identity Threat Landscape', 'Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report — ~20% "outsmarted" (credential-theft) category'],
+    // v0.9.7: stage-aware compromised-credential chain — the infostealer-to-
+    // intrusion pipeline. The point for the player is stage 4: MFA alone does
+    // not break this chain.
+    credentialChain: [
+      { stage:'Infostealer infection (off-network)', ttp:'T1555.003, T1539',
+        tools:['Malvertising / cracked-software lure on a personal or BYOD device','Lumma, RedLine, Vidar families','Browser credential store + cookie jar harvested in seconds'],
+        incident:'Recorded Future 2025 Identity Threat Landscape: infostealer logs are the dominant upstream source of corporate credentials on criminal markets.' },
+      { stage:'Log sold on a marketplace', ttp:'(criminal economy)',
+        tools:['Bulk "logs" listings keyed by corporate domain','Per-log pricing in single-digit dollars','Resale into IAB (WARDEN) pipelines'],
+        incident:'Stolen credentials become a commodity within hours; the victim organisation is searchable by domain.' },
+      { stage:'Validation + first login', ttp:'T1078, T1133',
+        tools:['Credential checkers against VPN / SaaS / webmail','Residential proxy to match victim geography'],
+        incident:'The Change Healthcare Citrix gateway had no MFA (CEO Witty testimony, May 2024) — validation was the whole attack.' },
+      { stage:'MFA bypass', ttp:'T1550.004, T1621',
+        tools:['Session-cookie replay — already-authenticated session, no prompt','Push fatigue / MFA bombing until a tap','Help-desk social engineering for a reset'],
+        incident:'"We have MFA" is not a complete answer: a replayed cookie never triggers it; a push can be fatigued. Number-matching and FIDO2 are the controls that hold.' },
+      { stage:'In-session reconnaissance', ttp:'T1087.001, T1021.001',
+        tools:['Mailbox search for "password", "invoice", "wire"','Shared-drive crawl','Inbox-rule creation to hide replies'],
+        incident:'First 15 minutes after login are the detection window: impossible travel + first-seen device + bulk access in one session.' },
+      { stage:'Monetisation', ttp:'T1657, T1486',
+        tools:['BEC / payment diversion','Data theft for extortion','Resale of the foothold to a ransomware affiliate'],
+        incident:'The HOLLOWKEY → ransomware path is the WARDEN successor pattern; in healthcare it ended as Change Healthcare.' },
+    ],
+    chainTitle: 'CREDENTIAL CHAIN (infostealer → intrusion)',
+    chainCodexRef: 'CODEX ▸ HOLLOWKEY sources',
+    sources: ['Recorded Future 2025 Identity Threat Landscape Report',
+              'Ponemon Institute / DTEX Systems 2025 Cost of Insider Risks Global Report — ~20% "outsmarted" (credential-theft) category',
+              'UnitedHealth CEO Andrew Witty, House Energy & Commerce Subcommittee testimony (May 2024) — Citrix gateway without MFA',
+              'MITRE ATT&CK T1539 / T1550.004 / T1621 technique pages'],
   },
   // v0.9: WARDEN reworked to match actual initial-access-broker tradecraft per
   // Huntress / Rapid7 2025 reporting: IABs breach → verify → sell → MOVE ON.
@@ -2304,7 +2475,7 @@ const AGENT_DEFS = [
         tools: ['Suricata','Zeek','Sigma'] },
       { id: 'trace', name: 'TRACE C2', cost: 2,
         desc: 'Correlate beacon traffic to locate adversary command node.',
-        d3fend: 'D3-NTA + D3-IPCTA',
+        d3fend: 'D3-NTA: Network Traffic Analysis + D3-PA: Process Analysis',
         tools: ['Zeek','MISP','STIX/TAXII'] },
     ],
   },
@@ -2315,7 +2486,7 @@ const AGENT_DEFS = [
     actions: [
       { id: 'disrupt', name: 'DISRUPT', cost: 2,
         desc: 'Break active attack chain on target node.',
-        d3fend: 'D3-PE: Process Eviction',
+        d3fend: 'Process termination (D3FEND Evict tactic) + D3-ANCI: Authentication Cache Invalidation',
         tools: ['Velociraptor','EDR response'] },
       { id: 'sever', name: 'SEVER C2', cost: 3,
         desc: 'Kill adversary command infrastructure. Requires C2 location revealed.',
@@ -2330,11 +2501,11 @@ const AGENT_DEFS = [
     actions: [
       { id: 'harden', name: 'HARDEN', cost: 1,
         desc: 'Apply patches and segmentation. +1 resilience to target.',
-        d3fend: 'D3-EI: Executable Integrity + D3-NI',
+        d3fend: 'D3-SBV: Service Binary Verification + D3-NI: Network Isolation',
         tools: ['Ansible','OSQuery','SCAP'] },
       { id: 'restore', name: 'RESTORE', cost: 2,
         desc: 'Recover compromised node from clean backups.',
-        d3fend: 'D3-FBA: File Backup',
+        d3fend: 'Immutable / offline backups (D3FEND Restore tactic)',
         tools: ['Velociraptor','Immutable backups'] },
     ],
   },
@@ -7188,6 +7359,57 @@ function renderCodexTab(el) {
     <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Sources: CISA Alert on ViaSat KA-SAT (Feb 2022); CSIS Space Threat Assessment (annual); Secure World Foundation Global Counterspace Capabilities (annual); USSF Space Delta 15 briefings; Mandiant M-Trends annual reports (aerospace observations within); public GPS-spoofing campaign reporting (Black Sea / Eastern Med 2017-2025). In-game: KINGFISHER actor archetype models this behavior.</div>
   </div>`;
 
+  // v0.9.7: data-driven codex entries for any actor that carries a stage
+  // chain but has no hand-written reference entry (today: GHOSTWIRE insiderChain,
+  // HOLLOWKEY credentialChain). Renders stage → TTPs → tools → documented
+  // incident/finding, plus the actor's sources. VOLTFORGE and KINGFISHER keep
+  // their richer hand-written entries above.
+  Object.values(THREAT_ACTORS).forEach(A => {
+    const ch = A.insiderChain || A.credentialChain;
+    if (!ch) return;
+    const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    html += `<div class="codex-entry" style="border-left:2px solid ${A.color};padding-left:6px;margin-top:8px;">
+      <div><span style="color:${A.color};font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ ${esc(A.name)} — ${esc(A.chainTitle || 'STAGE CHAIN')}</span></div>
+      <div class="codex-desc" style="margin-top:3px;">${esc(A.summary)}</div>
+      <div class="codex-tools" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--grid-line);">
+        <div style="color:var(--amber);font-weight:bold;font-size:10px;margin-bottom:3px;">▸ STAGE-BY-STAGE</div>
+        <div style="font-size:10px;line-height:1.6;">` +
+      ch.map(st => `<b style="color:var(--cyan);">${esc(st.stage).toUpperCase()}</b> — <span style="color:var(--cyan-dim);font-family:monospace;">${esc(st.ttp || '')}</span><br>` +
+                   `<span style="color:var(--white);font-size:9px;">${st.tools.map(esc).join(' · ')}</span><br>` +
+                   `<span style="color:var(--muted);font-size:9px;">↳ ${esc(st.incident)}</span><br>`).join('') +
+      `</div></div>
+      <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Sources: ${(A.sources || []).map(esc).join('; ')}. In-game: ${esc(A.id)} actor archetype.</div>
+    </div>`;
+  });
+
+  // v0.9.7: D3FEND defensive-technique section — grouped by tactic, each with
+  // the attack techniques whose counters cite it (computed, not hand-kept).
+  {
+    const idx = d3fendCountersIndex();
+    const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const active = new Set(activeRunTechs);
+    html += `<div class="codex-entry" style="border-left:2px solid #5cff8a;padding-left:6px;margin-top:8px;">
+      <div><span style="color:#5cff8a;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ MITRE D3FEND — DEFENSIVE TECHNIQUES (v1.3.0, Dec 2025)</span></div>
+      <div class="codex-desc" style="margin-top:3px;">D3FEND is MITRE's knowledge graph of defensive techniques, organised by tactic: ${D3FEND_TACTICS.join(' → ')}. The ${Object.keys(D3FEND).length} techniques below are the ones this game's attack-technique counters cite; each lists the ATT&amp;CK / ICS / SPARTA techniques it counters in this catalog. Techniques active in the current run are highlighted. In-game, HARDEN approximates the Harden and Isolate tactics, SCAN / TRACE approximate Detect, DISRUPT / SEVER approximate Isolate and Evict, RESTORE approximates Restore.</div>`;
+    D3FEND_TACTICS.forEach(tac => {
+      const ids = Object.keys(D3FEND).filter(d => D3FEND[d].tactic === tac);
+      if (ids.length === 0) return;
+      html += `<div style="margin-top:6px;"><div style="color:var(--amber);font-weight:bold;font-size:10px;letter-spacing:0.05em;">▸ ${tac.toUpperCase()}</div>`;
+      ids.forEach(d => {
+        const D = D3FEND[d];
+        const countered = idx[d] || [];
+        const hot = countered.some(t => active.has(t));
+        html += `<div style="margin-top:4px;padding-left:6px;border-left:1px solid ${hot ? '#5cff8a' : 'var(--grid-line)'};">
+          <div style="font-size:10px;"><span style="color:#5cff8a;font-family:monospace;">${d}</span> <b style="color:var(--white);">${esc(D.name)}</b>${hot ? ' <span style="color:#5cff8a;font-size:8px;">● ACTIVE THIS RUN</span>' : ''}</div>
+          <div style="color:var(--muted);font-size:9px;line-height:1.5;">${esc(D.desc)}</div>
+          <div style="font-size:9px;margin-top:2px;"><span style="color:var(--cyan-dim);">counters:</span> ${countered.length ? countered.map(t => '<span style="font-family:monospace;color:' + (active.has(t) ? '#5cff8a' : 'var(--cyan-dim)') + ';">' + t + '</span>').join(' · ') : '<span style="color:var(--muted);">(cited in narrative only)</span>'}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+    html += `<div style="color:var(--muted);font-size:8px;margin-top:6px;font-style:italic;">Source: MITRE D3FEND 1.3.0 knowledge base and ATT&amp;CK-mitigation mappings (next.d3fend.mitre.org). D3FEND® is a registered trademark of The MITRE Corporation.</div></div>`;
+  }
+
   // Section 1: Active this run
   if (activeRunTechs.length > 0) {
     html += `<div class="log-line log-cyan" style="font-weight:bold;font-size:12px;margin-top:8px;">// ACTIVE THIS RUN</div>`;
@@ -8737,8 +8959,12 @@ function showThreatActorIntro(onDone) {
       ${A.availabilityFocused ? '<div style="margin-top:8px;color:var(--amber);font-size:9px;letter-spacing:0.05em;">⚠ AVAILABILITY-FOCUSED — DDoS and defacement, not data theft. Loud, fast, symbolic.</div>' : ''}
       ${A.cellularBeaconMode ? '<div style="margin-top:8px;color:var(--magenta);font-size:9px;letter-spacing:0.05em;">⚠ OUT-OF-BAND C2 — vendor-equipment cellular modem bypasses your IT firewall entirely. Traffic is invisible to NetFlow. Carrier-level SIM visibility is the only enterprise detection path.</div>' : ''}
       ${A.lolBins ? '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--grid-line);"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ LIVING-OFF-THE-LAND TOOLING</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;font-family:monospace;">' + A.lolBins.join(' · ') + '</div></div>' : ''}
-      ${A.lolChain ? '<div style="margin-top:6px;"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ STAGE CHAIN (per advisory)</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;">' + A.lolChain.map(s => '<span style="color:var(--amber)">' + s.stage + '</span>: <span style="font-family:monospace;color:var(--cyan-dim);">' + s.tools.slice(0,3).join(', ') + (s.tools.length > 3 ? '…' : '') + '</span>').join('<br>') + '</div><div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Full command fingerprints in CODEX ▸ Volt Typhoon pattern.</div></div>' : ''}
-      ${A.aerospaceChain ? '<div style="margin-top:6px;"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ AEROSPACE KILL CHAIN (SPARTA + public reporting)</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;">' + A.aerospaceChain.map(s => '<span style="color:var(--amber)">' + s.stage + '</span> <span style="color:var(--cyan-dim);font-family:monospace;">[' + s.ttp + ']</span>').join('<br>') + '</div><div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Full tools + documented incidents in CODEX ▸ Aerospace APT pattern.</div></div>' : ''}
+      ${(() => { const ch = A.lolChain || A.aerospaceChain || A.insiderChain || A.credentialChain; if (!ch) return '';
+          const title = A.chainTitle || (A.lolChain ? 'STAGE CHAIN (per advisory)' : 'AEROSPACE KILL CHAIN (SPARTA + public reporting)');
+          const ref = A.chainCodexRef || (A.lolChain ? 'CODEX ▸ Volt Typhoon pattern' : 'CODEX ▸ Aerospace APT pattern');
+          return '<div style="margin-top:6px;"><div style="color:var(--cyan);font-size:9px;font-weight:bold;letter-spacing:0.05em;">▸ ' + title + '</div><div style="color:var(--white);font-size:9px;line-height:1.5;margin-top:3px;">'
+            + ch.map(s => '<span style="color:var(--amber)">' + s.stage + '</span> <span style="color:var(--cyan-dim);font-family:monospace;">[' + (s.ttp || '') + ']</span>').join('<br>')
+            + '</div><div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Full tools + documented incidents in ' + ref + '.</div></div>'; })()}
       ${A.sources && A.sources.length ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model sources: ' + A.sources.join(' · ') + '</div>' : (A.source ? '<div style="margin-top:8px;color:var(--muted);font-size:8px;font-style:italic;">Model source: ' + A.source + '</div>' : '')}
       <button class="action-btn primary" id="actor-intro-ack" style="width:100%;margin-top:14px;">▶ ACKNOWLEDGE</button>
     </div>

@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.6)
+## What's in the box (v0.9.7)
 
 ### Five missions, each grounded in real incident patterns
 
@@ -172,6 +172,15 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
 
+### v0.9.7: Insider depth, D3FEND as a real framework, protocol-centric detection plays
+
+- **GHOSTWIRE `insiderChain`** — six stages from the CERT National Insider Threat Center models (IT sabotage / theft of IP / fraud): precipitating event → entitlement accumulation → crown-jewel reconnaissance → staging + archiving → exfiltration → after-termination sabotage. Grounded in the SEI/CERT *Common Sense Guide to Mitigating Insider Threats*, 7th ed. (Sep 2022, 22 practices), *The CERT Guide to Insider Threats* (Cappelli, Moore, Trzeciak, 2012), and CERT's departing-insider pattern report (DTIC ADA585504: "many insiders who stole IP did so within 30 days of their termination"). Affinity 7 → 11.
+- **HOLLOWKEY `credentialChain`** — six stages of the infostealer-to-intrusion pipeline: off-network infection → marketplace sale → validation + first login → MFA bypass (session-cookie replay; push fatigue) → in-session recon → monetisation. The teaching point is stage 4: MFA alone does not break this chain. Affinity 7 → 11.
+- **Six ATT&CK techniques added** for the insider family: T1539 Steal Web Session Cookie, T1550.004 Web Session Cookie (use), T1621 MFA Request Generation, T1560 Archive Collected Data, T1052.001 Exfiltration over USB, T1567.002 Exfiltration to Cloud Storage. Catalog 68 → 74.
+- **One chain renderer** — intro card and codex now render any actor's chain (`lolChain`, `aerospaceChain`, `insiderChain`, `credentialChain`) through a single path; codex entries for chained actors without a hand-written reference are generated from the data. Reference entries 9 → 12.
+- **D3FEND is now real.** The boot banner has claimed "D3FEND ✓" since v0.6 while the catalog held zero D3FEND entries, and `counters:` text cited 19 D3- IDs of which only 6 were verifiable. New `D3FEND` catalog: 26 techniques, every ID and name verified against D3FEND 1.3.0 (Dec 2025) via the ATT&CK-mitigations mapping, grouped by the seven tactics. The 13 unverifiable IDs — including two that were simply invented (D3-IVV "Independent Variable Verification", D3-ITV "Internal Traffic Validation") — were replaced with verified IDs or plain language across 26 call sites. The codex renders the full attack→defense map, computed from counters so it cannot drift; all 26 techniques map to at least one attack technique in the catalog; techniques countering TTPs observed in the current run are highlighted.
+- **DETECTIONS.md Plays 9 and 10** — the first protocol-centric plays. **Play 9, HL7/DICOM interface tampering**: grounded in the fact that HL7v2's MLLP transport "does not natively support any encryption or authentication" (Google Cloud Healthcare API docs) and HHS 405(d) Practice #8; inventory-driven transport-vs-message identity checks, clinical-plausibility value checks, patient-safety-first triage. **Play 10, VHF cab-signalling / trackside command anomalies**: RF half (spectrum monitoring joined to dispatcher log and transmitter inventory) and IT half (parameter writes without engineering sessions, T0871 API callers); Polish Aug 2023 pattern, EN 50159, TSA SD 1580/82-2022-01C, FRA 236 Subpart I.
+
 ### v0.9.6: Consequence-model back-port, five-for-five demos, self-description accuracy
 
 Closes the debt the Oct 27 review found: the two oldest missions had never received the consequence model every later mission got, two missions had no instructor demo, and the game's own boot banner was lying about its contents.
@@ -238,7 +247,7 @@ The game relies on public catalogues:
 
 - **MITRE ATT&CK Enterprise** — Microsoft tactics/techniques, [attack.mitre.org](https://attack.mitre.org/)
 - **MITRE ATT&CK for ICS v20** — [attack.mitre.org/matrices/ics](https://attack.mitre.org/matrices/ics/) — including proper handling of techniques revoked in v19 (T0855 → T1692.001, T0803 → T1691.001, T0856 → T1692.002), both IDs preserved as aliases in the codex
-- **MITRE D3FEND** — defensive technique references
+- **MITRE D3FEND 1.3.0** — [d3fend.mitre.org](https://d3fend.mitre.org/) — 26 defensive techniques as a structured catalog (verified IDs and names), grouped by the seven D3FEND tactics, with the attack→defense mapping computed from each attack technique's counters
 - **MITRE ATLAS** — adversarial ML techniques
 - **SPARTA** (Space Attack Research & Tactic Analysis) — [sparta.aerospace.org](https://sparta.aerospace.org/) — authoritative aerospace cyber matrix maintained by The Aerospace Corporation
 - **CISA/NSA/FBI AA24-038A** — [cisa.gov/news-events/cybersecurity-advisories/aa24-038a](https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-038a) — Volt Typhoon joint advisory, the behavioral model for VOLTFORGE
@@ -274,13 +283,10 @@ Older builds are archived in `builds/` for reference.
 
 Issues and discussions welcome. Pull requests considered carefully — the single-file architecture is intentional, so cross-cutting refactors need to preserve that constraint.
 
-Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4), save/resume (v0.8), seeded `?seed=…` replay URLs (v0.9.2), TIMELINE debrief (v0.9.4), instructor demos for all five missions (v0.9.6).
+Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4), save/resume (v0.8), seeded `?seed=…` replay URLs (v0.9.2), TIMELINE debrief (v0.9.4), instructor demos for all five missions (v0.9.6), D3FEND structured catalog + insider stage chains + protocol-centric detection plays (v0.9.7).
 
 Open priorities:
 - **Multi-adversary scenarios** — two actors on one board (e.g. CRYO + VOLTFORGE), each with its own C2 and technique pool, forcing the ACH gate to disentangle two coherent hypotheses. The highest-leverage teaching feature left.
-- **D3FEND as a structured framework** — defensive techniques with their own IDs, linked from each attack technique's counters
-- **Insider stage chains** — GHOSTWIRE / HOLLOWKEY depth to match VOLTFORGE and KINGFISHER
-- **Protocol-centric detection plays** — HL7/DICOM interface tampering; VHF cab-signaling anomalies
 - **SOC-handoff export** — debrief → formatted incident ticket
 - Sound (Web Audio, opt-in)
 
@@ -312,4 +318,4 @@ Open priorities:
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.6** (October 2026) · BUILD `HUNT-20261027-1621Z`
+Current version: **v0.9.7** (October 2026) · BUILD `HUNT-20261027-1634Z`
