@@ -872,6 +872,71 @@ project: time, asset, action, value_before, value_after, caller, session_match
 
 ---
 
+## Play 11 · Concurrent intrusion sets — clustering before attribution (all missions — analytic play)
+
+### Objective
+Keep two independent adversaries on the same network from being analysed as one. CISA/FBI/CNMF advisory AA23-250A (7 Sep 2023) documents the pattern: "multiple nation-state APT actors were present on the organization's network" of an Aeronautical Sector organization, with indicators as early as January 2023; one set exploited CVE-2022-47966 in Zoho ManageEngine ServiceDesk Plus on the public-facing web server, "additional APT actors" exploited CVE-2022-42475 to establish presence on the firewall device, and the advisory itself notes "overlapping TTPs across multiple APT actors." Sophos X-Ops (Aug 2022) reported three ransomware groups hitting one network — "the first two attacks took place within two hours, and the third attack took place two weeks later" — while cautioning that "the rise in multiple attackers is still based on anecdotal evidence." The failure mode this play prevents is not a missed detection; it is a correct detection filed under the wrong adversary, followed by a containment action that ends one intrusion and leaves the other running.
+
+### Hypothesis
+Observed malicious activity on this network comes from more than one independent operator. Evidence: two or more clusters of C2 infrastructure (distinct destinations, beacon intervals, TLS/JA3 profiles, or user-agents) that do not share a parent process lineage or a common initial foothold; or two distinct initial-access vectors active in overlapping windows; or post-containment activity that continues after a confirmed eradication of the first set.
+
+### Data source
+Network: Zeek `conn.log` / `ssl.log` / `http.log` or NDR equivalent for beacon profiling; firewall and VPN logs for the edge. Endpoint: EDR process trees with parent lineage, scheduled-task and service creation, web-shell file writes on edge servers. Case management: the ticket itself — every observation must carry a cluster tag before it carries an actor hypothesis.
+
+### Starter logic
+```
+# 1. Cluster beacons by infrastructure + cadence, not by "known bad"
+source: zeek_conn | zeek_ssl
+where: dest is external and (periodicity_score > threshold or dest in known_c2)
+group_by: dest_asn, ja3, user_agent, median_interval(±jitter)
+emit: cluster_id per group
+
+# 2. Tie each endpoint artifact to a cluster via process lineage
+source: edr_process_tree
+where: process initiated a connection in a beacon cluster
+       or process wrote a file later executed by such a process
+project: host, cluster_id, root_parent, first_seen, initial_access_vector_guess
+
+# 3. Alarm on independence
+where: count(distinct cluster_id) >= 2
+   and clusters share no root_parent and no initial_access_vector
+   # or: a cluster's beacons persist > 1 interval after the other cluster's foothold was eradicated
+project: cluster_ids, hosts_per_cluster, initial_access_per_cluster, earliest_seen_per_cluster
+```
+
+### Known false positives
+- One operator with two infrastructure tiers (short-haul and long-haul C2) — lineage will usually link them; treat as one cluster until it doesn't
+- Red team and real adversary overlapping an exercise window — check the exercise deconfliction list first
+- Commodity malware riding on the same unpatched edge as a targeted set — still two clusters; the triage priority differs, the hygiene fix does not
+
+### Response / triage
+1. **Tag before you attribute.** Every observation gets a cluster ID in the ticket. Attribution hypotheses are per cluster. A TTP that "matches" your primary hypothesis is only evidence for that hypothesis if it belongs to that cluster.
+2. **Run ACH per cluster.** Hold H1 and H2 explicitly; score each observation against both. AA23-250A's "overlapping TTPs" is the reason a single-hypothesis workflow fails here.
+3. **Contain per cluster; verify after each.** After eradicating cluster A's foothold, re-run step 3 of the logic. Continued beaconing is not "A came back" until lineage says so — it is more likely B.
+4. **Fix the edge once.** AA23-250A's mitigations are deliberately generic (patch internet-facing systems, MFA, least privilege, log retention): two actors on the same vulnerable edge are an edge problem.
+
+### Maintenance & trend
+- **Baseline**: how many distinct beacon clusters the environment normally shows (SaaS telemetry, update agents) — label those so a new cluster stands out.
+- **Tune**: periodicity threshold and jitter tolerance per network segment.
+- **Trend**: a new cluster appearing within days of a public edge CVE is the AA23-250A shape — more than one operator scanning for the same bug.
+
+### Real anchors
+- CISA/FBI/CNMF, Cybersecurity Advisory AA23-250A, "Multiple Nation-State Threat Actors Exploit CVE-2022-47966 and CVE-2022-42475" (7 Sep 2023)
+- Sophos press release / X-Ops whitepaper, "Multiple Attackers: A Clear and Present Danger" (Aug 2022)
+- Richards J. Heuer Jr., *Psychology of Intelligence Analysis*, CIA Center for the Study of Intelligence (1999) — Analysis of Competing Hypotheses
+
+### Evolve it
+- *Easy*: alert when two different known-bad destinations are seen. Misses everything not on a list.
+- *Harder*: cluster by cadence and lineage, alarm on independence. Catches an unknown second set; needs endpoint lineage to be trustworthy.
+- *Toughest*: make cluster tagging a mandatory field in case management so the analytic discipline survives the analyst. That is the AA23-250A lesson — the tooling was not what failed.
+
+### Pivot to
+- Any actor play (1–8) once a cluster has a hypothesis — run it per cluster
+- Play 7 (VOLTFORGE) if one cluster is quiet and LotL while the other is loud: a noisy intrusion is cover for a quiet one whether or not the two are coordinated
+- In-game: TWO-ADVERSARY MODE (Settings ▸ ADVERSARIES ▸ TWO, or `?adv=2`) — one shared evidence pool, two C2s, one SEVER each
+
+---
+
 ## Detection authoring notes
 
 - **Build these for authoring, not copying.** Every environment is different. The seven-field schema is the discipline; the specific logic is yours.
@@ -880,4 +945,4 @@ project: time, asset, action, value_before, value_after, caller, session_match
 
 ---
 
-*Appendix generated for Joshua Protocol v0.9.9 — BUILD HUNT-20261027-1658Z · STAMP 2026-10-27T16:58Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.10.0 — BUILD HUNT-20261027-1710Z · STAMP 2026-10-27T17:10Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

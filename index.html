@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261027-1658Z';
-const STAMP_UTC = '2026-10-27T16:58Z';
-const APP_VERSION = 'v0.9.9';
+const BUILD_ID = 'HUNT-20261027-1710Z';
+const STAMP_UTC = '2026-10-27T17:10Z';
+const APP_VERSION = 'v0.10.0';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -1021,10 +1021,12 @@ function mulberry32(a) {
 // to the seeded PRNG so every random draw in the game reproduces across runs.
 // We expose JOSHUA_SEED on STATE so the share button can rebuild the URL.
 let JOSHUA_SEED = null;
+let JOSHUA_URL_TWO_ADV = false;  // v0.10: ?adv=2 enables two-adversary mode
 function initSeedFromURL() {
   try {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get('seed');
+    if (params.get('adv') === '2') JOSHUA_URL_TWO_ADV = true;  // v0.10
     if (raw != null && raw.length > 0) {
       // Accept a decimal, hex (0x…), or short alphanumeric slug. Normalize
       // to a 32-bit uint via a stable string hash so human-friendly seeds work.
@@ -1068,6 +1070,7 @@ function buildShareURL(forceNewSeed) {
   try {
     const u = new URL(window.location.href);
     u.searchParams.set('seed', seedStr);
+    if (typeof STATE !== 'undefined' && STATE.twoAdversary) u.searchParams.set('adv', '2'); else u.searchParams.delete('adv');  // v0.10
     u.hash = '';
     return u.toString();
   } catch (e) { return 'about:blank?seed=' + seedStr; }
@@ -1098,6 +1101,16 @@ function saveRun() {
       c2Node: STATE.c2Node,
       c2Revealed: STATE.c2Revealed,
       c2Severed: STATE.c2Severed,
+      // v0.10: second adversary
+      twoAdversary: !!STATE.twoAdversary,
+      coActorId: STATE.coActor ? STATE.coActor.id : null,
+      coC2Node: STATE.coC2Node || null,
+      coC2Revealed: !!STATE.coC2Revealed,
+      coC2Severed: !!STATE.coC2Severed,
+      coEntered: !!STATE.coEntered,
+      coActorRevealed: !!STATE.coActorRevealed,
+      coObservedTTPs: STATE.coObservedTTPs || {},
+      coDwellRoundsAccumulated: STATE.coDwellRoundsAccumulated || 0,
       actorRevealed: STATE.actorRevealed,
       actorAttribution: STATE.actorAttribution,
       observedTTPs: STATE.observedTTPs || {},
@@ -1123,6 +1136,7 @@ function saveRun() {
         history: t.history,
         spawnRound: t.spawnRound,
         pivotedFrom: t.pivotedFrom || null,
+        actorId: t.actorId || null,  // v0.10
       })),
     };
     localStorage.setItem(LS_SAVE_KEY, JSON.stringify(snapshot));
@@ -2409,7 +2423,17 @@ const COMBOS = [
 // already on the board) or from the scan resolver when an armed triangulation
 // gets its first revealed threat this round.
 function triangulateFulfil(why) {
-  if (STATE.c2Revealed) return;
+  if (STATE.c2Revealed) {
+    // v0.10: with the primary already located, triangulation resolves the second adversary
+    if (coActive() && STATE.coEntered && !STATE.coC2Revealed) {
+      STATE.triangulateArmed = false;
+      STATE.coC2Revealed = true;
+      STATE.metrics.coC2RevealedRound = STATE.round;
+      log(`&nbsp;&nbsp;└ <b>SECOND C2 LOCATED via triangulation → ${STATE.coC2Node}</b> <span style="color:var(--muted);">(${why})</span>`, 'log-crit');
+      STATE.iocs.push(`Second C2 located via VIGIL triangulation → ${STATE.coC2Node}`);
+    }
+    return;
+  }
   STATE.triangulateArmed = false;
   STATE.c2Revealed = true;
   STATE.metrics.c2RevealedRound = STATE.round;
@@ -3181,6 +3205,11 @@ const STATE = {
   c2Node: null,
   c2Revealed: false,
   c2Severed: false,
+  // v0.10: TWO-ADVERSARY MODE — a second, independent intrusion set with its own C2
+  twoAdversary: false,
+  coActor: null, coC2Node: null, coC2Revealed: false, coC2Severed: false,
+  coEntered: false, coActorRevealed: false, coActorAttribution: 0,
+  coObservedTTPs: {}, coDwellRoundsAccumulated: 0,
   log: [],
   activeTab: 'log',
   unreadComms: 0,
@@ -3444,6 +3473,8 @@ function drawPurdueZones() {
 function nodeColor(n) {
   if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) return '#ff3a3a';
   if (STATE.c2Severed && n.id === STATE.c2Node) return '#5cff8a';
+  if (coActive() && n.id === STATE.coC2Node && STATE.coC2Revealed && !STATE.coC2Severed) return '#ff3a3a';  // v0.10
+  if (coActive() && STATE.coC2Severed && n.id === STATE.coC2Node) return '#5cff8a';
   // v0.6: In operator view, use the effective visible state (spoofed/frozen).
   const state = effectiveState(n);
   switch (state) {
@@ -3842,7 +3873,7 @@ function drawNode(n) {
   ctx.font = '9px JetBrains Mono, monospace';
   ctx.textAlign = 'center';
   ctx.fillText(n.label, n.x, n.y + r + 12);
-  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+  if ((n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) || (coActive() && n.id === STATE.coC2Node && STATE.coC2Revealed && !STATE.coC2Severed)) {  // v0.10
     ctx.fillStyle = '#ff3a3a';
     ctx.font = 'bold 8px JetBrains Mono, monospace';
     ctx.fillText('◢ C2 ◣', n.x, n.y - r - 10);
@@ -4046,7 +4077,7 @@ function drawSatNode(n) {
     ctx.font = 'bold 7px JetBrains Mono, monospace';
     ctx.fillText('◢ COMP ◣', n.x, n.y + r + 9);
   }
-  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+  if ((n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) || (coActive() && n.id === STATE.coC2Node && STATE.coC2Revealed && !STATE.coC2Severed)) {  // v0.10
     ctx.fillStyle = '#ff3a3a';
     ctx.font = 'bold 7px JetBrains Mono, monospace';
     ctx.fillText('◢ C2 ◣', n.x, n.y + r + 9);
@@ -4084,7 +4115,7 @@ function drawGroundNode(n) {
   ctx.font = '9px JetBrains Mono, monospace';
   ctx.textAlign = 'center';
   ctx.fillText(n.label, n.x, n.y + r + 12);
-  if (n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) {
+  if ((n.id === STATE.c2Node && STATE.c2Revealed && !STATE.c2Severed) || (coActive() && n.id === STATE.coC2Node && STATE.coC2Revealed && !STATE.coC2Severed)) {  // v0.10
     ctx.fillStyle = '#ff3a3a';
     ctx.font = 'bold 8px JetBrains Mono, monospace';
     ctx.fillText('◢ C2 ◣', n.x, n.y - r - 14);
@@ -5014,50 +5045,94 @@ function drawAttackChains() {
 // =============================================================================
 // 10. THREAT AI
 // =============================================================================
-function pickC2() {
-  const actor = STATE.activeActor;
+// =============================================================================
+// v0.10: TWO-ADVERSARY MODE helpers
+// A second, independent intrusion set (STATE.coActor) with its own foothold
+// (STATE.coC2Node). Real-world anchor: CISA/FBI/CNMF AA23-250A (7 Sep 2023) —
+// "multiple nation-state APT actors were present on the organization's
+// network" of an Aeronautical Sector organization, with "overlapping TTPs
+// across multiple APT actors". Every path below is a no-op unless the mode is
+// on, so single-adversary play and the instructor demos are unchanged.
+// =============================================================================
+function coActive() { return !!(STATE.twoAdversary && STATE.coActor && !STATE.demoMode); }
+function isCoActor(actor) { return !!(actor && STATE.coActor && actor.id === STATE.coActor.id); }
+function actorOf(t) { return (t && STATE.coActor && t.actorId === STATE.coActor.id) ? STATE.coActor : STATE.activeActor; }
+function c2For(actor) { return isCoActor(actor) ? STATE.coC2Node : STATE.c2Node; }
+function isPrimaryThreat(t) { return !STATE.coActor || t.actorId !== STATE.coActor.id; }
+function allC2Severed() {
+  if (!STATE.c2Severed) return false;
+  if (coActive() && STATE.coEntered && !STATE.coC2Severed) return false;
+  return true;
+}
+// Which adversary a SEVER would hit right now: the primary first, then the second.
+function severCandidate() {
+  if (STATE.c2Revealed && !STATE.c2Severed) return { actor: STATE.activeActor, node: STATE.c2Node, co: false };
+  if (coActive() && STATE.coEntered && STATE.coC2Revealed && !STATE.coC2Severed) return { actor: STATE.coActor, node: STATE.coC2Node, co: true };
+  return null;
+}
+function pickCoActor(primaryId) {
+  // Any other actor valid for this mission. Initial-access brokers (handoff
+  // actors) are excluded: the handoff mechanic is bound to the primary slot.
+  const valid = (STATE.mission.validActors || []).filter(id => id !== primaryId && THREAT_ACTORS[id] && !THREAT_ACTORS[id].handoffAfterRounds);
+  if (valid.length === 0) return null;
+  return THREAT_ACTORS[valid[Math.floor(Math.random() * valid.length)]];
+}
+function pickCoC2() {
+  let co = null;
+  for (let i = 0; i < 12; i++) { co = pickC2(STATE.coActor); if (co && co !== STATE.c2Node) return co; }
+  // Two actors whose doctrine lands on the same foothold: give the second one
+  // a different, non-control node so the two C2s are distinguishable.
+  const alt = STATE.nodes.filter(n => n.id !== STATE.c2Node && n.type !== 'control' && n.type !== 'interlock');
+  return alt.length ? alt[Math.floor(Math.random() * alt.length)].id : STATE.c2Node;
+}
+
+function pickC2(actorOverride) {
+  // v0.10: with actorOverride, returns the C2 for that actor without touching STATE.c2Node
+  const actor = actorOverride || STATE.activeActor;
+  let c2 = null;
   // Insider mode: C2 is one of the assets itself.
   if (actor && actor.insiderMode) {
     if (STATE.mission.id === 'BLACKFROST') {
       const candidates = STATE.nodes.filter(n => n.type === 'substation' || n.type === 'generator');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else if (STATE.mission.id === 'NIGHTWATCH') {
-      STATE.c2Node = Math.random() < 0.5 ? 'KEYSTONE' : 'MCC';
+      c2 = Math.random() < 0.5 ? 'KEYSTONE' : 'MCC';
     } else if (STATE.mission.id === 'TIDEBREAK') {
       // Insider sits on TOS, PCS, or VTS — IT/coordination layer
       const candidates = STATE.nodes.filter(n => n.type === 'it' || n.type === 'control');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else if (STATE.mission.id === 'HEARTLINE') {
       // v0.9.3: Insider in healthcare sits on a clinical workstation / AD
       // (EHR snooping / HR fallout vector per HHS OCR insider breach reporting).
       const candidates = STATE.nodes.filter(n => n.type === 'clinical-it' || n.type === 'identity');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else if (STATE.mission.id === 'RAILGUARD') {
       // v0.9.4: Insider in rail — dispatch console or back-office. APTA
       // insider-threat guidance documents dispatch-console insiders as a
       // real but low-base-rate pattern; TSA 1580/82 Security Directives
       // require insider-threat programs.
       const candidates = STATE.nodes.filter(n => n.type === 'dispatch' || n.type === 'rail-back-office');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     }
-    return;
+    if (!actorOverride) STATE.c2Node = c2;
+    return c2;
   }
   // Standard external C2 (i.e., the foothold node from which adversary launches threats)
   if (STATE.mission.id === 'BLACKFROST') {
     const candidates = STATE.nodes.filter(n => n.type !== 'control');
-    STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+    c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
   } else if (STATE.mission.id === 'NIGHTWATCH') {
-    STATE.c2Node = Math.random() < 0.5 ? 'KEYSTONE' : 'MCC';
+    c2 = Math.random() < 0.5 ? 'KEYSTONE' : 'MCC';
   } else if (STATE.mission.id === 'TIDEBREAK') {
     // External C2 likely on edge-facing IT nodes (Houston pattern: web server / PCS / TOS)
     // For TIDEMARK supply-chain: GANTRY or VTS (vendor remote access points)
     if (actor && actor.archetype === 'supply_chain') {
       const candidates = STATE.nodes.filter(n => n.type === 'crane' || n.type === 'comms');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else {
       // Other actors: prefer IT nodes (Houston-style)
       const candidates = STATE.nodes.filter(n => n.type === 'it' || n.type === 'comms');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     }
   } else if (STATE.mission.id === 'HEARTLINE') {
     // v0.9.3: Healthcare external C2 — the Change Healthcare 2024 pattern says
@@ -5066,13 +5141,13 @@ function pickC2() {
     // creds) can also land on AD. VOLTFORGE prefers clinical-it (long-dwell
     // credential theft against operator consoles).
     if (actor && actor.archetype === 'compromised_credentials') {
-      STATE.c2Node = Math.random() < 0.6 ? 'EDGE' : 'AD';
+      c2 = Math.random() < 0.6 ? 'EDGE' : 'AD';
     } else if (actor && actor.archetype === 'pre_positioning') {
       const candidates = STATE.nodes.filter(n => n.type === 'clinical-it' || n.type === 'identity' || n.type === 'edge');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else {
       // CRYO ransomware / WARDEN broker / default: edge VPN per sector pattern
-      STATE.c2Node = 'EDGE';
+      c2 = 'EDGE';
     }
   } else if (STATE.mission.id === 'RAILGUARD') {
     // v0.9.4: Rail external C2 varies by actor shape.
@@ -5083,17 +5158,19 @@ function pickC2() {
     // - WARDEN (broker): AD typical entry
     // - CRYO (ransomware against dispatch IT per CISA #StopRansomware rail-sector pattern): AD
     if (actor && actor.archetype === 'hacktivist') {
-      STATE.c2Node = Math.random() < 0.5 ? 'AD' : 'VHF-LINK';
+      c2 = Math.random() < 0.5 ? 'AD' : 'VHF-LINK';
     } else if (actor && actor.archetype === 'compromised_credentials') {
-      STATE.c2Node = 'AD';
+      c2 = 'AD';
     } else if (actor && actor.archetype === 'pre_positioning') {
       const candidates = STATE.nodes.filter(n => n.type === 'rail-back-office' || n.type === 'identity');
-      STATE.c2Node = candidates[Math.floor(Math.random() * candidates.length)].id;
+      c2 = candidates[Math.floor(Math.random() * candidates.length)].id;
     } else {
       // CRYO / WARDEN / default — AD entry (CISA #StopRansomware rail-sector archetype)
-      STATE.c2Node = 'AD';
+      c2 = 'AD';
     }
   }
+  if (!actorOverride) STATE.c2Node = c2;
+  return c2;
 }
 
 function aiPlanThreats() {
@@ -5104,7 +5181,7 @@ function aiPlanThreats() {
   }
   const actor = STATE.activeActor;
   if (!actor) return;
-  const attacked = STATE.threats.length;
+  const attacked = STATE.threats.filter(isPrimaryThreat).length;  // v0.10: count only this adversary's chains
   let baseDesired;
   // v0.3: actor spawn-rate modifier
   if (actor.archetype === 'ransomware' || actor.archetype === 'hacktivist' || actor.archetype === 'cybercriminal') {
@@ -5131,17 +5208,46 @@ function aiPlanThreats() {
   // Difficulty multiplier
   const diffMod = STATE.difficulty === 'analyst' ? 1.3 : STATE.difficulty === 'novice' ? 0.7 : 1.0;
   const desired = Math.max(0, Math.round(baseDesired * actor.spawnRateMod * diffMod));
-  const launches = Math.max(0, desired - attacked);
+  const launches = STATE.c2Severed ? 0 : Math.max(0, desired - attacked);  // v0.10: a severed primary stays severed
   for (let i = 0; i < launches; i++) maybeLaunchThreat();
+  aiPlanCoThreats(diffMod);  // v0.10
+}
+
+// v0.10: the second adversary plans independently from its own foothold.
+function aiPlanCoThreats(diffMod) {
+  if (!coActive() || STATE.coC2Severed) return;
+  const B = STATE.coActor;
+  // Both intrusion sets are present from the start (AA23-250A: both were on the
+  // network when incident response began); the second one's first chain lands
+  // in the round-1 consequence phase, so it is visible from round 2.
+  const entry = STATE.mission.coAdversaryEntryRound || 1;
+  if (STATE.round < entry) return;
+  let desired = (STATE.round <= entry + 1) ? 1 : 2;
+  if (B.burstPattern && STATE.round % 2 === 0) desired = 0;
+  if (B.tempo === 'slow_dwell_fast_impact') {
+    desired = (STATE.round - entry) < (B.dwellRoundsBeforeImpact || 2) ? 1 : desired + 1;
+  }
+  desired = Math.max(0, Math.round(desired * (B.spawnRateMod || 1) * (diffMod || 1)));
+  const active = STATE.threats.filter(t => t.actorId === B.id).length;
+  const launches = Math.max(0, desired - active);
+  for (let i = 0; i < launches; i++) maybeLaunchThreat({ actor: B, sourceId: STATE.coC2Node });
+  if (!STATE.coEntered && STATE.threats.some(t => t.actorId === B.id)) {
+    STATE.coEntered = true;
+    STATE.metrics.coEntryRound = STATE.round;
+    log('<b style="color:var(--magenta);">▸▸ SECOND SIGNATURE — new beacon profile does not fit the current hypothesis</b>', 'log-crit');
+    log('<span style="color:var(--muted);">A second, independent intrusion set is active. Its C2 is separate: TRACE and SEVER apply per adversary. Overlapping TTPs will muddle attribution — keep two hypotheses.</span>');
+    setTimeout(() => logJoshua('Two hands on the board, Operator. Do not fold the new activity into your first hypothesis. Hold two.'), 900);
+  }
 }
 
 function maybeLaunchThreat(opts) {
   opts = opts || {};
-  const c2 = getNode(STATE.c2Node);
+  // v0.10: opts.actor / opts.sourceId let the second adversary launch from its own C2
+  const actor = opts.actor || STATE.activeActor;
+  const sourceId = opts.sourceId || c2For(actor);
+  const c2 = getNode(sourceId);
   if (!c2) return;
-  const actor = STATE.activeActor;
   // Insider: spawns originate from the foothold node, not external C2 (same node id)
-  const sourceId = STATE.c2Node;
   const candidates = STATE.nodes.filter(n =>
     n.id !== sourceId &&
     n.state !== 'compromised' &&
@@ -5215,8 +5321,9 @@ function maybeLaunchThreat(opts) {
     history: [techId],
     spawnRound: STATE.round,
     pivotedFrom: opts.pivotedFrom || null,  // v0.3: track adaptive-pivot lineage
+    actorId: actor ? actor.id : null,       // v0.10: which adversary owns this chain
   });
-  STATE.metrics.threatSpawns.push({ round: STATE.round, target: target.id, techniqueId: techId });
+  STATE.metrics.threatSpawns.push({ round: STATE.round, target: target.id, techniqueId: techId, actorId: actor ? actor.id : null });
   if (target.state === 'healthy') target.state = 'attacked';
 }
 
@@ -5236,9 +5343,15 @@ function recordAction(agentId, actionId, targetId, outcome, wasteReason, techniq
   });
 }
 
-function recordTechniqueObserved(tid) {
+function recordTechniqueObserved(tid, actorId) {
   if (!tid) return;
   STATE.observedTTPs[tid] = (STATE.observedTTPs[tid] || 0) + 1;
+  // v0.10: the second adversary's techniques are also tracked in their own pool.
+  // The shared pool above stays shared on purpose — that is the attribution problem.
+  if (actorId && STATE.coActor && actorId === STATE.coActor.id) {
+    STATE.coObservedTTPs = STATE.coObservedTTPs || {};
+    STATE.coObservedTTPs[tid] = (STATE.coObservedTTPs[tid] || 0) + 1;
+  }
   if (STATE.metrics.firstThreatRevealedRound === null) {
     STATE.metrics.firstThreatRevealedRound = STATE.round;
   }
@@ -5332,7 +5445,8 @@ function computeRubric() {
 
   // 6. Doctrine
   let doctrineScore = 0;
-  if (STATE.c2Severed) doctrineScore = 100;
+  if (allC2Severed()) doctrineScore = 100;
+  else if (STATE.c2Severed || STATE.coC2Severed) doctrineScore = 85;  // v0.10: one of two adversaries cut
   else if (STATE.phase === 'WIN') doctrineScore = 70;
   else doctrineScore = 0;
 
@@ -5366,7 +5480,7 @@ function scoreLabel(s) {
   return 'CRITICAL';
 }
 function doctrineLabel() {
-  if (STATE.c2Severed) return 'DECISIVE';
+  if (allC2Severed()) return 'DECISIVE';
   if (STATE.phase === 'WIN') return 'DEFENSIVE HOLD';
   return 'BREACHED';
 }
@@ -5740,8 +5854,9 @@ function executeAction(ag, a) {
           t.revealed = true;
           foundCount++;
           foundTechs.push(t.techniqueId);
-          recordTechniqueObserved(t.techniqueId);
-          log(`&nbsp;&nbsp;└ Threat exposed at ${n.id}`, 'log-warn');
+          recordTechniqueObserved(t.techniqueId, t.actorId);
+          const sigTag = (STATE.coActor && t.actorId === STATE.coActor.id) ? ' <span style="color:var(--magenta);">[signature B]</span>' : '';  // v0.10
+          log(`&nbsp;&nbsp;└ Threat exposed at ${n.id}${sigTag}`, 'log-warn');
           logTechnique(t.techniqueId);
         }
       });
@@ -5758,20 +5873,31 @@ function executeAction(ag, a) {
     speak(verbose('Tracing C2.',
                   'Initiating C2 traceback via beacon correlation.',
                   'C2 trace: pivot/jitter analysis on Zeek conn.log + STIX/TAXII enrichment + MISP cross-ref.'));
-    if (STATE.c2Revealed) {
+    // v0.10: once the primary C2 is known, TRACE works the second adversary's beacons
+    const traceCo = STATE.c2Revealed && coActive() && STATE.coEntered && !STATE.coC2Revealed;
+    if (STATE.c2Revealed && !traceCo) {
       speak('C2 location already known.');
       recordAction(ag.id, a.actionId, a.target, 'wasted', 'c2 already located', []);
     } else {
-      const revealedCount = STATE.threats.filter(t => t.revealed).length;
+      const revealedCount = STATE.threats.filter(t => t.revealed && (traceCo ? t.actorId === STATE.coActor.id : isPrimaryThreat(t))).length;
       // v0.3: Difficulty + actor detection window affects trace odds
       let chance = 0.30 + revealedCount * 0.20;
-      if (STATE.activeActor) {
-        chance = chance / STATE.activeActor.detectionWindow;
+      const traceActor = traceCo ? STATE.coActor : STATE.activeActor;
+      if (traceActor) {
+        chance = chance / traceActor.detectionWindow;
       }
       if (STATE.difficulty === 'novice') chance += 0.15;
       if (STATE.difficulty === 'analyst') chance -= 0.10;
       chance = clamp(chance, 0.10, 0.95);
-      if (Math.random() < chance) {
+      const traceRoll = Math.random();
+      if (traceRoll < chance && traceCo) {
+        STATE.coC2Revealed = true;
+        STATE.metrics.coC2RevealedRound = STATE.round;
+        log(`&nbsp;&nbsp;└ <b>SECOND ${STATE.coActor.insiderMode ? 'INSIDER FOOTHOLD' : 'C2'} IDENTIFIED → ${STATE.coC2Node}</b>`, 'log-crit');
+        recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
+        STATE.iocs.push(`Second beacon source attributed → ${STATE.coC2Node}`);
+        setTimeout(() => logJoshua('Second command node located. One SEVER per adversary — this one is still owed.'), 400);
+      } else if (traceRoll < chance) {
         STATE.c2Revealed = true;
         STATE.metrics.c2RevealedRound = STATE.round;
         const insiderLabel = STATE.activeActor && STATE.activeActor.insiderMode ? 'INSIDER FOOTHOLD' : 'C2';
@@ -5813,7 +5939,7 @@ function executeAction(ag, a) {
       });
       // v0.3: ADAPTIVE PIVOT — adaptive actors re-emerge on adjacent node
       // v0.4: KILL_BOX combo blocks all pivots this round
-      const actor = STATE.activeActor;
+      const actor = actorOf(ts[0]);  // v0.10: the adversary whose chain was just broken
       const isAdaptive = actor && actor.adaptive;
       const willPivot = STATE.killBoxActive ? false : (
         (STATE.difficulty === 'novice') ? false :
@@ -5840,11 +5966,11 @@ function executeAction(ag, a) {
             round: STATE.round,
             from: target.id,
             to: pivotTarget.id,
-            actor: actor.id,
+            actor: actor ? actor.id : null,
           });
           log(`&nbsp;&nbsp;└ <b style="color:var(--magenta);">⚠ ADVERSARY ADAPTING — campaign pivoting to ${pivotTarget.id}</b>`, 'log-warn');
           // Spawn the pivoted threat now so it's in motion next conseq phase
-          maybeLaunchThreat({ preferTarget: pivotTarget.id, pivotedFrom: target.id });
+          maybeLaunchThreat({ preferTarget: pivotTarget.id, pivotedFrom: target.id, actor, sourceId: c2For(actor) });
           // The pivoted threat is automatically revealed (we saw the pivot happen)
           const pivot = STATE.threats[STATE.threats.length - 1];
           if (pivot) pivot.revealed = true;
@@ -5861,38 +5987,49 @@ function executeAction(ag, a) {
     }
   }
   else if (a.actionId === 'sever') {
-    const isInsider = STATE.activeActor && STATE.activeActor.insiderMode;
+    const cand = severCandidate();  // v0.10: which adversary this SEVER hits (primary first)
+    const sevActor = cand ? cand.actor : STATE.activeActor;
+    const isInsider = sevActor && sevActor.insiderMode;
     speak(verbose(
       isInsider ? 'Containing insider.' : 'Cutting C2 link.',
       isInsider ? 'Containing insider — credential lockout, asset isolation.' : 'Severing C2 — burning persistence, isolating egress.',
       isInsider ? 'Cred revocation + session termination + UEBA-flagged asset quarantine.' : 'BGP blackhole + firewall block + cred rotation. Burning all observed adversary infra.'
     ));
-    if (!STATE.c2Revealed) {
+    if (!cand) {
       speak(isInsider ? 'ERROR — Foothold not identified.' : 'ERROR — C2 location unknown.');
       recordAction(ag.id, a.actionId, a.target, 'wasted', 'c2 not revealed', []);
       return;
     }
-    STATE.c2Severed = true;
-    STATE.metrics.c2SeveredRound = STATE.round;
-    const c2 = getNode(STATE.c2Node);
+    if (cand.co) { STATE.coC2Severed = true; STATE.metrics.coC2SeveredRound = STATE.round; }
+    else { STATE.c2Severed = true; STATE.metrics.c2SeveredRound = STATE.round; }
+    const c2 = getNode(cand.node);
     STATE.nodes.forEach(n => {
       if (n.id !== c2.id) {
         const p = bfsPath(n.id, c2.id);
         if (p) spawnAttackChain(p, 'counter');
       }
     });
-    log(`&nbsp;&nbsp;└ <b>${isInsider ? 'INSIDER CONTAINED. Foothold isolated.' : 'C2 SEVERED. Adversary command lost.'}</b>`, 'log-good');
-    STATE.threats = [];
-    STATE.nodes.forEach(n => { if (n.state === 'attacked') n.state = 'stressed'; });
+    log(`&nbsp;&nbsp;└ <b>${isInsider ? 'INSIDER CONTAINED. Foothold isolated.' : (cand.co ? 'SECOND C2 SEVERED. Second adversary\'s command lost.' : 'C2 SEVERED. Adversary command lost.')}</b>`, 'log-good');
+    // Only the severed adversary's chains die. In a single-adversary run that is all of them.
+    const sevId = sevActor ? sevActor.id : null;
+    STATE.threats = STATE.threats.filter(t => coActive() && t.actorId && t.actorId !== sevId);
+    STATE.nodes.forEach(n => { if (n.state === 'attacked' && !STATE.threats.some(t => t.target === n.id)) n.state = 'stressed'; });
     // Insider: also restore the foothold node since they were sitting on it
     if (isInsider && c2 && c2.state !== 'healthy') {
       c2.state = 'stressed';
     }
     recordAction(ag.id, a.actionId, a.target, 'effective', null, []);
-    setTimeout(() => {
-      logJoshua('A strange game. The only winning move is to play it well. WELL PLAYED.');
-      checkWinCondition();
-    }, 1200);
+    if (allC2Severed()) {
+      setTimeout(() => {
+        logJoshua('A strange game. The only winning move is to play it well. WELL PLAYED.');
+        checkWinCondition();
+      }, 1200);
+    } else {
+      STATE.achGatePassed = false;  // v0.10: the second SEVER is a second irreversible decision — it gets its own ACH gate
+      setTimeout(() => logJoshua(cand.co
+        ? 'Second channel cut. The first adversary still has command — trace it and sever it.'
+        : 'One channel cut, Operator. The second signature is still beaconing. Hold the hypothesis; trace it.'), 1200);
+    }
   }
   else if (a.actionId === 'harden') {
     speak(verbose(`Hardening ${target.id}.`,
@@ -5929,7 +6066,7 @@ function executeAction(ag, a) {
 }
 
 function startConseqPhase() {
-  if (STATE.c2Severed) return;
+  if (allC2Severed()) return;  // v0.10
   setPhase('CONSEQ');
   document.getElementById('tap-hint').textContent = 'ADVERSARY ACTING';
   logDivider();
@@ -5989,7 +6126,7 @@ function advanceThreat(t) {
   }
   log(`Threat advances on ${target.id} [phase ${t.phase}/3]`, 'log-warn');
   logTechnique(t.techniqueId);
-  recordTechniqueObserved(t.techniqueId);
+  recordTechniqueObserved(t.techniqueId, t.actorId);
   spawnAttackChain(t.path, 'attack');
   // v0.6: Telemetry-trust mechanic. Certain techniques create a divergence
   // between ground truth and what the operators see.
@@ -6014,7 +6151,7 @@ function advanceThreat(t) {
     STATE.metrics.compromisesByRound = STATE.metrics.compromisesByRound || [];
     STATE.metrics.compromisesByRound.push({ round: STATE.round, target: target.id, techniqueId: t.techniqueId });
     // v0.9: Actor-specific impact flavor
-    const A = STATE.activeActor;
+    const A = actorOf(t);  // v0.10: per-chain owner
     if (A && A.doubleExtortion) {
       log(`&nbsp;&nbsp;└ <span style="color:var(--red);">⚠ Data exfil detected on ${target.id} (per double-extortion pattern — exfil preceded encryption)</span>`, 'log-crit');
       // Record exfil as an IOC proxy
@@ -6082,7 +6219,7 @@ function pickNextPhaseTech(t) {
     3: ['Impact','Loss','Manipulation','Disruption'],
   };
   const allowed = phaseTactics[t.phase] || ['Impact'];
-  const A = STATE.activeActor;
+  const A = actorOf(t);  // v0.10
   // v0.3: prefer actor's biased techniques first
   let pool = [];
   if (A) {
@@ -6120,19 +6257,23 @@ function advanceRound() {
   // dwellRoundsToWin and they achieve persistent pre-positioning victory
   // — their actual goal per CISA AA24-038A.
   const A = STATE.activeActor;
-  if (A && A.dwellMode) {
-    const unrevealed = STATE.threats.filter(t => !t.revealed).length;
+  // v0.10: dwell credit is per adversary — a second dwell-mode actor keeps its own counter.
+  const dwellers = [];
+  if (A && A.dwellMode && !STATE.c2Severed) dwellers.push({ actor: A, key: 'dwellRoundsAccumulated', mine: isPrimaryThreat });
+  if (coActive() && STATE.coEntered && STATE.coActor.dwellMode && !STATE.coC2Severed) dwellers.push({ actor: STATE.coActor, key: 'coDwellRoundsAccumulated', mine: t => t.actorId === STATE.coActor.id });
+  for (const D of dwellers) {
+    const unrevealed = STATE.threats.filter(t => D.mine(t) && !t.revealed).length;
     if (unrevealed > 0) {
-      STATE.dwellRoundsAccumulated++;
-      log(`<span style="color:${A.color};">▸ Pre-positioning dwell: ${STATE.dwellRoundsAccumulated}/${A.dwellRoundsToWin}</span>`, 'log-warn');
-      if (STATE.dwellRoundsAccumulated >= A.dwellRoundsToWin) {
-        triggerLose(`${A.name} achieved persistent pre-positioning (${STATE.dwellRoundsAccumulated} undetected dwell rounds). Adversary has strategic access for future disruption.`);
+      STATE[D.key] = (STATE[D.key] || 0) + 1;
+      log(`<span style="color:${D.actor.color};">▸ Pre-positioning dwell: ${STATE[D.key]}/${D.actor.dwellRoundsToWin}</span>`, 'log-warn');
+      if (STATE[D.key] >= D.actor.dwellRoundsToWin) {
+        triggerLose(`${D.actor.name} achieved persistent pre-positioning (${STATE[D.key]} undetected dwell rounds). Adversary has strategic access for future disruption.`);
         return;
       }
     } else {
       // All threats revealed this round — dwell counter decays, doesn't reset
       // (hunting them down takes real work; small win still accumulates).
-      STATE.dwellRoundsAccumulated = Math.max(0, STATE.dwellRoundsAccumulated - 1);
+      STATE[D.key] = Math.max(0, (STATE[D.key] || 0) - 1);
     }
   }
   if (STATE.round >= STATE.mission.maxRounds) {
@@ -6170,7 +6311,7 @@ function advanceRound() {
 }
 
 function checkWinCondition() {
-  if (STATE.c2Severed) {
+  if (allC2Severed()) {  // v0.10
     triggerWin('C2 severed. Adversary command structure neutralized.');
   }
 }
@@ -6409,6 +6550,19 @@ function exportCaseLog(rubric, cfiNote, win, reason) {
       revealed_round: (STATE.metrics && STATE.metrics.c2RevealedRound) || null,
       severed_round: (STATE.metrics && STATE.metrics.c2SeveredRound) || null,
     },
+    // v0.10: second adversary (two-adversary mode only)
+    second_adversary: coActive() ? {
+      actor: STATE.coActor.id,
+      entered_round: (STATE.metrics && STATE.metrics.coEntryRound) || null,
+      attributed: !!STATE.coActorRevealed,
+      attribution: STATE.coActorAttribution || 0,
+      observed_ttps: STATE.coObservedTTPs || {},
+      c2: {
+        node: STATE.coC2Node,
+        revealed_round: (STATE.metrics && STATE.metrics.coC2RevealedRound) || null,
+        severed_round: (STATE.metrics && STATE.metrics.coC2SeveredRound) || null,
+      },
+    } : null,
     rubric,
     cfi_note: cfiNote,
     rounds: (STATE.metrics && STATE.metrics.rounds) || [],
@@ -6469,6 +6623,10 @@ function buildHandoffTicket(rubric, cfiNote, win, reason) {
   L.push(`## 1. Summary`);
   L.push(`- Adversary assessed as **${A.name || 'UNKNOWN'}** (${A.tagline || A.archetype || 'archetype unknown'}) — attribution confidence ${STATE.actorAttribution || 0}%${STATE.handoffFired ? ' — ATTRIBUTION SHIFTED mid-incident (' + (m.handoffFrom || '?') + ' → ' + (m.handoffTo || '?') + ' at R' + (m.handoffRound || '?') + ')' : ''}.`);
   L.push(`- C2 ${STATE.c2Revealed ? 'located at **' + STATE.c2Node + '** (R' + (m.c2RevealedRound || '?') + ')' : '**not located**'}; ${STATE.c2Severed ? 'severed R' + (m.c2SeveredRound || '?') : 'NOT severed'}.`);
+  if (coActive() && STATE.coEntered) {  // v0.10
+    const B = STATE.coActor;
+    L.push(`- **SECOND ADVERSARY** (entered R${m.coEntryRound || '?'}): ${STATE.coActorRevealed ? 'assessed as **' + B.name + '** (' + B.tagline + ')' : '**unattributed**'} — attribution ${STATE.coActorAttribution || 0}%. Second C2 ${STATE.coC2Revealed ? 'located at **' + STATE.coC2Node + '** (R' + (m.coC2RevealedRound || '?') + ')' : '**not located**'}; ${STATE.coC2Severed ? 'severed R' + (m.coC2SeveredRound || '?') : 'NOT severed'}. Concurrent-actor pattern per CISA AA23-250A; treat shared TTP evidence with two hypotheses.`);
+  }
   L.push(`- Assets compromised: ${compromised.length ? '**' + compromised.join(', ') + '**' : 'none'}. Stressed: ${stressed.length ? stressed.join(', ') : 'none'}.`);
   if (m.sectorCascade) L.push(`- **Sector cascade fired** R${m.sectorCascade.round} on ${m.sectorCascade.triggerNode} (${m.sectorCascade.doctrineRef}).`);
   if ((STATE.lifeSafetyEvents || []).length) L.push(`- **LIFE-SAFETY EVENT(S):** ${STATE.lifeSafetyEvents.map(e => e.node + ' (R' + e.round + ')').join(', ')} — escalate per sector protocol (see §6).`);
@@ -6531,6 +6689,7 @@ function buildHandoffTicket(rubric, cfiNote, win, reason) {
   L.push(`## 6. Open items for next shift`);
   const open = [];
   if (!STATE.c2Severed) open.push(`C2 ${STATE.c2Revealed ? 'located but NOT severed — SEVER is the pending action' : 'NOT located — continue TRACE / TRIANGULATE'}.`);
+  if (coActive() && STATE.coEntered && !STATE.coC2Severed) open.push(`Second adversary's C2 ${STATE.coC2Revealed ? 'located at ' + STATE.coC2Node + ' but NOT severed — a second SEVER is owed' : 'NOT located — TRACE works it once the primary C2 is known'}.`);  // v0.10
   compromised.forEach(id => open.push(`${id} compromised — eradication + RESTORE; preserve forensic image first.`));
   stressed.forEach(id => open.push(`${id} stressed — RESTORE to prevent cascade.`));
   if (STATE.handoffFired) open.push(`Attribution shifted mid-incident — re-run ACH for ${A.name}; the prior actor's foothold may have been sold, assume two parties have been present.`);
@@ -6756,6 +6915,21 @@ function renderTimelineTab() {
     const r = STATE.metrics.c2SeveredRound;
     roundMarkers[r] = roundMarkers[r] || [];
     roundMarkers[r].push({ kind:'sever', detail: 'C2 severed' });
+  }
+  if (STATE.metrics && STATE.metrics.coEntryRound) {  // v0.10
+    const r = STATE.metrics.coEntryRound;
+    roundMarkers[r] = roundMarkers[r] || [];
+    roundMarkers[r].push({ kind:'c2reveal', detail: 'Second adversary entered' });
+  }
+  if (STATE.metrics && STATE.metrics.coC2RevealedRound) {
+    const r = STATE.metrics.coC2RevealedRound;
+    roundMarkers[r] = roundMarkers[r] || [];
+    roundMarkers[r].push({ kind:'c2reveal', detail: 'Second C2 revealed' });
+  }
+  if (STATE.metrics && STATE.metrics.coC2SeveredRound) {
+    const r = STATE.metrics.coC2SeveredRound;
+    roundMarkers[r] = roundMarkers[r] || [];
+    roundMarkers[r].push({ kind:'sever', detail: 'Second C2 severed' });
   }
   if (STATE.handoffFired && STATE.metrics && STATE.metrics.handoffRound) {
     const r = STATE.metrics.handoffRound;
@@ -7465,6 +7639,19 @@ function renderCodexTab(el) {
     <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: E-ISAC / SANS ICS, "Analysis of the Cyber Attack on the Ukrainian Power Grid" (18 Mar 2016); Dragos, "CRASHOVERRIDE: Analyzing the Threat to Electric Grid Operations" (Jun 2017); ESET, "Win32/Industroyer" (Jun 2017); DOE Form OE-417 instructions. In-game: BLACKFROST sectorCascade fires on CTRL compromise; SUB-B / SUB-D are critical-load life-safety nodes.</div>
   </div>`;
 
+  // v0.10: Multiple concurrent adversaries — the anchor for TWO-ADVERSARY MODE
+  html += `<div class="codex-entry" style="border-left:2px solid var(--magenta);padding-left:6px;margin-top:8px;">
+    <div><span style="color:var(--magenta);font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ MULTIPLE ADVERSARIES IN ONE NETWORK (CISA/FBI/CNMF AA23-250A · Sophos X-Ops 2022)</span></div>
+    <div class="codex-desc" style="margin-top:3px;"><b>AA23-250A, 7 Sep 2023.</b> CISA, the FBI and the Cyber National Mission Force reported that "multiple nation-state APT actors were present on the organization's network" of an Aeronautical Sector organization, with indicators as early as January 2023 and CISA incident response from February to April 2023. One set exploited CVE-2022-47966 (Zoho ManageEngine ServiceDesk Plus) on the public-facing web server; "additional APT actors" exploited CVE-2022-42475 to establish presence on the firewall device. The advisory notes "overlapping TTPs across multiple APT actors" and lists 37 ATT&amp;CK techniques across the combined activity.<br><br><b>Sophos X-Ops, Aug 2022</b> ("Multiple Attackers: A Clear and Present Danger"): three ransomware groups consecutively attacked the same network — "the first two attacks took place within two hours, and the third attack took place two weeks later" — leaving some files triple-encrypted. Sophos was explicit that "the rise in multiple attackers is still based on anecdotal evidence"; this entry carries that hedge.</div>
+    <div class="codex-tools" style="margin-top:4px;">
+      <b>Attribution problem</b>: one evidence pool, two sources. TTPs that match your primary hypothesis may belong to the other actor; TTPs that contradict it may not disconfirm it. Heuer's ACH: hold both hypotheses, score each against each observation.<br>
+      <b>Containment problem</b>: one SEVER ends one command channel. The second intrusion set keeps operating — and may be the one you had less evidence on.<br>
+      <b>Doctrine lesson</b>: AA23-250A's own mitigations are generic by design (patch the edge, MFA, least privilege, log retention) because the fix for "two actors on the same vulnerable edge" is the edge, not the attribution.
+    </div>
+    <div class="codex-counters" style="margin-top:4px;">▸ In-game (TWO-ADVERSARY MODE, Settings ▸ ADVERSARIES ▸ TWO, or ?adv=2): a second actor from the mission's roster is present from round 1 with its own C2. TRACE resolves the primary C2 first, then the second; TRIANGULATE does the same; SEVER hits whichever is revealed and live, primary first, and each SEVER gets its own ACH gate. Observed TTPs stay in one shared pool on purpose — the second adversary's techniques inflate or dilute your primary attribution exactly as they would in the SOC. The INTEL tab keeps a separate evidence count and attribution for signature B.</div>
+    <div style="color:var(--muted);font-size:8px;margin-top:3px;font-style:italic;">Source: CISA/FBI/CNMF, Cybersecurity Advisory AA23-250A, "Multiple Nation-State Threat Actors Exploit CVE-2022-47966 and CVE-2022-42475" (7 Sep 2023); Sophos press release and X-Ops whitepaper "Multiple Attackers: A Clear and Present Danger" (Aug 2022). The in-game pairing of specific archetypes is a scenario construct, not a claim about which real actors co-occurred.</div>
+  </div>`;
+
   // v0.9.2: Aerospace APT codex entry
   html += `<div class="codex-entry" style="border-left:2px solid #60a0ff;padding-left:6px;margin-top:8px;">
     <div><span style="color:#60a0ff;font-weight:bold;font-size:11px;letter-spacing:0.05em;">▸▸ AEROSPACE APT PATTERN (SPARTA + public reporting composite)</span></div>
@@ -7635,6 +7822,44 @@ function renderIntelTab(el) {
       <div class="log-line"><span style="color:var(--amber);">ATTRIBUTION:</span> ${attribution}%</div>`;
   }
 
+  // v0.10: second adversary — its own evidence pool, its own attribution, its own C2 line
+  let coHTML = '';
+  if (coActive() && STATE.coEntered) {
+    const B = STATE.coActor;
+    const coObs = Object.keys(STATE.coObservedTTPs || {});
+    const coMatch = coObs.filter(tid => B.techniqueAffinity.includes(tid)).length;
+    const coAttr = Math.min(100, coMatch * 18 + (STATE.coC2Revealed ? 30 : 0));
+    STATE.coActorAttribution = coAttr;
+    const showCo = STATE.difficulty === 'novice' || coAttr >= 60;
+    if (showCo && !STATE.coActorRevealed) {
+      STATE.coActorRevealed = true;
+      log(`<b style="color:${B.color};">▸▸ SECOND ADVERSARY ATTRIBUTED → ${B.name}</b> <span style="color:var(--muted);">(${B.tagline})</span>`, 'log-crit');
+    }
+    if (showCo) {
+      const silB = buildSilhouetteSVG(B.silhouette, B.color);
+      coHTML = `
+      <div style="display:flex;gap:8px;align-items:flex-start;background:rgba(255,78,168,0.04);padding:6px;border:1px solid ${B.color};border-radius:2px;margin-top:6px;">
+        <div style="width:40px;height:40px;flex:0 0 40px;">${silB}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="color:var(--magenta);font-size:8px;letter-spacing:0.1em;">SECOND ADVERSARY</div>
+          <div style="color:${B.color};font-weight:bold;font-size:11px;">${B.name}</div>
+          <div style="color:var(--white);font-size:9px;text-transform:uppercase;letter-spacing:0.05em;">${B.tagline}</div>
+          <div style="color:var(--muted);font-size:9px;margin-top:2px;">Attribution (B): ${coAttr}% · ${coObs.length} TTP(s) on its chains</div>
+        </div>
+      </div>`;
+    } else {
+      coHTML = `
+      <div class="log-line" style="margin-top:4px;"><span style="color:var(--magenta);">SECOND SIGNATURE:</span> <i style="color:var(--muted);">unattributed — ${coObs.length} TTP(s) observed on its chains</i></div>
+      <div class="log-line"><span style="color:var(--amber);">ATTRIBUTION (B):</span> ${coAttr}%</div>`;
+    }
+    const coC2Text = STATE.coC2Severed
+      ? '<span class="log-good">SEVERED — second adversary\'s command neutralized</span>'
+      : STATE.coC2Revealed
+      ? `<span class="log-crit">LOCATED at ${STATE.coC2Node}</span> — WRAITH ▸ SEVER (after the primary C2, if it is still live)`
+      : (STATE.c2Revealed ? 'unknown — TRACE now works this adversary' : 'unknown — TRACE resolves the primary C2 first');
+    coHTML += `<div class="log-line log-crit" style="margin-top:4px;">▸ SECOND C2 STATUS</div><div class="log-line">&nbsp;&nbsp;└ ${coC2Text}</div>`;
+  }
+
   // C2 + IOCs
   const isInsider = A && A.insiderMode;
   const c2Label = isInsider ? 'FOOTHOLD' : 'C2';
@@ -7663,6 +7888,7 @@ function renderIntelTab(el) {
     <div class="log-line log-cyan" style="font-weight:bold;">// THREAT INTEL</div>
     <div class="log-line log-divider">─────────────────────────────</div>
     ${actorHTML}
+    ${coHTML}
     <br>
     <div class="log-line log-cyan">▸ OBSERVED TTPs</div>
     ${observedHTML}
@@ -8242,6 +8468,12 @@ function showSettingsModal() {
         <button class="verbosity-btn ${STATE.difficulty==='operator'?'active':''}" data-d="operator">OPERATOR</button>
         <button class="verbosity-btn ${STATE.difficulty==='analyst'?'active':''}" data-d="analyst">ANALYST</button>
       </div>
+      <div style="margin-top:14px;" class="settings-label">ADVERSARIES</div>
+      <div style="color:var(--muted);font-size:9px;margin:2px 0 6px;">TWO: a second, independent intrusion set is present from the start with its own C2 — one SEVER per adversary, shared evidence. Applies to the next mission you start; never to instructor demos.</div>
+      <div class="verbosity-toggle" style="width:100%;justify-content:space-evenly;">
+        <button class="verbosity-btn ${!STATE.twoAdversary?'active':''}" data-a="1">ONE</button>
+        <button class="verbosity-btn ${STATE.twoAdversary?'active':''}" data-a="2">TWO</button>
+      </div>
       <div style="color:var(--muted);font-size:10px;margin-top:10px;line-height:1.5;">
         <b>MANUAL:</b> Tap CONTINUE between events. Read everything.<br>
         <b>STEADY:</b> Auto-advance ~900ms (default).<br>
@@ -8271,6 +8503,12 @@ function showSettingsModal() {
     b.addEventListener('click', () => {
       STATE.difficulty = b.dataset.d;
       modal.querySelectorAll('[data-d]').forEach(x => x.classList.toggle('active', x.dataset.d === STATE.difficulty));
+    });
+  });
+  modal.querySelectorAll('[data-a]').forEach(b => {  // v0.10
+    b.addEventListener('click', () => {
+      STATE.twoAdversary = b.dataset.a === '2';
+      modal.querySelectorAll('[data-a]').forEach(x => x.classList.toggle('active', (x.dataset.a === '2') === STATE.twoAdversary));
     });
   });
   modal.querySelector('#settings-close').addEventListener('click', () => modal.remove());
@@ -8632,6 +8870,17 @@ function resumeSavedRun(saved) {
   STATE.c2Node = saved.c2Node;
   STATE.c2Revealed = !!saved.c2Revealed;
   STATE.c2Severed = !!saved.c2Severed;
+  // v0.10: second adversary
+  STATE.twoAdversary = !!saved.twoAdversary;
+  STATE.coActor = saved.coActorId ? (THREAT_ACTORS[saved.coActorId] || null) : null;
+  STATE.coC2Node = saved.coC2Node || null;
+  STATE.coC2Revealed = !!saved.coC2Revealed;
+  STATE.coC2Severed = !!saved.coC2Severed;
+  STATE.coEntered = !!saved.coEntered;
+  STATE.coActorRevealed = !!saved.coActorRevealed;
+  STATE.coActorAttribution = 0;
+  STATE.coObservedTTPs = saved.coObservedTTPs || {};
+  STATE.coDwellRoundsAccumulated = saved.coDwellRoundsAccumulated || 0;
   STATE.actorRevealed = !!saved.actorRevealed;
   STATE.actorAttribution = saved.actorAttribution || 0;
   STATE.observedTTPs = saved.observedTTPs || {};
@@ -8708,6 +8957,10 @@ function beginGame(missionId) {
   STATE.sectorCascadeFired = false;      // v0.9.1: reset mission-level sector cascade flag
   STATE.lifeSafetyEvents = [];           // v0.9.3: reset life-safety event log
   STATE.triangulateArmed = false;        // v0.9.6: reset armed triangulation
+  // v0.10: two-adversary resets
+  STATE.coActor = null; STATE.coC2Node = null; STATE.coC2Revealed = false; STATE.coC2Severed = false;
+  STATE.coEntered = false; STATE.coActorRevealed = false; STATE.coActorAttribution = 0;
+  STATE.coObservedTTPs = {}; STATE.coDwellRoundsAccumulated = 0;
   if (document.getElementById('view-mode-btn')) updateViewModeButton();
   STATE.killBoxActive = false;
   STATE.metrics = {
@@ -8724,6 +8977,9 @@ function beginGame(missionId) {
     const actorId = valid[Math.floor(Math.random() * valid.length)];
     STATE.activeActor = THREAT_ACTORS[actorId];
   }
+  // v0.10: two-adversary mode (opt-in via settings or ?adv=2; never in instructor demos)
+  if (JOSHUA_URL_TWO_ADV) STATE.twoAdversary = true;
+  STATE.coActor = (STATE.twoAdversary && !STATE.demoMode) ? pickCoActor(STATE.activeActor && STATE.activeActor.id) : null;
 
   resizeCanvas();
   if (STATE.mission.id === 'BLACKFROST') setupEnergyGrid();
@@ -8738,10 +8994,15 @@ function beginGame(missionId) {
     STATE.c2Node = STATE.demoScript.c2Node;
   } else {
     pickC2();
+    if (STATE.coActor) STATE.coC2Node = pickCoC2();  // v0.10
   }
 
   log(`<b>// JOSHUA PROTOCOL — ${STATE.mission.name}</b>`, 'log-cyan');
   log(`${STATE.mission.sector}`, 'log-info');
+  if (coActive()) {
+    log('<b style="color:var(--magenta);">// TWO-ADVERSARY MODE</b> — a second, independent intrusion set is on this network from the start. Separate C2; one SEVER per adversary; shared evidence pool.', 'log-warn');
+    log('<span style="color:var(--muted);">Pattern: CISA/FBI/CNMF AA23-250A (Sep 2023) — multiple nation-state actors present on one aeronautical-sector network, with overlapping TTPs across actors.</span>');
+  }
   if (STATE.demoMode) {
     log('<b style="color:var(--cyan);">// TUTORIAL DEMO — instructor walkthrough</b>', 'log-cyan');
     const badge = document.getElementById('demo-badge');
@@ -8819,8 +9080,9 @@ function spawnDemoThreat(targetId, techId) {
     history: [techId],
     spawnRound: STATE.round,
     pivotedFrom: null,
+    actorId: STATE.activeActor ? STATE.activeActor.id : null,  // v0.10
   });
-  STATE.metrics.threatSpawns.push({ round: STATE.round, target: targetId, techniqueId: techId });
+  STATE.metrics.threatSpawns.push({ round: STATE.round, target: targetId, techniqueId: techId, actorId: STATE.activeActor ? STATE.activeActor.id : null });
   if (target.state === 'healthy') target.state = 'attacked';
 }
 
@@ -8949,16 +9211,22 @@ function renderLoop() {
 // hypothesis AND the strongest alternatives, then commit (or back out).
 // The gate fires at most once per run (STATE.achGatePassed).
 function showACHGate(onConfirm, onReject) {
+  const severCand = severCandidate();  // v0.10: the C2 this SEVER would hit
+  const severNode = severCand ? severCand.node : severNode;
+  const twoAdvNote = (coActive() && STATE.coEntered)
+    ? `<li style="margin-bottom:3px;">The beacons you traced belong to the <b>other</b> intrusion set — overlapping TTPs across concurrent actors are documented (CISA AA23-250A); severing ${severNode} leaves the real target of this evidence untouched</li>`
+    : '';
   const observedTTPs = Object.keys(STATE.observedTTPs || {}).length;
   const iocCount = (STATE.iocs || []).length;
   const revealedThreats = (STATE.threats || []).filter(t => t.revealed).length;
   // Generate alternative hypotheses from the asset topology
   const altNodes = (STATE.nodes || [])
-    .filter(n => n.id !== STATE.c2Node)
+    .filter(n => n.id !== severNode)
     .slice(0, 4);
   const altList = altNodes.length > 0
-    ? altNodes.map(n => `<li style="margin-bottom:3px;">C2 is actually on <b>${n.id}</b>, and ${STATE.c2Node} is a <i>decoy/jump-host/misattribution</i></li>`).join('')
+    ? altNodes.map(n => `<li style="margin-bottom:3px;">C2 is actually on <b>${n.id}</b>, and ${severNode} is a <i>decoy/jump-host/misattribution</i></li>`).join('')
     : '<li>No alternative candidates on this topology.</li>';
+  const altListFull = twoAdvNote + altList;
   const evidenceStrength = (observedTTPs * 20) + (iocCount * 15) + (revealedThreats * 10);
   const strengthLabel = evidenceStrength >= 80 ? 'STRONG' : evidenceStrength >= 50 ? 'MODERATE' : 'THIN';
   const strengthColor = evidenceStrength >= 80 ? 'var(--green)' : evidenceStrength >= 50 ? 'var(--amber)' : 'var(--red)';
@@ -8973,7 +9241,7 @@ function showACHGate(onConfirm, onReject) {
 
       <div style="margin-top:10px;padding:6px;background:rgba(78,226,255,0.05);border-left:3px solid var(--cyan);">
         <div style="color:var(--cyan);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ PRIMARY HYPOTHESIS (H1)</div>
-        <div style="color:var(--white);font-size:11px;margin-top:3px;">C2 is at <b>${STATE.c2Node}</b>.</div>
+        <div style="color:var(--white);font-size:11px;margin-top:3px;">C2 is at <b>${severNode}</b>.</div>
         <div style="color:var(--muted);font-size:10px;margin-top:3px;">Evidence basis: ${observedTTPs} observed TTPs · ${iocCount} IOCs · ${revealedThreats} revealed threats.</div>
         <div style="margin-top:4px;color:${strengthColor};font-size:10px;font-weight:bold;">Evidence strength: ${strengthLabel} (${evidenceStrength})</div>
       </div>
@@ -8981,10 +9249,10 @@ function showACHGate(onConfirm, onReject) {
       <div style="margin-top:10px;padding:6px;background:rgba(255,184,77,0.05);border-left:3px solid var(--amber);">
         <div style="color:var(--amber);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ COMPETING HYPOTHESES (H2…Hn)</div>
         <ul style="color:var(--white);font-size:10px;margin:4px 0 0 14px;padding:0;line-height:1.4;">
-          ${altList}
+          ${altListFull}
         </ul>
         <div style="margin-top:6px;color:var(--muted);font-size:10px;line-height:1.4;">
-          Also consider: adversary is <b>using ${STATE.c2Node} as a cutout and real C2 is upstream</b>; your attribution was <b>planted by the adversary</b> via T1692.002 reporting-message spoof; attack is a <b>burst-pattern diversion</b> ahead of a second-vector main attack.
+          Also consider: adversary is <b>using ${severNode} as a cutout and real C2 is upstream</b>; your attribution was <b>planted by the adversary</b> via T1692.002 reporting-message spoof; attack is a <b>burst-pattern diversion</b> ahead of a second-vector main attack.
         </div>
       </div>
 

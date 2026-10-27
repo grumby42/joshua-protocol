@@ -60,6 +60,7 @@ Legend — **V** verified against primary · **C** corroborated by secondary pre
 | SEI/CERT *Common Sense Guide to Mitigating Insider Threats*, 7th ed. (7 Sep 2022), 22 best practices | sei.cmu.edu library page | Title, edition, date, practice count confirmed | V | 2026-10-27 |
 | CERT, *A Pattern for Increased Monitoring for Intellectual Property Theft by Departing Insiders* — "many insiders who stole IP did so within 30 days of their termination" | apps.dtic.mil ADA585504 | Quoted verbatim; **no percentage claimed** (the primary gives none) | V | 2026-10-27 |
 | Cappelli, Moore, Trzeciak, *The CERT Guide to Insider Threats* (Addison-Wesley 2012) — IT sabotage / theft of IP / fraud models | informit.com | Book exists; model taxonomy is its central content | N | — |
+| **CISA/FBI/CNMF AA23-250A** (7 Sep 2023): "multiple nation-state APT actors were present on the organization's network" (Aeronautical Sector organization); indicators as early as Jan 2023; CISA IR Feb–Apr 2023; CVE-2022-47966 (Zoho ManageEngine ServiceDesk Plus, public-facing web server); "additional APT actors" exploited CVE-2022-42475 on the firewall device; "overlapping TTPs across multiple APT actors"; 37 ATT&CK techniques listed | cisa.gov/sites/default/files/2023-09/aa23-250a-apt-actors-exploit-cve-2022-47966-and-cve-2022-42475.pdf | Advisory PDF read; quotes verbatim. The game does **not** name the firewall vendor (the advisory does not). | V | 2026-10-27 |
 
 ## Incidents
 
@@ -77,6 +78,7 @@ Legend — **V** verified against primary · **C** corroborated by secondary pre
 | **Europol Operation Eastwood, Jul 2025** — NoName057(16) / DDOSIA takedown | Europol press release; SecurityAffairs | Operation and date confirmed | V | 2026-10-17 |
 | **Black Sea / Eastern Mediterranean GPS spoofing (2017–)**; Russia–Ukraine theatre GPS/Starlink/Iridium jamming | Multiple public maritime-safety and OSINT reports | Pattern-level claims only; no figures stated | C | 2026-10-17 |
 | ~~Taiwan TRA 2022–2024 ransomware~~ | — | **Removed v0.9.5** — no primary source found for a specific incident | — | — |
+| **Sophos, Aug 2022** — three ransomware groups consecutively attacked one network; "the first two attacks took place within two hours, and the third attack took place two weeks later"; some files triple-encrypted; "the rise in multiple attackers is still based on anecdotal evidence" (John Shier) | sophos.com press release, *Hive, LockBit and BlackCat Ransomware Gangs Consecutively Attack the Same Network* (Aug 2022; whitepaper "Multiple Attackers: A Clear and Present Danger") | Press release read (localized mirror of the English text); quotes verbatim. The whitepaper itself was not read in session; the game cites only what the release states and carries Sophos's own "anecdotal" hedge. Vendor source, not government. | V | 2026-10-27 |
 
 ---
 
@@ -87,4 +89,4 @@ Legend — **V** verified against primary · **C** corroborated by secondary pre
 3. Add the row here with the date and the exact thing checked.
 4. If it is a framework ID, resolve it on the publisher's site before using it. Do not infer IDs from naming patterns — that is how D3-IVV and D3-ITV were invented.
 
-*Ledger created for v0.9.8; current build v0.9.9 — BUILD HUNT-20261027-1658Z. Maintained alongside README.md and DETECTIONS.md.*
+*Ledger created for v0.9.8; current build v0.10.0 — BUILD HUNT-20261027-1710Z. Maintained alongside README.md and DETECTIONS.md.*

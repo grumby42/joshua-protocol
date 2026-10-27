@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.9.9)
+## What's in the box (v0.10.0)
 
 ### Five missions, each grounded in real incident patterns
 
@@ -172,6 +172,17 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
 
+### v0.10.0: TWO-ADVERSARY MODE
+
+The first mechanic that changes what *attribution* means in the game. Opt-in (Settings ▸ ADVERSARIES ▸ TWO, or `?adv=2` on the URL — carried in SHARE links); off by default; never applied to instructor demos; single-adversary play is byte-for-byte unchanged (`coActive()` is false on every new path).
+
+- **Real-world anchor, verified against the primary.** CISA/FBI/CNMF advisory [AA23-250A](https://www.cisa.gov/sites/default/files/2023-09/aa23-250a-apt-actors-exploit-cve-2022-47966-and-cve-2022-42475.pdf) (7 Sep 2023): "multiple nation-state APT actors were present on the organization's network" of an Aeronautical Sector organization — one set via CVE-2022-47966 (Zoho ManageEngine ServiceDesk Plus), "additional APT actors" via CVE-2022-42475 on the firewall device — with "overlapping TTPs across multiple APT actors." Sophos X-Ops (Aug 2022) is the corroborating vendor case (three ransomware groups, two within two hours), carried with Sophos's own caveat that the trend "is still based on anecdotal evidence." The game pairs archetypes from the mission's roster; it does not claim which real actors co-occurred.
+- **Mechanics.** A second actor from the mission's roster (never an initial-access broker — the handoff mechanic stays bound to the primary slot) is present from round 1 with its own foothold, its own threat chains (`threat.actorId`), its own adaptive pivots, its own dwell counter if it is a pre-positioning actor, and its own spawn tempo. **TRACE** resolves the primary C2 first, then works the second adversary's beacons; **TRIANGULATE** does the same; **SEVER** hits whichever C2 is revealed and live, primary first — and the second SEVER gets its own ACH gate, with an added competing hypothesis: *the beacons you traced belong to the other intrusion set*. Severing one adversary removes only that adversary's chains; the game does not end until both are cut or the clock runs out.
+- **The attribution problem is deliberate.** Observed TTPs stay in one shared pool, so the second adversary's techniques inflate or dilute the primary attribution exactly as they would in a SOC. The INTEL tab keeps a separate evidence count and attribution for "signature B" and reveals the second actor's identity at the same 60% threshold.
+- **Everything downstream knows.** Case-log JSON carries `second_adversary`; the TICKET export adds a SECOND ADVERSARY line and an open item for the un-severed C2; the TIMELINE tab marks entry, second reveal and second sever; save/resume round-trips all of it; seeded replay is deterministic in the mode.
+- **Codex entry + DETECTIONS.md Play 11** (*Concurrent intrusion sets — clustering before attribution*): cluster beacons by infrastructure and lineage before attributing; ACH per cluster; contain per cluster and re-verify; fix the edge once.
+- **Verified headlessly**: 120 seeded active-bot runs (24 per mission, 70 distinct actor pairings) — every invariant holds (second actor ≠ primary and never a broker; second C2 ≠ primary C2; every chain tagged; primary SEVER leaves no primary chains; no WIN-by-sever while the second adversary is live; ticket carries the second adversary); 40/40 mode-off runs unchanged; all five instructor demos still win with nothing compromised; the v0.9 passive, stress, save/resume, ACH, combo and export suites pass.
+
 ### v0.9.9: NIGHTWATCH demo correction (and a correction to the v0.9.8 record)
 
 - **Correction.** The v0.9.8 release note and commit message said all five instructor demos finished "with nothing compromised." That was true for four. The NIGHTWATCH walkthrough scanned and hardened the round-one KEYSTONE threat but never DISRUPTed it, so it matured at round 4 and KEYSTONE was compromised in every run. The harness output was there; the claim was written before it was read. Logged here so the record is accurate, not quietly fixed.
@@ -295,10 +306,11 @@ Older builds are archived in `builds/` for reference.
 
 Issues and discussions welcome. Pull requests considered carefully — the single-file architecture is intentional, so cross-cutting refactors need to preserve that constraint.
 
-Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4), save/resume (v0.8), seeded `?seed=…` replay URLs (v0.9.2), TIMELINE debrief (v0.9.4), instructor demos for all five missions (v0.9.6), D3FEND structured catalog + insider stage chains + protocol-centric detection plays (v0.9.7).
+Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4), save/resume (v0.8), seeded `?seed=…` replay URLs (v0.9.2), TIMELINE debrief (v0.9.4), instructor demos for all five missions (v0.9.6), D3FEND structured catalog + insider stage chains + protocol-centric detection plays (v0.9.7), SOURCES.md verification ledger + SOC-handoff ticket (v0.9.8), two-adversary mode (v0.10.0).
 
 Open priorities:
-- **Multi-adversary scenarios** — two actors on one board (e.g. CRYO + VOLTFORGE), each with its own C2 and technique pool, forcing the ACH gate to disentangle two coherent hypotheses. The highest-leverage teaching feature left.
+- **Instructor demo for two-adversary mode** — a scripted walkthrough that teaches cluster-then-attribute on one mission.
+- **Per-cluster ACH gate** — the gate currently adds the "other intrusion set" hypothesis as text; scoring each observed TTP against H1 and H2 side by side is the next analytic step.
 - Sound (Web Audio, opt-in)
 
 ---
@@ -329,4 +341,4 @@ Open priorities:
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.9.9** (October 2026) · BUILD `HUNT-20261027-1658Z`
+Current version: **v0.10.0** (October 2026) · BUILD `HUNT-20261027-1710Z`
