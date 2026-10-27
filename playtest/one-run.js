@@ -1,5 +1,17 @@
 require('./harness.js');
 
+// v0.10.1: JOSHUA_SEED=<decimal|0xhex|string> reproduces a shared ?seed= run
+// (same normalisation as initSeedFromURL). ADV=2 turns on two-adversary mode.
+if (process.env.JOSHUA_SEED) {
+  const raw = process.env.JOSHUA_SEED; let seed;
+  if (/^-?\d+$/.test(raw)) seed = parseInt(raw, 10) >>> 0;
+  else if (/^0x[0-9a-fA-F]+$/.test(raw)) seed = parseInt(raw, 16) >>> 0;
+  else { let h = 2166136261 >>> 0; for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } seed = h; }
+  Math.random = global.mulberry32(seed);
+  console.log('[one-run] seeded:', raw, '->', seed);
+}
+if (process.env.ADV === '2') global.STATE.twoAdversary = true;
+
 function play(missionId, actorId, difficulty) {
   const mission = global.MISSIONS[missionId];
   if (!mission.validActors.includes(actorId)) throw new Error(actorId + ' not valid for ' + missionId);

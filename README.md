@@ -26,7 +26,7 @@ They are complementary tools. A serious OT learner would use several of them.
 
 ---
 
-## What's in the box (v0.10.0)
+## What's in the box (v0.10.1)
 
 ### Five missions, each grounded in real incident patterns
 
@@ -172,6 +172,15 @@ Added depth to the three archetypes/missions the audit flagged as thin:
 - Shows the active seed at the top of the tab when a seeded run — closes the loop with v0.9.2's seeded replay URLs so peer review is "same seed → same timeline"
 - Mobile-friendly: table is horizontally scrollable; sticky node-name column; compact glyphs
 
+### v0.10.1: Per-cluster ACH, the two-adversary walkthrough, deterministic demos — and two engine bugs the walkthrough exposed
+
+- **Per-cluster ACH scoring.** In two-adversary mode the ACH gate now renders an evidence matrix: every observed TTP tagged by the intrusion set whose chains it was seen on — **A**, **B**, or **A+B** (seen on both; counts for neither) — and scored against H1 (*this SEVER ends the set that produced the evidence*) and H2 (*the evidence belongs to the other set*). Verdict line follows Heuer: when more observations disconfirm H1 than support it, the gate says so in red. The INTEL tab carries the same [A]/[B]/[A+B] tags on the observed-TTP list; the TICKET export reports the per-cluster split. Lineage tagging is DETECTIONS.md Play 11, mechanised.
+- **NIGHTWATCH two-adversary instructor demo** (`▶ DEMO: 2 ADVERSARIES` on the mission card). KINGFISHER on the ground station, HOLLOWKEY on mission control — the AA23-250A shape on the aeronautical board. Five rounds, nothing compromised, two SEVERs. It teaches four things in order: tag before you attribute (the scan output says *[signature B]*); the same technique on two clusters is the AA23-250A overlap, not corroboration (T1133 lands as A+B in round 3); one SEVER ends one channel and the board stays hot; and evidence ages — at the second gate four of the disconfirming rows belong to the set already severed, and "dead evidence doesn't vote" is the analyst's call.
+- **Demos now run on a fixed PRNG.** `beginDemo` seeds `Math.random` per script and restores it on exit, so a walkthrough is the same walkthrough every time — the only condition under which narration can be accurate. Before this, trace odds, hardening blunts and cascade stress were live dice inside a scripted lesson. `playtest/demo-test.js` now asserts the contract (WIN, nothing compromised) for every script and exits non-zero on a break.
+- **Bug: an adversary could "pivot" onto its own foothold.** The pivot picked any adjacent node, but the launch routine excludes the source node — so the log announced a pivot to the C2 node and the chain silently spawned somewhere else, or nowhere, and the "revealed" flag was then set on whichever chain happened to be last in the list. Pre-existing in single-adversary play. Fixed: pivots exclude the actor's foothold; the launch routine returns the chain it created and the pivot code uses that.
+- **Bug: the NIGHTWATCH demo narrated a BULWARK it never performed.** Round 3's script hardened MCC once and KEYSTONE once while the narration described two HARDENs on MCC. Fixed to a real BULWARK; rounds 3–5 re-narrated to the engine's actual pivots under the corrected rule (KEYSTONE → MCC, NWATCH-2 → NWATCH-1, NWATCH-1 → NWATCH-2), with the new teaching line: count the open neighbours — an adversary never pivots onto its own foothold — and harden where the pivot will land.
+- TRIANGULATE resolves the second C2 once the primary is known (it previously logged "already known" and gave a bonus IOC instead). Boot banner now reports six walkthroughs, computed.
+
 ### v0.10.0: TWO-ADVERSARY MODE
 
 The first mechanic that changes what *attribution* means in the game. Opt-in (Settings ▸ ADVERSARIES ▸ TWO, or `?adv=2` on the URL — carried in SHARE links); off by default; never applied to instructor demos; single-adversary play is byte-for-byte unchanged (`coActive()` is false on every new path).
@@ -309,8 +318,7 @@ Issues and discussions welcome. Pull requests considered carefully — the singl
 Shipped from the original roadmap: OP. HEARTLINE (v0.9.3), OP. RAILGUARD (v0.9.4), save/resume (v0.8), seeded `?seed=…` replay URLs (v0.9.2), TIMELINE debrief (v0.9.4), instructor demos for all five missions (v0.9.6), D3FEND structured catalog + insider stage chains + protocol-centric detection plays (v0.9.7), SOURCES.md verification ledger + SOC-handoff ticket (v0.9.8), two-adversary mode (v0.10.0).
 
 Open priorities:
-- **Instructor demo for two-adversary mode** — a scripted walkthrough that teaches cluster-then-attribute on one mission.
-- **Per-cluster ACH gate** — the gate currently adds the "other intrusion set" hypothesis as text; scoring each observed TTP against H1 and H2 side by side is the next analytic step.
+- **Human playtest** — difficulty has only ever been measured by perfect-information bots; see [`playtest/HUMAN-PLAYTEST.md`](playtest/HUMAN-PLAYTEST.md) for the protocol.
 - Sound (Web Audio, opt-in)
 
 ---
@@ -341,4 +349,4 @@ Open priorities:
 
 Built by Ted Gransbury — [github.com/grumby42](https://github.com/grumby42) · [linkedin.com/in/tgransbury](https://www.linkedin.com/in/tgransbury) — cybersecurity professional, FAA Commercial LTA-Balloon pilot and flight instructor, Launch Director at the Albuquerque International Balloon Fiesta. Career direction: converging aviation and cybersecurity at the cyber-physical seam.
 
-Current version: **v0.10.0** (October 2026) · BUILD `HUNT-20261027-1710Z`
+Current version: **v0.10.1** (October 2026) · BUILD `HUNT-20261027-1721Z`

@@ -89,4 +89,4 @@ Legend — **V** verified against primary · **C** corroborated by secondary pre
 3. Add the row here with the date and the exact thing checked.
 4. If it is a framework ID, resolve it on the publisher's site before using it. Do not infer IDs from naming patterns — that is how D3-IVV and D3-ITV were invented.
 
-*Ledger created for v0.9.8; current build v0.10.0 — BUILD HUNT-20261027-1710Z. Maintained alongside README.md and DETECTIONS.md.*
+*Ledger created for v0.9.8; current build v0.10.1 — BUILD HUNT-20261027-1721Z. Maintained alongside README.md and DETECTIONS.md.*

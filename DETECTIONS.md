@@ -945,4 +945,4 @@ project: cluster_ids, hosts_per_cluster, initial_access_per_cluster, earliest_se
 
 ---
 
-*Appendix generated for Joshua Protocol v0.10.0 — BUILD HUNT-20261027-1710Z · STAMP 2026-10-27T17:10Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*
+*Appendix generated for Joshua Protocol v0.10.1 — BUILD HUNT-20261027-1721Z · STAMP 2026-10-27T17:21Z. In the spirit of grumby42/dfir-trainers' TRAINER_SPEC.md: detections authored as plays, not shipped as copy-paste rules.*

@@ -1001,9 +1001,9 @@
 
 // v0.7/v0.8: Build stamping — borrowed from DFIR Trainers convention. Surfaced
 // in-boot and in debrief footer so playtest screenshots carry provenance.
-const BUILD_ID = 'HUNT-20261027-1710Z';
-const STAMP_UTC = '2026-10-27T17:10Z';
-const APP_VERSION = 'v0.10.0';
+const BUILD_ID = 'HUNT-20261027-1721Z';
+const STAMP_UTC = '2026-10-27T17:21Z';
+const APP_VERSION = 'v0.10.1';
 
 // v0.9.2: Deterministic seeded replay URLs.
 // mulberry32 PRNG — small, fast, deterministic, uniform. Not cryptographic;
@@ -2371,7 +2371,9 @@ const COMBOS = [
     },
     apply(ctx) {
       log(`<b style="color:#4ee2ff;">▸▸ COMBO: TRIANGULATE</b>`, 'log-good');
-      if (STATE.c2Revealed) {
+      // v0.10.1: with the primary C2 known, triangulation works the second adversary
+      const coPending = STATE.c2Revealed && coActive() && STATE.coEntered && !STATE.coC2Revealed;
+      if (STATE.c2Revealed && !coPending) {
         log('&nbsp;&nbsp;└ C2 already known. Combo bonus IOC instead.', 'log-good');
         STATE.iocs.push('Cross-correlated beacon jitter pattern observed');
         return;
@@ -2383,7 +2385,7 @@ const COMBOS = [
       // that sequence and it did not work). Now: if evidence already exists,
       // reveal immediately; otherwise ARM the reveal and let the scan fulfil
       // it (see triangulateFulfil, called from the scan resolver).
-      const anyRevealed = STATE.threats.some(t => t.revealed);
+      const anyRevealed = STATE.threats.some(t => t.revealed && (!coPending || t.actorId === STATE.coActor.id));
       if (anyRevealed) {
         triangulateFulfil('prior-round evidence');
       } else {
@@ -2871,12 +2873,12 @@ const DEMOS = {
         threatSpawns: [],
         playerActions: [
           { agent: 'ANCHOR', action: 'harden', target: 'MCC' },
-          { agent: 'ANCHOR', action: 'harden', target: 'KEYSTONE' },
+          { agent: 'ANCHOR', action: 'harden', target: 'MCC' },
           { agent: 'WRAITH', action: 'disrupt', target: 'NWATCH-2' },
         ],
         narration: [
           { phase: 'INTEL', text: 'Round 3. C2 is at KEYSTONE, and the pivot went exactly where I said: MCC. It is sitting on a hardened node, so it will hold a round. Standard play would be SEVER right away, but I want to bulwark mission control first — if MCC falls we lose command authority over the whole constellation, and that is the one outcome we cannot recover from in-mission.' },
-          { phase: 'PLAN', text: 'BULWARK on MCC (two HARDENs, 2 AP) for +1 bonus resilience, plus WRAITH ▸ DISRUPT NWATCH-2 (2 AP). 4 AP. Watch the pivot again after the disrupt — with NWATCH-2 cut, the next adjacent node toward the ground is KEYSTONE itself.' },
+          { phase: 'PLAN', text: 'BULWARK on MCC (two HARDENs, 2 AP) for +1 bonus resilience, plus WRAITH ▸ DISRUPT NWATCH-2 (2 AP). 4 AP. Watch the pivot after the disrupt — and watch where it cannot go. KEYSTONE is the adversary\'s own foothold, so the campaign never "pivots" onto it; from NWATCH-2 the next eligible neighbour is NWATCH-1.' },
         ],
       },
       {
@@ -2884,12 +2886,12 @@ const DEMOS = {
         threatSpawns: [],
         playerActions: [
           { agent: 'WRAITH', action: 'disrupt', target: 'MCC' },
-          { agent: 'WRAITH', action: 'disrupt', target: 'KEYSTONE' },
-          { agent: 'ANCHOR', action: 'harden', target: 'NWATCH-1' },
+          { agent: 'WRAITH', action: 'disrupt', target: 'NWATCH-1' },
+          { agent: 'ANCHOR', action: 'harden', target: 'NWATCH-2' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 4. Two live threats now, MCC and KEYSTONE — both ground segment, and they are adjacent. That is the KILL BOX setup: two DISRUPTs on adjacent nodes in one round block every pivot. Notice the pattern across three rounds: every time we hit a satellite, the campaign fell back toward the ground. Aerospace APTs want the uplink, not the bus.' },
-          { phase: 'PLAN', text: 'KILL BOX: WRAITH ▸ DISRUPT MCC (2 AP) + WRAITH ▸ DISRUPT KEYSTONE (2 AP). Both live threats cut, no pivot possible. ANCHOR ▸ HARDEN NWATCH-1 (1 AP) — the imager we have not touched yet. 5 AP. Next round: sever.' },
+          { phase: 'INTEL', text: 'Round 4. Two live threats: MCC, from the round-two pivot, and NWATCH-1, from the round-three pivot. Not adjacent, so no KILL BOX this time — but read the topology before you swing. A pivot off MCC has nowhere to go: its only neighbour is KEYSTONE, the foothold itself. A pivot off NWATCH-1 has exactly one open neighbour, NWATCH-2. So we know where the next chain lands before we break this one.' },
+          { phase: 'PLAN', text: 'WRAITH ▸ DISRUPT MCC (2 AP) + WRAITH ▸ DISRUPT NWATCH-1 (2 AP), and ANCHOR ▸ HARDEN NWATCH-2 (1 AP) — hardening the node we have just predicted the pivot will land on. 5 AP. Expect: MCC cleared with no pivot; NWATCH-1 cleared with a pivot onto a hardened NWATCH-2. Next round: sever.' },
         ],
       },
       {
@@ -2900,12 +2902,12 @@ const DEMOS = {
           { agent: 'ANCHOR', action: 'harden', target: 'KEYSTONE' },
         ],
         narration: [
-          { phase: 'INTEL', text: 'Round 5. Board is clear: pivots blocked, both ground-segment threats cut, MCC bulwarked. KEYSTONE is the C2 — in the real world, this is the ground station whose management plane the adversary owns, the KA-SAT pattern. Now we sever.' },
+          { phase: 'INTEL', text: 'Round 5. One chain left, on NWATCH-2, exactly where we said it would land, against a hardening charge. KEYSTONE is the C2 — in the real world, this is the ground station whose management plane the adversary owns, the KA-SAT pattern. Severing the channel ends every chain it commands. Now we sever.' },
           { phase: 'PLAN', text: 'WRAITH ▸ SEVER C2 at KEYSTONE (3 AP). ANCHOR hardens KEYSTONE (1 AP) as a final hedge. Mission complete on sever — KINGFISHER\'s aerospace campaign is finished. Constellation operationally normal.' },
         ],
       },
     ],
-    outro: 'Mission complete by round 5 with nothing compromised. Aerospace lessons: ground segment is your defense priority because it is the gateway to orbital command. Adaptive actors require special handling — KILL BOX exists specifically to deny them their pivot. Always assume an APT is patient. The two-vector campaign — ground intrusion plus orbital interference — is the standard nation-state playbook for aerospace targeting.',
+    outro: 'Mission complete by round 5 with nothing compromised. Aerospace lessons: ground segment is your defense priority because it is the gateway to orbital command. Adaptive actors require special handling — predict the pivot from the topology (an adversary never pivots onto its own foothold; count the open neighbours) and harden where it will land, or deny it outright with a KILL BOX on adjacent nodes. Always assume an APT is patient. The two-vector campaign — ground intrusion plus orbital interference — is the standard nation-state playbook for aerospace targeting.',
   },
 
   'TIDEBREAK': {
@@ -3175,6 +3177,42 @@ const DEMOS = {
       },
     ],
     outro: 'Mission complete by round 6 with zero life-safety events. Rail lessons: life-safety nodes — interlockings and grade crossings — jump the queue over every business system, every time. Dispatch is the Belarus lesson: bulwark it on round one because movement authorities, not trackside hardware, are what stop trains. The VHF foothold is the Poland lesson: legacy cab-signaling was safety-engineered to fail safe, not cyber-engineered to authenticate, and the fix is cryptographic protection of command messages per EN 50159. And the modern hacktivist runs two plays at once — RF on the trackside, DDoS on the business side — so attribute by the pattern, not by any single technique.',
+  },
+  // v0.10.1: TWO-ADVERSARY instructor demo. Same constellation, two
+  // independent intrusion sets — the CISA AA23-250A shape (aeronautical
+  // sector, two actors, overlapping TTPs). Narration is written to what the
+  // engine does under the demo's deterministic pivots; see playtest/demo-test.js.
+  'NIGHTWATCH-2ADV': {
+    missionId: 'NIGHTWATCH',
+    actor: 'KINGFISHER',
+    c2Node: 'KEYSTONE',
+    coActor: 'HOLLOWKEY',
+    coC2Node: 'MCC',
+    difficulty: 'operator',
+    intro: `OP. NIGHTWATCH — TWO-ADVERSARY WALKTHROUGH.\n\nIn September 2023 CISA, FBI and Cyber National Mission Force published advisory AA23-250A: an aeronautical-sector organization with multiple nation-state actors on the same network at the same time — one through a ServiceDesk web server, additional actors through the firewall device — and, in the advisory's words, overlapping TTPs across the actors. That is this run.\n\nKINGFISHER, the aerospace APT, is on the ground station. Someone else is on the network too, and their techniques will look a lot like KINGFISHER's. The lesson is not detection. It is bookkeeping: tag every observation by which chain it came from BEFORE you attribute, and sever per adversary.`,
+    rounds: [
+      { round: 1,
+        threatSpawns: [ { target: 'NWATCH-2', techniqueId: 'REC-0001' }, { target: 'KEYSTONE', techniqueId: 'T1078', actor: 'B' } ],
+        playerActions: [ { agent: 'VIGIL', action: 'scan', target: 'KEYSTONE' }, { agent: 'ANCHOR', action: 'harden', target: 'MCC' }, { agent: 'ANCHOR', action: 'harden', target: 'KEYSTONE' } ],
+        narration: [ { phase: 'INTEL', text: 'Round 1. Two things in the egress: KINGFISHER-shaped reconnaissance toward the imagers, and a second beacon profile that does not fit. JOSHUA has already flagged it — SECOND SIGNATURE. In AA23-250A the responders found this the same way: activity on the ServiceDesk web server that did not line up with the activity on the firewall. From this moment every observation gets a cluster tag before it gets a name.' }, { phase: 'PLAN', text: 'VIGIL ▸ SCAN KEYSTONE (1 AP) — the ground station sees itself plus every adjacent node, so one scan covers both suspected chains. ANCHOR ▸ HARDEN MCC (1 AP) and ANCHOR ▸ HARDEN KEYSTONE (1 AP): mission control is the cascade trigger and the ground station is the gateway. 3 AP; we hold 2 because round one is for looking, not swinging.' }, { phase: 'RESOLVE', text: 'Read the scan output carefully. KEYSTONE: T1078 Valid Accounts, tagged [signature B] — a credential actor\'s opener, not an aerospace APT\'s. NWATCH-2: REC-0001, spacecraft design reconnaissance — that is KINGFISHER. Two clusters from one scan. In the INTEL tab each observed TTP now carries an [A], [B] or [A+B] tag. Keep them apart.' } ] },
+      { round: 2,
+        threatSpawns: [ { target: 'NWATCH-1', techniqueId: 'REC-0003' }, { target: 'NWATCH-3', techniqueId: 'T1133', actor: 'B' } ],
+        playerActions: [ { agent: 'VIGIL', action: 'scan', target: 'NWATCH-2' }, { agent: 'VIGIL', action: 'trace', target: null }, { agent: 'WRAITH', action: 'disrupt', target: 'KEYSTONE' } ],
+        narration: [ { phase: 'INTEL', text: 'Round 2. KINGFISHER\'s chain on NWATCH-2 advanced to T1133 External Remote Services — set A. The B chain on KEYSTONE did not advance: the hardening charge we put there absorbed it. Note the technique, though. T1133 is in HOLLOWKEY\'s playbook too. When the same technique shows up on both clusters, the shared pool will not tell you which actor it belongs to. The lineage will.' }, { phase: 'PLAN', text: 'TRIANGULATE: VIGIL ▸ SCAN NWATCH-2 (1 AP) + VIGIL ▸ TRACE (2 AP). We already hold revealed evidence, so the combo resolves the primary C2 immediately — KEYSTONE. The TRACE action itself then goes after the second beacon and will come up short; that is acceptable, triangulation handles B later. WRAITH ▸ DISRUPT KEYSTONE (2 AP) cuts the B chain sitting on our gateway. 5 AP. HOLLOWKEY is adaptive, but watch: all three satellites already carry chains and MCC is its own foothold, so there is nowhere to pivot to. No pivot this round.' } ] },
+      { round: 3,
+        threatSpawns: [],
+        playerActions: [ { agent: 'WRAITH', action: 'sever', target: null }, { agent: 'WRAITH', action: 'disrupt', target: 'NWATCH-3' } ],
+        narration: [ { phase: 'INTEL', text: 'Round 3. Look at the evidence by cluster: T1078 [B], REC-0001 [A], REC-0003 [A], PER-0001 [A], EX-0014 [A], EX-0012 [B] — and T1133 is now [A+B]: the same technique observed on both intrusion sets. That one row is the AA23-250A finding, overlapping TTPs across actors. Score the SEVER on KEYSTONE: four observations consistent with H1, two that belong to the other set, one ambiguous. H1 survives. But those two rows are a promise that the board stays hot after we cut.' }, { phase: 'PLAN', text: 'WRAITH ▸ SEVER KEYSTONE (3 AP). In live play the ACH gate shows exactly the matrix I just read; commit H1 knowing what it does not cover. WRAITH ▸ DISRUPT NWATCH-3 (2 AP) on the B chain. 5 AP. Expect: KINGFISHER\'s chains on NWATCH-1 and NWATCH-2 die with its command channel — HOLLOWKEY\'s do not — and the disrupt on NWATCH-3 pushes HOLLOWKEY back toward the ground: KEYSTONE.' } ] },
+      { round: 4,
+        threatSpawns: [ { target: 'KEYSTONE', techniqueId: 'T1555.003', actor: 'B' } ],
+        playerActions: [ { agent: 'VIGIL', action: 'scan', target: 'KEYSTONE' }, { agent: 'VIGIL', action: 'trace', target: null }, { agent: 'WRAITH', action: 'disrupt', target: 'KEYSTONE' } ],
+        narration: [ { phase: 'INTEL', text: 'Round 4. One channel cut; the board did not go quiet. It never does with two actors — Sophos documented a network that received three ransom notes. Only signature B remains: the pivoted chain on KEYSTONE, revealed because we watched it move, plus whatever it staged there that we have not scanned yet. Second C2 is still unknown. TRACE alone has failed twice; triangulation is the reliable path, and with the primary C2 already known it now resolves the second one.' }, { phase: 'PLAN', text: 'TRIANGULATE again: VIGIL ▸ SCAN KEYSTONE (1 AP) + VIGIL ▸ TRACE (2 AP) — prior-round B evidence resolves the second C2: MCC. The scan also exposes the staged chain on KEYSTONE, and with WRAITH ▸ DISRUPT KEYSTONE (2 AP) it forms a RECON STRIKE. 5 AP. Both chains on KEYSTONE break; HOLLOWKEY pivots once more, toward NWATCH-1 — MCC is its own foothold and the other imagers are hardened or occupied.' } ] },
+      { round: 5,
+        threatSpawns: [],
+        playerActions: [ { agent: 'WRAITH', action: 'sever', target: null }, { agent: 'ANCHOR', action: 'harden', target: 'NWATCH-2' } ],
+        narration: [ { phase: 'INTEL', text: 'Round 5. Second C2 located at MCC. Score the SEVER: four rows consistent with H1, four disconfirming, one ambiguous — a tie on raw counts. But read which rows disconfirm: REC-0001, REC-0003, PER-0001, EX-0014. All set A. A cluster we already severed. Evidence ages: observations from a dead intrusion set do not vote on the live one. Strip them and H1 is four to nothing. That judgement — which evidence is still load-bearing — is the analyst\'s, not the tool\'s.' }, { phase: 'PLAN', text: 'WRAITH ▸ SEVER (3 AP) — it hits the revealed, live C2: MCC. ANCHOR ▸ HARDEN NWATCH-2 (1 AP) with the spare point. 4 AP. The pivoted chain on NWATCH-1 dies with its command channel, and that is both adversaries cut.' } ] },
+    ],
+    outro: 'Mission complete by round 5, nothing compromised, two adversaries cut. The lessons are bookkeeping, not bravery. One: tag every observation by the chain it came from before you attribute it — the scan tells you, if you read it. Two: the same technique on two clusters is not corroboration, it is the AA23-250A overlap; it counts for neither hypothesis. Three: one SEVER ends one command channel, and the board stays hot until the second is traced and cut — triangulation resolves the second C2 once the first is known. Four: evidence ages — rows from a cluster you already severed do not vote on the one still live. Fix the edge once: AA23-250A\'s own mitigations are generic on purpose, because two actors on the same vulnerable edge is an edge problem.',
   },
 };
 
@@ -5054,7 +5092,7 @@ function drawAttackChains() {
 // across multiple APT actors". Every path below is a no-op unless the mode is
 // on, so single-adversary play and the instructor demos are unchanged.
 // =============================================================================
-function coActive() { return !!(STATE.twoAdversary && STATE.coActor && !STATE.demoMode); }
+function coActive() { return !!STATE.coActor; }  // coActor is only ever set when the mode is on (or a demo script asks for it)
 function isCoActor(actor) { return !!(actor && STATE.coActor && actor.id === STATE.coActor.id); }
 function actorOf(t) { return (t && STATE.coActor && t.actorId === STATE.coActor.id) ? STATE.coActor : STATE.activeActor; }
 function c2For(actor) { return isCoActor(actor) ? STATE.coC2Node : STATE.c2Node; }
@@ -5070,6 +5108,37 @@ function severCandidate() {
   if (coActive() && STATE.coEntered && STATE.coC2Revealed && !STATE.coC2Severed) return { actor: STATE.coActor, node: STATE.coC2Node, co: true };
   return null;
 }
+// v0.10.1: per-cluster evidence. Each observed TTP is tagged by which
+// intrusion set's chains it was seen on: A (primary only), B (second only),
+// A+B (both). This is the lineage tagging of DETECTIONS.md Play 11.
+function clusterEvidence() {
+  const out = [];
+  const co = STATE.coObservedTTPs || {};
+  Object.entries(STATE.observedTTPs || {}).forEach(([tid, total]) => {
+    const b = co[tid] || 0; const a = Math.max(0, total - b);
+    out.push({ tid, a, b, cluster: (a && b) ? 'A+B' : (b ? 'B' : 'A') });
+  });
+  return out;
+}
+function clusterTag(tid) {
+  if (!(coActive() && STATE.coEntered)) return '';
+  const b = (STATE.coObservedTTPs || {})[tid] || 0; const a = Math.max(0, (STATE.observedTTPs[tid] || 0) - b);
+  const c = (a && b) ? 'A+B' : (b ? 'B' : 'A');
+  const col = c === 'B' ? 'var(--magenta)' : c === 'A' ? 'var(--cyan)' : 'var(--amber)';
+  return ` <span style="color:${col};font-size:8px;">[${c}]</span>`;
+}
+// Score the evidence against "SEVER <node> ends the intrusion that produced it".
+function achClusterScore(severIsCo) {
+  const rows = clusterEvidence();
+  let consistent = 0, disconfirm = 0, ambiguous = 0;
+  rows.forEach(r => {
+    if (r.cluster === 'A+B') ambiguous++;
+    else if ((r.cluster === 'B') === !!severIsCo) consistent++;
+    else disconfirm++;
+  });
+  return { rows, consistent, disconfirm, ambiguous };
+}
+
 function pickCoActor(primaryId) {
   // Any other actor valid for this mission. Initial-access brokers (handoff
   // actors) are excluded: the handoff mechanic is bound to the primary slot.
@@ -5231,13 +5300,15 @@ function aiPlanCoThreats(diffMod) {
   const active = STATE.threats.filter(t => t.actorId === B.id).length;
   const launches = Math.max(0, desired - active);
   for (let i = 0; i < launches; i++) maybeLaunchThreat({ actor: B, sourceId: STATE.coC2Node });
-  if (!STATE.coEntered && STATE.threats.some(t => t.actorId === B.id)) {
-    STATE.coEntered = true;
-    STATE.metrics.coEntryRound = STATE.round;
-    log('<b style="color:var(--magenta);">▸▸ SECOND SIGNATURE — new beacon profile does not fit the current hypothesis</b>', 'log-crit');
-    log('<span style="color:var(--muted);">A second, independent intrusion set is active. Its C2 is separate: TRACE and SEVER apply per adversary. Overlapping TTPs will muddle attribution — keep two hypotheses.</span>');
-    setTimeout(() => logJoshua('Two hands on the board, Operator. Do not fold the new activity into your first hypothesis. Hold two.'), 900);
-  }
+  if (!STATE.coEntered && STATE.threats.some(t => t.actorId === B.id)) noteCoEntry();
+}
+function noteCoEntry() {
+  if (STATE.coEntered) return;
+  STATE.coEntered = true;
+  STATE.metrics.coEntryRound = STATE.round;
+  log('<b style="color:var(--magenta);">▸▸ SECOND SIGNATURE — new beacon profile does not fit the current hypothesis</b>', 'log-crit');
+  log('<span style="color:var(--muted);">A second, independent intrusion set is active. Its C2 is separate: TRACE and SEVER apply per adversary. Overlapping TTPs will muddle attribution — keep two hypotheses.</span>');
+  setTimeout(() => logJoshua('Two hands on the board, Operator. Do not fold the new activity into your first hypothesis. Hold two.'), 900);
 }
 
 function maybeLaunchThreat(opts) {
@@ -5254,7 +5325,7 @@ function maybeLaunchThreat(opts) {
     !STATE.threats.some(t => t.target === n.id) &&
     (!opts.excludeTarget || n.id !== opts.excludeTarget)
   );
-  if (candidates.length === 0) return;
+  if (candidates.length === 0) return null;
   // Weight by node type (mission-specific high-value targeting)
   const weighted = [];
   candidates.forEach(n => {
@@ -5325,6 +5396,7 @@ function maybeLaunchThreat(opts) {
   });
   STATE.metrics.threatSpawns.push({ round: STATE.round, target: target.id, techniqueId: techId, actorId: actor ? actor.id : null });
   if (target.state === 'healthy') target.state = 'attacked';
+  return STATE.threats[STATE.threats.length - 1];
 }
 
 
@@ -5729,6 +5801,7 @@ function startIntelPhase() {
       if (!roundData) {
         // Script ran out — exit demo mode, let player take over
         STATE.demoMode = false;
+        demoRestoreRandom();  // v0.10.1
         const badge = document.getElementById('demo-badge');
         if (badge) badge.style.display = 'none';
         logJoshua('Demo script complete. You have the controls, Operator.');
@@ -5847,6 +5920,7 @@ function executeAction(ag, a) {
                   'IDS sweep deployed: Suricata sig hunt + Zeek conn.log diff across target ±1 hop.'));
     const reveal = [target, ...adjacent(target.id)];
     let foundCount = 0;
+    let foundTechsCo = false;  // v0.10.1: did this scan expose a second-adversary chain?
     const foundTechs = [];
     reveal.forEach(n => {
       STATE.threats.forEach(t => {
@@ -5856,6 +5930,7 @@ function executeAction(ag, a) {
           foundTechs.push(t.techniqueId);
           recordTechniqueObserved(t.techniqueId, t.actorId);
           const sigTag = (STATE.coActor && t.actorId === STATE.coActor.id) ? ' <span style="color:var(--magenta);">[signature B]</span>' : '';  // v0.10
+          if (sigTag) foundTechsCo = true;
           log(`&nbsp;&nbsp;└ Threat exposed at ${n.id}${sigTag}`, 'log-warn');
           logTechnique(t.techniqueId);
         }
@@ -5866,7 +5941,7 @@ function executeAction(ag, a) {
       recordAction(ag.id, a.actionId, a.target, 'wasted', 'no threats present', []);
     } else {
       recordAction(ag.id, a.actionId, a.target, 'effective', null, foundTechs);
-      if (STATE.triangulateArmed) triangulateFulfil('this round\'s scan');  // v0.9.6
+      if (STATE.triangulateArmed && (!STATE.c2Revealed || foundTechsCo)) triangulateFulfil('this round\'s scan');  // v0.9.6 / v0.10.1
     }
   }
   else if (a.actionId === 'trace') {
@@ -5950,8 +6025,13 @@ function executeAction(ag, a) {
         log(`&nbsp;&nbsp;└ <span style="color:#ff4ea8;">KILL BOX prevented adversary pivot</span>`, 'log-good');
       }
       if (willPivot) {
+        // v0.10.1: an adversary never "pivots" onto its own foothold (the launch
+        // routine excludes the source node, so such a pivot silently spawned
+        // elsewhere — or nowhere — while the log claimed a target).
+        const ownC2 = c2For(actor);
         const adjacents = adjacent(target.id).filter(n =>
           n.state !== 'compromised' &&
+          n.id !== ownC2 &&
           !STATE.threats.some(t2 => t2.target === n.id)
         );
         if (adjacents.length > 0) {
@@ -5970,9 +6050,9 @@ function executeAction(ag, a) {
           });
           log(`&nbsp;&nbsp;└ <b style="color:var(--magenta);">⚠ ADVERSARY ADAPTING — campaign pivoting to ${pivotTarget.id}</b>`, 'log-warn');
           // Spawn the pivoted threat now so it's in motion next conseq phase
-          maybeLaunchThreat({ preferTarget: pivotTarget.id, pivotedFrom: target.id, actor, sourceId: c2For(actor) });
-          // The pivoted threat is automatically revealed (we saw the pivot happen)
-          const pivot = STATE.threats[STATE.threats.length - 1];
+          const pivot = maybeLaunchThreat({ preferTarget: pivotTarget.id, pivotedFrom: target.id, actor, sourceId: c2For(actor) });
+          // The pivoted threat is automatically revealed (we saw the pivot happen).
+          // v0.10.1: use the returned chain, not "the last threat in the list".
           if (pivot) pivot.revealed = true;
         }
       }
@@ -6339,6 +6419,7 @@ function triggerWin(reason) {
       onContinue: () => {
         hideNarratorCard();
         STATE.demoMode = false;  // exit demo mode so debrief renders normally
+        demoRestoreRandom();
         finishWin();
       },
       onExit: exitDemo,
@@ -6625,6 +6706,8 @@ function buildHandoffTicket(rubric, cfiNote, win, reason) {
   L.push(`- C2 ${STATE.c2Revealed ? 'located at **' + STATE.c2Node + '** (R' + (m.c2RevealedRound || '?') + ')' : '**not located**'}; ${STATE.c2Severed ? 'severed R' + (m.c2SeveredRound || '?') : 'NOT severed'}.`);
   if (coActive() && STATE.coEntered) {  // v0.10
     const B = STATE.coActor;
+    const sc = achClusterScore(false);
+    L.push(`- Evidence by cluster: ${sc.rows.filter(r => r.cluster === 'A').length} TTP(s) on set A only, ${sc.rows.filter(r => r.cluster === 'B').length} on set B only, ${sc.ambiguous} on both. Attribute per cluster; do not pool.`);
     L.push(`- **SECOND ADVERSARY** (entered R${m.coEntryRound || '?'}): ${STATE.coActorRevealed ? 'assessed as **' + B.name + '** (' + B.tagline + ')' : '**unattributed**'} — attribution ${STATE.coActorAttribution || 0}%. Second C2 ${STATE.coC2Revealed ? 'located at **' + STATE.coC2Node + '** (R' + (m.coC2RevealedRound || '?') + ')' : '**not located**'}; ${STATE.coC2Severed ? 'severed R' + (m.coC2SeveredRound || '?') : 'NOT severed'}. Concurrent-actor pattern per CISA AA23-250A; treat shared TTP evidence with two hypotheses.`);
   }
   L.push(`- Assets compromised: ${compromised.length ? '**' + compromised.join(', ') + '**' : 'none'}. Stressed: ${stressed.length ? stressed.join(', ') : 'none'}.`);
@@ -7795,7 +7878,7 @@ function renderIntelTab(el) {
         const matchTag = (A && A.techniqueAffinity.includes(tid))
           ? ' <span style="color:' + A.color + ';font-size:8px;">[match]</span>'
           : '';
-        return `<div class="log-line">&nbsp;&nbsp;└ <span class="tech-tap" data-tid="${tid}">${tid}</span> ${T.name} <span class="framework-tag ${fw.cls}">${fw.short}</span> <span style="color:var(--amber);">[${count}×]</span>${matchTag}</div>`;
+        return `<div class="log-line">&nbsp;&nbsp;└ <span class="tech-tap" data-tid="${tid}">${tid}</span> ${T.name} <span class="framework-tag ${fw.cls}">${fw.short}</span> <span style="color:var(--amber);">[${count}×]</span>${matchTag}${clusterTag(tid)}</div>`;
       }).join('');
 
   // Actor block
@@ -8777,6 +8860,7 @@ function showMissionSelect() {
       return `<span class="framework-tag ${F.cls}">${F.short}</span>`;
     }).join(' ');
     const hasDemo = !!DEMOS[m.id];
+    const hasDemo2 = !!DEMOS[m.id + '-2ADV'];  // v0.10.1: two-adversary walkthrough
     cards += `
       <div class="mission-card" data-mid="${m.id}" style="display:flex;flex-direction:column;">
         <div style="flex:1;">
@@ -8787,6 +8871,7 @@ function showMissionSelect() {
         </div>
         <div style="display:flex;gap:6px;margin-top:8px;">
           ${hasDemo ? `<button class="action-btn" data-demo="${m.id}" style="flex:1;font-size:10px;">▶ WATCH DEMO</button>` : ''}
+          ${hasDemo2 ? `<button class="action-btn" data-demo="${m.id}-2ADV" style="flex:1;font-size:10px;color:var(--magenta);border-color:var(--magenta);">▶ DEMO: 2 ADVERSARIES</button>` : ''}
           <button class="action-btn primary" data-play="${m.id}" style="flex:1;font-size:10px;">▶ PLAY</button>
         </div>
       </div>
@@ -8972,6 +9057,7 @@ function beginGame(missionId) {
   if (STATE.demoMode && STATE.demoScript) {
     STATE.activeActor = THREAT_ACTORS[STATE.demoScript.actor];
     STATE.difficulty = STATE.demoScript.difficulty || 'operator';
+    STATE.coActor = STATE.demoScript.coActor ? (THREAT_ACTORS[STATE.demoScript.coActor] || null) : null;  // v0.10.1: scripted second adversary
   } else {
     const valid = STATE.mission.validActors || [STATE.mission.defaultActor || 'CRYO'];
     const actorId = valid[Math.floor(Math.random() * valid.length)];
@@ -8979,7 +9065,7 @@ function beginGame(missionId) {
   }
   // v0.10: two-adversary mode (opt-in via settings or ?adv=2; never in instructor demos)
   if (JOSHUA_URL_TWO_ADV) STATE.twoAdversary = true;
-  STATE.coActor = (STATE.twoAdversary && !STATE.demoMode) ? pickCoActor(STATE.activeActor && STATE.activeActor.id) : null;
+  if (!STATE.demoMode) STATE.coActor = STATE.twoAdversary ? pickCoActor(STATE.activeActor && STATE.activeActor.id) : null;
 
   resizeCanvas();
   if (STATE.mission.id === 'BLACKFROST') setupEnergyGrid();
@@ -8992,6 +9078,7 @@ function beginGame(missionId) {
   // v0.5: demo overrides C2 from script
   if (STATE.demoMode && STATE.demoScript) {
     STATE.c2Node = STATE.demoScript.c2Node;
+    if (STATE.coActor) STATE.coC2Node = STATE.demoScript.coC2Node || pickCoC2();  // v0.10.1
   } else {
     pickC2();
     if (STATE.coActor) STATE.coC2Node = pickCoC2();  // v0.10
@@ -9018,7 +9105,7 @@ function beginGame(missionId) {
     if (STATE.demoMode && STATE.demoScript) {
       const r1 = STATE.demoScript.rounds.find(r => r.round === 1);
       if (r1 && r1.threatSpawns) {
-        r1.threatSpawns.forEach(s => spawnDemoThreat(s.target, s.techniqueId));
+        r1.threatSpawns.forEach(s => spawnDemoThreat(s.target, s.techniqueId, s.actor === 'B'));
       }
     } else {
       maybeLaunchThreat();
@@ -9044,6 +9131,11 @@ function beginDemo(missionId) {
   }
   STATE.demoMode = true;
   STATE.demoScript = script;
+  // v0.10.1: instructor demos run on a fixed PRNG so every playback is the
+  // same playback — the narration can only be accurate if the engine's random
+  // draws (trace odds, hardening blunts, cascade stress) are the same each time.
+  if (!STATE.demoRandomRestore) STATE.demoRandomRestore = Math.random;
+  Math.random = mulberry32(script.seed || 20261027);
   // Show intro narrator card before mission boots — wraps beginGame
   showNarratorCard({
     label: '▸ INSTRUCTOR — INTRO',
@@ -9051,13 +9143,17 @@ function beginDemo(missionId) {
     progress: `${script.missionId} DEMO`,
     onContinue: () => {
       hideNarratorCard();
-      beginGame(missionId);
+      beginGame(script.missionId || missionId);
     },
     onExit: exitDemo,
   });
 }
 
+function demoRestoreRandom() {
+  if (STATE.demoRandomRestore) { Math.random = STATE.demoRandomRestore; STATE.demoRandomRestore = null; }
+}
 function exitDemo() {
+  demoRestoreRandom();
   STATE.demoMode = false;
   STATE.demoScript = null;
   STATE.demoNarrationQueue = [];
@@ -9066,11 +9162,14 @@ function exitDemo() {
   location.reload();
 }
 
-function spawnDemoThreat(targetId, techId) {
-  const c2 = getNode(STATE.c2Node);
+function spawnDemoThreat(targetId, techId, isCo) {
+  // v0.10.1: isCo spawns the chain from the second adversary's foothold
+  const srcId = isCo ? STATE.coC2Node : STATE.c2Node;
+  const actor = isCo ? STATE.coActor : STATE.activeActor;
+  const c2 = getNode(srcId);
   const target = getNode(targetId);
   if (!c2 || !target) return;
-  const path = bfsPath(STATE.c2Node, targetId) || [STATE.c2Node, targetId];
+  const path = bfsPath(srcId, targetId) || [srcId, targetId];
   STATE.threats.push({
     target: targetId,
     path,
@@ -9080,10 +9179,11 @@ function spawnDemoThreat(targetId, techId) {
     history: [techId],
     spawnRound: STATE.round,
     pivotedFrom: null,
-    actorId: STATE.activeActor ? STATE.activeActor.id : null,  // v0.10
+    actorId: actor ? actor.id : null,  // v0.10
   });
-  STATE.metrics.threatSpawns.push({ round: STATE.round, target: targetId, techniqueId: techId, actorId: STATE.activeActor ? STATE.activeActor.id : null });
+  STATE.metrics.threatSpawns.push({ round: STATE.round, target: targetId, techniqueId: techId, actorId: actor ? actor.id : null });
   if (target.state === 'healthy') target.state = 'attacked';
+  if (isCo) noteCoEntry();
 }
 
 // Narrator card management — single-card display, tap CONTINUE to advance
@@ -9171,7 +9271,7 @@ function demoSpawnNewThreats() {
   if (!STATE.demoMode || !STATE.demoScript) return;
   const next = STATE.demoScript.rounds.find(r => r.round === STATE.round + 1);
   if (!next || !next.threatSpawns) return;
-  next.threatSpawns.forEach(s => spawnDemoThreat(s.target, s.techniqueId));
+  next.threatSpawns.forEach(s => spawnDemoThreat(s.target, s.techniqueId, s.actor === 'B'));
   STATE.threats.forEach(t => {
     if (t.spawnRound === STATE.round + 1) {
       const target = getNode(t.target);
@@ -9193,6 +9293,7 @@ function demoMaybeShowOutro() {
       hideNarratorCard();
       // After outro, leave demo mode and let normal debrief render
       STATE.demoMode = false;
+      demoRestoreRandom();  // v0.10.1
     },
     onExit: exitDemo,
   });
@@ -9216,6 +9317,37 @@ function showACHGate(onConfirm, onReject) {
   const twoAdvNote = (coActive() && STATE.coEntered)
     ? `<li style="margin-bottom:3px;">The beacons you traced belong to the <b>other</b> intrusion set — overlapping TTPs across concurrent actors are documented (CISA AA23-250A); severing ${severNode} leaves the real target of this evidence untouched</li>`
     : '';
+  // v0.10.1: per-cluster ACH matrix (two-adversary mode only)
+  let clusterHTML = '';
+  if (coActive() && STATE.coEntered) {
+    const sc = achClusterScore(!!(severCand && severCand.co));
+    const other = (severCand && severCand.co) ? 'A (the first intrusion set)' : 'B (the second intrusion set)';
+    const mine = (severCand && severCand.co) ? 'B' : 'A';
+    const rowsHTML = sc.rows.length === 0
+      ? '<tr><td colspan="4" style="color:var(--muted);">no observed TTPs yet — SCAN before you SEVER</td></tr>'
+      : sc.rows.map(r => {
+          const h1 = r.cluster === 'A+B' ? '<span style="color:var(--amber);">~</span>' : (r.cluster === mine ? '<span style="color:var(--green);">✓</span>' : '<span style="color:var(--red);">✗</span>');
+          const h2 = r.cluster === 'A+B' ? '<span style="color:var(--amber);">~</span>' : (r.cluster === mine ? '<span style="color:var(--red);">✗</span>' : '<span style="color:var(--green);">✓</span>');
+          const col = r.cluster === 'B' ? 'var(--magenta)' : r.cluster === 'A' ? 'var(--cyan)' : 'var(--amber)';
+          return `<tr><td style="padding:1px 4px;">${r.tid}</td><td style="padding:1px 4px;color:${col};">${r.cluster}</td><td style="padding:1px 4px;text-align:center;">${h1}</td><td style="padding:1px 4px;text-align:center;">${h2}</td></tr>`;
+        }).join('');
+    const verdict = sc.rows.length === 0 ? ''
+      : sc.disconfirm > sc.consistent
+      ? `<div style="margin-top:5px;color:var(--red);font-size:10px;font-weight:bold;">⚠ ${sc.disconfirm} of ${sc.rows.length} observations were produced by the OTHER intrusion set. The C2 at ${severNode} is real, but it is not the one your evidence describes. Heuer: prefer the hypothesis with the fewest disconfirming observations — that is H2 here.</div>`
+      : sc.disconfirm > 0
+      ? `<div style="margin-top:5px;color:var(--amber);font-size:10px;">${sc.consistent} consistent · ${sc.disconfirm} disconfirming · ${sc.ambiguous} ambiguous. H1 survives, but ${sc.disconfirm} observation(s) belong to the other set — it stays live after this SEVER.</div>`
+      : `<div style="margin-top:5px;color:var(--green);font-size:10px;">${sc.consistent} consistent · 0 disconfirming · ${sc.ambiguous} ambiguous. The evidence and the SEVER target agree.</div>`;
+    clusterHTML = `
+      <div style="margin-top:10px;padding:6px;background:rgba(255,78,168,0.05);border-left:3px solid var(--magenta);">
+        <div style="color:var(--magenta);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ EVIDENCE BY CLUSTER — H1: this SEVER ends set ${mine} · H2: the evidence is set ${other}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:9px;color:var(--white);margin-top:4px;">
+          <tr style="color:var(--muted);"><th style="text-align:left;padding:1px 4px;">TTP</th><th style="text-align:left;padding:1px 4px;">cluster</th><th style="padding:1px 4px;">H1</th><th style="padding:1px 4px;">H2</th></tr>
+          ${rowsHTML}
+        </table>
+        ${verdict}
+        <div style="margin-top:4px;color:var(--muted);font-size:9px;">Cluster = which intrusion set's chains the technique was observed on (lineage, Play 11). ~ = seen on both; counts for neither.</div>
+      </div>`;
+  }
   const observedTTPs = Object.keys(STATE.observedTTPs || {}).length;
   const iocCount = (STATE.iocs || []).length;
   const revealedThreats = (STATE.threats || []).filter(t => t.revealed).length;
@@ -9256,6 +9388,7 @@ function showACHGate(onConfirm, onReject) {
         </div>
       </div>
 
+      ${clusterHTML}
       <div style="margin-top:10px;padding:6px;background:rgba(92,255,138,0.05);border-left:3px solid var(--green);">
         <div style="color:var(--green);font-size:10px;font-weight:bold;letter-spacing:0.08em;">▸ ACH DISCIPLINE</div>
         <div style="color:var(--white);font-size:10px;margin-top:3px;line-height:1.4;">The ACH method (Heuer, 1999) ranks hypotheses by <i>consistency with evidence</i>, not by familiarity. Prefer the hypothesis with the <i>fewest</i> disconfirming observations. If every hypothesis fits, your evidence is thin — collect more before committing.</div>
